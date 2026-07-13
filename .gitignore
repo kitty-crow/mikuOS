@@ -1,0 +1,37 @@
+# Package managers and generated builds
+/node_modules/
+/build/
+/dist/
+/coverage/
+*.tsbuildinfo
+
+# Local runtime state
+/.thistle/
+/.thistle-web/
+/logs/
+*.log
+
+# Local configuration and credentials
+/.env
+/.env.*
+!/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and operating-system files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary and emergency copies
+*.tmp
+*.bak
+*.before-*
+/*.tar
+/*.tar.gz
+/*.tgz
+
+node_modules/

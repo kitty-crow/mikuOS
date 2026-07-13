@@ -1,0 +1,25 @@
+{
+  "name": "@kittyx/thistle",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The base TypeScript kernel in the KITTYX family.",
+  "scripts": {
+    "build": "rm -rf build && tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run check"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "bun": ">=1.1.0"
+  },
+  "author": {
+    "name": "Kitty Crow",
+    "url": "https://kittycrow.dev"
+  },
+  "license": "MIT"
+}
