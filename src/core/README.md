@@ -1,6 +1,6 @@
 ---
 module: core
-owns: [processes, scheduling, signals, syscalls, boot-log]
+owns: [processes, scheduling, signals, syscalls, host-limits, boot-log]
 ---
 
 # Core
@@ -10,3 +10,6 @@ owns: [processes, scheduling, signals, syscalls, boot-log]
 microtask boundaries. Scheduling is cooperative because JavaScript controls
 pre-emption, but lifecycle, waiting, groups and signals are kernel-managed
 rather than inferred from terminal output.
+
+`cap.ts` derives host-sensitive VFS, touched-page, stack and instruction limits.
+Environment overrides change resource policy without changing the native ABI.

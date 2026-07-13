@@ -1,9 +1,9 @@
 export type Errno =
   | "EACCES" | "EAGAIN" | "EBADF" | "EBUSY" | "ECHILD" | "EEXIST"
-  | "EINTR" | "EINVAL" | "EIO" | "EISDIR" | "ELOOP" | "EMFILE"
+  | "EFBIG" | "EINTR" | "EINVAL" | "EIO" | "EISDIR" | "ELOOP" | "EMFILE"
   | "ENAMETOOLONG" | "ENFILE" | "ENOENT" | "ENOEXEC" | "ENOMEM"
-  | "ENOSPC" | "ENOSYS" | "ENOTDIR" | "ENOTEMPTY" | "ENOTSUP"
-  | "EPERM" | "EPIPE" | "ERANGE" | "EROFS" | "ESRCH";
+  | "ENETUNREACH" | "ENOSPC" | "ENOSYS" | "ENOTDIR" | "ENOTEMPTY" | "ENOTSUP"
+  | "EPERM" | "EPIPE" | "EPROTO" | "ERANGE" | "EROFS" | "ESRCH" | "ETIMEDOUT";
 
 export class KErr extends Error {
   constructor(public readonly code: Errno, msg: string = code) {

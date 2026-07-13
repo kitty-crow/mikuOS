@@ -9,6 +9,11 @@ import type { Io, Sig } from "./proc.js";
 import { Sys } from "./sys.js";
 import { Wasi } from "../wasm/wasi.js";
 import { Sched } from "./sched.js";
+import { Net } from "../net/net.js";
+import { Exe, codec, isExe } from "../asm/fmt.js";
+import { Vm } from "../vm/vm.js";
+import { Vm64 } from "../vm/vm64.js";
+import { Lim } from "./cap.js";
 
 export interface Start {
   io?: Partial<Io>;
@@ -27,20 +32,28 @@ export interface PInfo {
   cmd: string;
 }
 
+export interface Mnt { src: string; at: string; kind: string; opt: string; }
+
 const root: Cred = { uid: 0, gid: 0, groups: [0] };
 
 export class Kern {
-  readonly fs = new Vfs();
+  readonly fs: Vfs;
   readonly apps = new Map<string, App>();
   readonly procs = new Map<number, Proc>();
   readonly logs: string[] = [];
   readonly sched = new Sched();
   readonly born = Date.now();
-  readonly release = "1.0.0-thistle";
+  readonly release = "2.0.0-thistle";
   host = "thistle";
+  disk = false;
   ttyFn: (s: string, err: boolean) => void = () => {};
   private seq = 1;
   private haltFn?: () => void;
+
+  constructor(readonly net = new Net(), readonly lim = Lim.host()) {
+    this.fs = new Vfs(lim.fs);
+    net.log = s => this.log(s);
+  }
 
   setHalt(fn: () => void): void { this.haltFn = fn; }
   tty(s: string, err = false): void { this.ttyFn(s, err); }
@@ -142,6 +155,11 @@ export class Kern {
     try {
       if (bin.length >= 4 && bin[0] === 0 && bin[1] === 0x61 && bin[2] === 0x73 && bin[3] === 0x6d) {
         code = await new Wasi(new Sys(this, p)).run(bin, [path, ...argv]);
+      } else if (isExe(bin)) {
+        let x: Exe;
+        try { const q = codec.unpack(bin); x = q instanceof Exe ? q : bad("ENOEXEC", `${path}: not an executable`); }
+        catch (e) { x = bad("ENOEXEC", `${path}: ${e instanceof Error ? e.message : String(e)}`); }
+        code = x.machine === "thistle64" ? await new Vm64(new Sys(this, p)).run(x, [path, ...argv]) : await new Vm(new Sys(this, p)).run(x, [path, ...argv]);
       } else {
         const src = new TextDecoder().decode(bin);
         const m = /^#!thistle:([^\n]+)\n/.exec(src);
@@ -206,6 +224,15 @@ export class Kern {
       pid: p.pid, ppid: p.ppid, pgid: p.pgid, uid: p.cred.uid,
       state: p.state, ms: p.ms(), cmd: p.argv.join(" "),
     }));
+  }
+
+  mounts(): Mnt[] {
+    const a: Mnt[] = [
+      { src: this.disk ? "hostfs" : "memfs", at: "/", kind: "thistlefs", opt: "rw,nosuid,relatime" },
+      { src: "proc", at: "/proc", kind: "procfs", opt: "ro" },
+      { src: "dev", at: "/dev", kind: "devfs", opt: "rw" },
+    ];
+    return a;
   }
 
   stop(by: Proc): void {

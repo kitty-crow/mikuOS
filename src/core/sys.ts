@@ -5,6 +5,7 @@ import type { Sig } from "./proc.js";
 import { Chr, Dir, Reg } from "../fs/vfs.js";
 import type { St, VNode } from "../fs/vfs.js";
 import { dec, enc } from "../io/stream.js";
+import type { NReq, NRes } from "../net/net.js";
 
 export class Sys {
   constructor(readonly k: Kern, readonly p: Proc) {}
@@ -171,6 +172,7 @@ export class Sys {
   apps(): AppInfo[] { return [...this.k.apps.values()].map(x => ({ name: x.name, desc: x.desc, use: x.use })).sort((a, b) => a.name.localeCompare(b.name)); }
   uptime(): number { return Date.now() - this.k.born; }
   logs(): string[] { return [...this.k.logs]; }
+  net(r: NReq): Promise<NRes> { return this.k.net.req(r, this.p.ac.signal); }
   reboot(): void { this.k.stop(this.p); }
 
   async sleep(ms: number): Promise<void> {
