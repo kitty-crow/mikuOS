@@ -6,7 +6,10 @@ const td = new TextDecoder();
 export const enc = (s: string): Uint8Array => te.encode(s);
 export const dec = (b: Uint8Array): string => td.decode(b);
 
+import type { TtyDevice } from "./tty.js";
+
 export interface In {
+  readonly tty?: TtyDevice;
   rd(): Promise<Uint8Array>;
   holdR?(): void;
   releaseR?(): void;
@@ -15,6 +18,7 @@ export interface In {
 }
 
 export interface Out {
+  readonly tty?: TtyDevice;
   wr(b: Uint8Array): Promise<number>;
   hold?(): void;
   close?(): void;

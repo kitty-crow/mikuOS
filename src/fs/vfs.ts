@@ -37,6 +37,7 @@ export abstract class VNode {
 export class Reg extends VNode {
   readonly kind = "file" as const;
   data: Uint8Array;
+  sum: string | undefined;
 
   constructor(data: Uint8Array | string = "", mode = 0o644, uid = 0, gid = 0) {
     super(mode, uid, gid);
@@ -224,6 +225,7 @@ export class Vfs {
         if (made) made.dir.ent.delete(made.name);
         bad("ENOSPC", path);
       }
+      n.sum = undefined;
       n.touch(true);
       return;
     }
@@ -340,8 +342,8 @@ export class Vfs {
     n.touch();
   }
 
-  utime(p: string, at: number, mt: number, cwd: string, c: Cred): void {
-    const h = this.at(p, cwd, c, false);
+  utime(p: string, at: number, mt: number, cwd: string, c: Cred, follow = true): void {
+    const h = this.at(p, cwd, c, follow);
     if (c.uid !== 0 && c.uid !== h.node.uid) bad("EPERM", h.path);
     h.node.at = at;
     h.node.mt = mt;

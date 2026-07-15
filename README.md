@@ -1,9 +1,9 @@
 # Thistle
 
-Thistle is the base TypeScript kernel in the KITTYX project family. It owns
-processes, scheduling, filesystems, descriptors, signals, system calls and
-direct execution of the Thistle machine languages.
+Thistle is the base kernel and the upstream history shared by Teto and
+mikuOS. It runs directly as TypeScript and owns the process, filesystem,
+descriptor, signal, network and syscall model.
 
-The assembler and binary format implementation is kept in the independent
-ThistleASM repository and mounted at `src/asm`. Userland, the interactive
-shell and browser packaging are downstream concerns.
+ThistleASM is an independent dependency mounted at `src/asm`. The base
+kernel executes Thistle32 and Thistle64 programmes. The downstream Teto fork
+adds the generated WebAssembly kernel and the RV64GC execution integration.

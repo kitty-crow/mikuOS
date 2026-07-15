@@ -40,7 +40,7 @@ export class Wasi {
   async run(bin: Uint8Array, argv: string[]): Promise<number> {
     this.argv = argv;
     this.env = [...(this.s.env() as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
-    this.sin = await this.s.inb();
+    this.sin = this.s.p.fds.get(0)?.input?.tty ? new Uint8Array() : await this.s.inb();
     this.fds.set(3, { path: "/", dir: true });
     this.fds.set(4, { path: this.s.cwd, dir: true });
     let code = 0;

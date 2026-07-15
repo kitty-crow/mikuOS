@@ -18,7 +18,8 @@ export class Sched {
   async yield(p: Proc): Promise<void> {
     p.state = "ready";
     this.ready.push(p.pid);
-    await new Promise<void>(ok => queueMicrotask(ok));
+    // Big compilers can run for a while. Let paint and network breathe now and then.
+    await new Promise<void>(ok => this.ticks % 64 ? queueMicrotask(ok) : setTimeout(ok, 0));
     this.ready.splice(this.ready.indexOf(p.pid), 1);
     this.ticks++;
     if (p.code === null) p.state = "run";

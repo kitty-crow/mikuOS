@@ -2,9 +2,10 @@ import { bad, KErr } from "./err.js";
 import type { Kern, PInfo, Start } from "./kernel.js";
 import { Fd, Proc } from "./proc.js";
 import type { Sig } from "./proc.js";
-import { Chr, Dir, Reg } from "../fs/vfs.js";
+import { Chr, Dir, Reg, norm } from "../fs/vfs.js";
 import type { St, VNode } from "../fs/vfs.js";
-import { dec, enc } from "../io/stream.js";
+import { dec, enc, Pipe } from "../io/stream.js";
+import { ttyOf } from "../io/tty.js";
 import type { NReq, NRes } from "../net/net.js";
 
 export class Sys {
@@ -83,12 +84,13 @@ export class Sys {
   readlink(p: string): string { return this.k.fs.readlink(p, this.cwd, this.p.cred); }
   chmod(p: string, mode: number): void { this.k.fs.chmod(p, mode, this.cwd, this.p.cred); }
   chown(p: string, uid: number, gid: number): void { this.k.fs.chown(p, uid, gid, this.cwd, this.p.cred); }
-  utime(p: string, at: number, mt: number): void { this.k.fs.utime(p, at, mt, this.cwd, this.p.cred); }
+  utime(p: string, at: number, mt: number, follow = true): void { this.k.fs.utime(p, at, mt, this.cwd, this.p.cred, follow); }
   stat(p: string, follow = true): St { return this.k.fs.stat(p, this.cwd, this.p.cred, follow); }
   paths(p = "."): string[] { return this.k.fs.paths(p, this.cwd, this.p.cred); }
   glob(p: string): string[] { return this.k.fs.glob(p, this.cwd, this.p.cred); }
 
   open(path: string, flags = "r", mode = 0o666): number {
+    const requested = norm(path, this.cwd);
     const rd = flags.includes("r") || flags.includes("+");
     const wr = /[wa+]/.test(flags);
     const add = flags.startsWith("a");
@@ -97,6 +99,20 @@ export class Sys {
       if (h.node instanceof Dir) bad("EISDIR", path);
       if (rd) this.k.fs.need(h.node, this.p.cred, 4, h.path);
       if (wr) this.k.fs.need(h.node, this.p.cred, 2, h.path);
+
+      if (requested === "/dev/tty") {
+        const all = [...this.p.fds.values()];
+        const dev = all.map(f => ttyOf(f.input) ?? ttyOf(f.output)).find(Boolean);
+        const input = rd ? all.map(f => f.input).find(x => ttyOf(x) === dev) : undefined;
+        const output = wr ? all.map(f => f.output).find(x => ttyOf(x) === dev) : undefined;
+        if (!dev || (rd && !input) || (wr && !output)) bad("ENOTSUP", "/dev/tty: no controlling terminal");
+        input?.holdR?.();
+        output?.hold?.();
+        const n = this.k.fd(this.p);
+        this.p.fds.set(n, new Fd(input, output, requested, rd, wr));
+        return n;
+      }
+
       if (flags.startsWith("w")) this.writeb(h.path, new Uint8Array());
       path = h.path;
     } catch (e) {
@@ -111,8 +127,30 @@ export class Sys {
     return n;
   }
 
+  openDir(path: string): number {
+    const h = this.k.fs.at(path, this.cwd, this.p.cred);
+    if (!(h.node instanceof Dir)) bad("ENOTDIR", path);
+    this.k.fs.need(h.node, this.p.cred, 5, h.path);
+    const n = this.k.fd(this.p);
+    this.p.fds.set(n, new Fd(undefined, undefined, h.path, true));
+    return n;
+  }
+
+  pipe(): [number, number] {
+    const p = new Pipe(), rd = this.k.fd(this.p);
+    this.p.fds.set(rd, new Fd(p, undefined, undefined, true));
+    p.holdR();
+    const wr = this.k.fd(this.p);
+    this.p.fds.set(wr, new Fd(undefined, p, undefined, false, true));
+    p.hold();
+    return [rd, wr];
+  }
+
   close(fd: number): void {
-    if (fd < 3 || !this.p.fds.delete(fd)) bad("EBADF", String(fd));
+    const f = this.p.fds.get(fd) ?? bad("EBADF", String(fd));
+    this.p.fds.delete(fd);
+    f.input?.releaseR?.();
+    f.output?.close?.();
   }
 
   dup(fd: number, nu?: number): number { return this.k.cloneFd(this.p, fd, nu); }

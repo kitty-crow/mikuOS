@@ -14,9 +14,12 @@ import { Exe, codec, isExe } from "../asm/fmt.js";
 import { Vm } from "../vm/vm.js";
 import { Vm64 } from "../vm/vm64.js";
 import { Lim } from "./cap.js";
+import { DEFAULT_CONFIG } from "./config.js";
+import type { AccountConfig, SystemConfig } from "./config.js";
 
 export interface Start {
   io?: Partial<Io>;
+  fds?: Map<number, Fd>;
   pgid?: number;
   cwd?: string;
   env?: Map<string, string>;
@@ -43,14 +46,16 @@ export class Kern {
   readonly logs: string[] = [];
   readonly sched = new Sched();
   readonly born = Date.now();
-  readonly release = "2.0.0-thistle";
-  host = "thistle";
+  readonly release: string;
+  host: string;
   disk = false;
   ttyFn: (s: string, err: boolean) => void = () => {};
   private seq = 1;
   private haltFn?: () => void;
 
-  constructor(readonly net = new Net(), readonly lim = Lim.host()) {
+  constructor(readonly net = new Net(), readonly lim = Lim.host(), readonly config: SystemConfig = DEFAULT_CONFIG) {
+    this.release = config.os.release;
+    this.host = config.hostName;
     this.fs = new Vfs(lim.fs);
     net.log = s => this.log(s);
   }
@@ -74,27 +79,31 @@ export class Kern {
     return p;
   }
 
-  session(io: Io, cred: Cred = root): Proc {
+  session(io: Io, account: AccountConfig = this.config.accounts.cli): Proc {
     this.init();
     const pid = this.seq++;
-    const home = cred.uid === 0 ? "/root" : "/home/guest";
+    const cred = account.cred;
     const env = this.baseEnv();
-    env.set("HOME", home);
-    env.set("USER", cred.uid === 0 ? "root" : "guest");
-    env.set("PWD", home);
-    const p = new Proc(pid, 1, pid, "thsh", ["thsh"], home, env, { ...cred, groups: [...cred.groups] }, io);
+    env.set("HOME", account.home);
+    env.set("USER", account.name);
+    env.set("LOGNAME", account.name);
+    env.set("SHELL", account.shell);
+    env.set("PWD", account.home);
+    env.set("PS1", "${USER}@\\h:\\w" + (cred.uid === 0 ? "# " : "$ "));
+    const p = new Proc(pid, 1, pid, "thsh", ["thsh"], account.home, env, { ...cred, groups: [...cred.groups] }, io);
     p.state = "run";
     this.procs.set(pid, p);
     this.procs.get(1)!.kids.add(pid);
-    this.log(`tty: session pid=${pid} uid=${cred.uid}`);
+    this.log(`tty: session pid=${pid} uid=${cred.uid} user=${account.name}`);
     return p;
   }
 
   private baseEnv(): Map<string, string> {
     return new Map([
-      ["PATH", "/bin:/usr/bin"], ["HOME", "/root"], ["USER", "root"],
-      ["SHELL", "/bin/thsh"], ["TERM", "thistle-256"], ["LANG", "en_GB.UTF-8"],
-      ["HOSTNAME", this.host], ["PS1", "\\u@\\h:\\w\\$ "],
+      ["PATH", "/bin:/usr/bin"], ["HOME", this.config.accounts.cli.home], ["USER", this.config.accounts.cli.name],
+      ["LOGNAME", this.config.accounts.cli.name], ["SHELL", this.config.accounts.cli.shell],
+      ["TERM", this.config.terminal.term], ["LANG", this.config.terminal.lang],
+      ["HOSTNAME", this.host],
     ]);
   }
 
@@ -135,13 +144,22 @@ export class Kern {
       sout: opt.io?.sout ?? par.fds.get(1)?.output ?? new MemOut(),
       serr: opt.io?.serr ?? par.fds.get(2)?.output ?? new MemOut(),
     };
-    io.sin.holdR?.();
-    io.sout.hold?.();
-    if (io.serr !== io.sout) io.serr.hold?.();
+    if (!opt.fds) {
+      io.sin.holdR?.();
+      io.sout.hold?.();
+      if (io.serr !== io.sout) io.serr.hold?.();
+    }
     const p = new Proc(
       pid, par.pid, opt.pgid ?? pid, path, [name, ...argv], opt.cwd ?? par.cwd,
       new Map(opt.env ?? par.env), { ...par.cred, groups: [...par.cred.groups] }, io,
     );
+    if (opt.fds) {
+      p.fds.clear(); p.allHeld = true;
+      for (const [n, f] of opt.fds) {
+        f.input?.holdR?.(); f.output?.hold?.();
+        const q = new Fd(f.input, f.output, f.path, f.rd, f.wr, f.add, f.clo); q.pos = f.pos; p.fds.set(n, q);
+      }
+    }
     p.mask = par.mask;
     this.procs.set(pid, p);
     par.kids.add(pid);
@@ -159,7 +177,9 @@ export class Kern {
         let x: Exe;
         try { const q = codec.unpack(bin); x = q instanceof Exe ? q : bad("ENOEXEC", `${path}: not an executable`); }
         catch (e) { x = bad("ENOEXEC", `${path}: ${e instanceof Error ? e.message : String(e)}`); }
-        code = x.machine === "thistle64" ? await new Vm64(new Sys(this, p)).run(x, [path, ...argv]) : await new Vm(new Sys(this, p)).run(x, [path, ...argv]);
+        code = x.machine === "thistle64"
+          ? x.isa === "rv64gc" ? await new Rv64(new Sys(this, p)).run(x, [path, ...argv]) : await new Vm64(new Sys(this, p)).run(x, [path, ...argv])
+          : await new Vm(new Sys(this, p)).run(x, [path, ...argv]);
       } else {
         const src = new TextDecoder().decode(bin);
         const m = /^#!thistle:([^\n]+)\n/.exec(src);
@@ -180,9 +200,13 @@ export class Kern {
         await p.fds.get(2)?.output?.wr(enc(`${p.argv[0]}: ${msg(e)}\n`));
       }
     } finally {
-      p.fds.get(0)?.input?.releaseR?.();
-      p.fds.get(1)?.output?.close?.();
-      if (p.fds.get(2)?.output !== p.fds.get(1)?.output) p.fds.get(2)?.output?.close?.();
+      if (p.allHeld) {
+        for (const f of p.fds.values()) { f.input?.releaseR?.(); f.output?.close?.(); }
+      } else {
+        p.fds.get(0)?.input?.releaseR?.();
+        p.fds.get(1)?.output?.close?.();
+        if (p.fds.get(2)?.output !== p.fds.get(1)?.output) p.fds.get(2)?.output?.close?.();
+      }
       p.end(code);
       this.log(`proc: pid=${p.pid} exit=${code} cmd=${path}`);
     }
@@ -250,6 +274,12 @@ export class Kern {
   cloneFd(p: Proc, old: number, nu?: number): number {
     const f = p.fds.get(old) ?? bad("EBADF", String(old));
     const n = nu ?? this.fd(p);
+    if (n === old) return n;
+    const q = p.fds.get(n);
+    q?.input?.releaseR?.();
+    q?.output?.close?.();
+    f.input?.holdR?.();
+    f.output?.hold?.();
     p.fds.set(n, new Fd(f.input, f.output, f.path, f.rd, f.wr, f.add));
     return n;
   }

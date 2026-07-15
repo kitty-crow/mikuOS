@@ -39,10 +39,11 @@ export class Lim {
 
   static host(): Lim {
     const r = ram();
-    const fs = env("THISTLE_FS_MB", Math.max(128, Math.min(8192, Math.floor(r / MB / 8)))) * MB;
-    const mem = env("THISTLE_MEM_MB", Math.max(256, Math.min(16384, Math.floor(r / MB / 4)))) * MB;
-    const stack = env("THISTLE_STACK_MB", Math.max(16, Math.min(256, Math.floor(mem / MB / 8)))) * MB;
-    const fuel = env("THISTLE_FUEL", 1_000_000_000, true);
+    // Capacity is sparse: a generous ceiling costs nothing until a program uses it.
+    const fs = env("THISTLE_FS_MB", Math.max(2048, Math.min(65536, Math.floor(r / MB / 2)))) * MB;
+    const mem = env("THISTLE_MEM_MB", Math.max(512, Math.min(32768, Math.floor(r / MB / 2)))) * MB;
+    const stack = env("THISTLE_STACK_MB", Math.max(32, Math.min(1024, Math.floor(mem / MB / 8)))) * MB;
+    const fuel = env("THISTLE_FUEL", 10_000_000_000, true);
     return new Lim(fs, mem, stack, fuel);
   }
 }

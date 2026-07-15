@@ -159,7 +159,7 @@ export class Net {
         this.calls++;
         this.tx += body?.length ?? 0;
         this.log(`net: ${verb} ${url}`);
-        const q: DReq = { url, method: verb, hdr: { "user-agent": "Thistle/2.0.0", ...(r.hdr ?? {}) }, max };
+        const q: DReq = { url, method: verb, hdr: { "user-agent": "Thistle/2.1.0", ...(r.hdr ?? {}) }, max };
         if (body !== undefined) q.body = body;
         const x = await this.dev.req(q, ac.signal);
         this.rx += x.body.length;

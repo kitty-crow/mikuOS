@@ -20,6 +20,7 @@ export class Fd {
     public rd = false,
     public wr = false,
     public add = false,
+    public clo = false,
   ) {}
 }
 
@@ -32,6 +33,7 @@ export class Proc {
   readonly fds = new Map<number, Fd>();
   readonly kids = new Set<number>();
   mask = 0o022;
+  allHeld = false;
   readonly done: Promise<number>;
   private fin!: (n: number) => void;
 
