@@ -6,7 +6,7 @@ import { dec, enc } from "../io/stream.js";
 
 const E: Record<Errno, number> = {
   EACCES: 2, EAGAIN: 6, EBADF: 8, EBUSY: 10, ECHILD: 12, EEXIST: 20,
-  EFBIG: 22, EINTR: 27, EINVAL: 28, EIO: 29, EISDIR: 31, ELOOP: 32, EMFILE: 33,
+  EFAULT: 21, EFBIG: 22, EINTR: 27, EINVAL: 28, EIO: 29, EISDIR: 31, ELOOP: 32, EMFILE: 33,
   ENAMETOOLONG: 37, ENFILE: 41, ENOENT: 44, ENOEXEC: 45, ENOMEM: 48,
   ENETUNREACH: 46, ENOSPC: 51, ENOSYS: 52, ENOTDIR: 54, ENOTEMPTY: 55, ENOTSUP: 58,
   EPERM: 63, EPIPE: 64, EPROTO: 65, ERANGE: 68, EROFS: 69, ESRCH: 71, ETIMEDOUT: 73,
@@ -40,7 +40,8 @@ export class Wasi {
   async run(bin: Uint8Array, argv: string[]): Promise<number> {
     this.argv = argv;
     this.env = [...(this.s.env() as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
-    this.sin = this.s.p.fds.get(0)?.input?.tty ? new Uint8Array() : await this.s.inb();
+    const input = this.s.p.fds.get(0)?.input;
+    this.sin = input?.tty ? new Uint8Array() : await this.s.inb();
     this.fds.set(3, { path: "/", dir: true });
     this.fds.set(4, { path: this.s.cwd, dir: true });
     let code = 0;

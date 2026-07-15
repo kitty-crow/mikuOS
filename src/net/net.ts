@@ -69,55 +69,13 @@ export abstract class NetDev {
 }
 
 export class FetchDev extends NetDev {
-  private readonly proxy: string;
-
-  constructor(proxy?: string) {
-    super();
-    this.proxy = proxy ?? (typeof document === "undefined" ? "" : "/__thistle/net");
-  }
-
   override async req(r: DReq, sig: AbortSignal): Promise<DRes> {
-    if (this.proxy) {
-      const x = await this.viaProxy(r, sig);
-      if (x) return x;
-    }
-    return this.direct(r, sig);
-  }
-
-  private async direct(r: DReq, sig: AbortSignal): Promise<DRes> {
     const init: RequestInit = { method: r.method, headers: r.hdr, redirect: "manual", signal: sig };
     if (r.body && r.method !== "GET" && r.method !== "HEAD") init.body = Uint8Array.from(r.body);
     let x: Response;
     try { x = await fetch(r.url, init); }
     catch (e) { throw this.fail(e); }
     return { url: x.url || r.url, status: x.status, text: x.statusText, hdr: hdrs(x.headers), body: await bytes(x, r.max) };
-  }
-
-  private async viaProxy(r: DReq, sig: AbortSignal): Promise<DRes | undefined> {
-    const h: Hdr = {
-      "x-thistle-url": r.url,
-      "x-thistle-method": r.method,
-      "x-thistle-headers": encodeURIComponent(JSON.stringify(r.hdr)),
-    };
-    let x: Response;
-    const init: RequestInit = { method: "POST", headers: h, signal: sig };
-    if (r.body) init.body = Uint8Array.from(r.body);
-    try { x = await fetch(this.proxy, init); }
-    catch (e) { throw this.fail(e); }
-    const st = x.headers.get("x-thistle-status");
-    if (st === null) return undefined; // A plain static server: direct CORS is still worth a go.
-    if (x.headers.has("x-thistle-error")) throw new KErr("ENETUNREACH", new TextDecoder().decode(await bytes(x, r.max)));
-    const raw = x.headers.get("x-thistle-headers") ?? "%7B%7D";
-    let hs: Hdr;
-    try { hs = JSON.parse(decodeURIComponent(raw)) as Hdr; }
-    catch { throw new KErr("EPROTO", "bad response metadata from web proxy"); }
-    return {
-      url: x.headers.get("x-thistle-url") ?? r.url,
-      status: Number(st),
-      text: decodeURIComponent(x.headers.get("x-thistle-text") ?? ""),
-      hdr: hs,
-      body: await bytes(x, r.max),
-    };
   }
 
   private fail(e: unknown): KErr {

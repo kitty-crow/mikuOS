@@ -1,0 +1,49 @@
+name: Test dependency update
+
+on:
+  repository_dispatch:
+    types: [dependency-updated]
+  workflow_dispatch:
+    inputs:
+      dependency:
+        description: Dependency name from project.dependencies.json
+        required: true
+      revision:
+        description: Exact commit to test
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependency-${{ github.event.client_payload.dependency || inputs.dependency }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Select dependency revision
+        env:
+          DEPENDENCY: ${{ github.event.client_payload.dependency || inputs.dependency }}
+          REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
+        run: scripts/ci/update-dependency.sh "$DEPENDENCY" "$REVISION"
+      - name: Install
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Compatibility suite
+        run: npm test
+      - name: Open or update approval-only pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPENDENCY: ${{ github.event.client_payload.dependency || inputs.dependency }}
+          REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
+        run: scripts/ci/open-dependency-pr.sh "$DEPENDENCY" "$REVISION"

@@ -1,214 +1,502 @@
-import { dec, enc } from "./stream.js";
+import { enc } from "./stream.js";
 import type { In, Out } from "./stream.js";
 
-const ICRNL = 0x100;
-const OPOST = 0x1, ONLCR = 0x4;
-const ISIG = 0x1, ICANON = 0x2, ECHO = 0x8, ECHOE = 0x10, ECHOK = 0x20, ECHONL = 0x40, IEXTEN = 0x8000;
-const CREAD = 0x80, CS8 = 0x30;
-const VINTR = 0, VERASE = 2, VKILL = 3, VEOF = 4, VTIME = 5, VMIN = 6, VSTART = 8, VSTOP = 9, VSUSP = 10;
-export const TERMIOS_SIZE = 36;
+/*
+ * Linux asm-generic kernel termios layout used by RISC-V:
+ *
+ *   tcflag_t c_iflag;    offset 0
+ *   tcflag_t c_oflag;    offset 4
+ *   tcflag_t c_cflag;    offset 8
+ *   tcflag_t c_lflag;    offset 12
+ *   cc_t     c_line;     offset 16
+ *   cc_t     c_cc[19];   offset 17
+ *
+ * Total: 36 bytes.
+ */
+const TERMIOS_SIZE = 36;
+const LFLAG_OFFSET = 12;
+const CC_OFFSET = 17;
+const NCCS = 19;
 
-export interface TtySize { rows: number; cols: number; }
+/* c_lflag */
+const ISIG = 0x0001;
+const ICANON = 0x0002;
+const ECHO = 0x0008;
+const ECHOE = 0x0010;
+const ECHOK = 0x0020;
+const ECHOCTL = 0x0200;
+const ECHOKE = 0x0800;
+const IEXTEN = 0x8000;
 
-export interface TtyDevice {
-  size(): TtySize;
-  resize(rows: number, cols: number): void;
-  termios(): Uint8Array;
-  setTermios(b: Uint8Array, flush: boolean): void;
-  available(): number;
+/* c_cc indexes from asm-generic/termbits.h */
+const VINTR = 0;
+const VQUIT = 1;
+const VERASE = 2;
+const VKILL = 3;
+const VEOF = 4;
+const VTIME = 5;
+const VMIN = 6;
+const VSWTC = 7;
+const VSTART = 8;
+const VSTOP = 9;
+const VSUSP = 10;
+const VEOL = 11;
+const VREPRINT = 12;
+const VDISCARD = 13;
+const VWERASE = 14;
+const VLNEXT = 15;
+const VEOL2 = 16;
+
+function defaultTermios(): Uint8Array {
+  const raw = new Uint8Array(TERMIOS_SIZE);
+  const view = new DataView(raw.buffer);
+
+  /*
+   * Conventional Linux-like defaults:
+   *   input:  BRKINT | ICRNL | IXON | IUTF8
+   *   output: OPOST | ONLCR
+   *   control: B38400 | CS8 | CREAD
+   *   local: canonical input, signals, echo and extended editing
+   */
+  view.setUint32(0, 0x0002 | 0x0100 | 0x0400 | 0x4000, true);
+  view.setUint32(4, 0x0001 | 0x0004, true);
+  view.setUint32(8, 0x000f | 0x0030 | 0x0080, true);
+  view.setUint32(
+    LFLAG_OFFSET,
+    ISIG |
+      ICANON |
+      ECHO |
+      ECHOE |
+      ECHOK |
+      ECHOCTL |
+      ECHOKE |
+      IEXTEN,
+    true,
+  );
+
+  raw[16] = 0;                  // N_TTY
+
+  raw[CC_OFFSET + VINTR] = 3;       // Ctrl+C
+  raw[CC_OFFSET + VQUIT] = 28;      // Ctrl+\
+  raw[CC_OFFSET + VERASE] = 127;    // DEL
+  raw[CC_OFFSET + VKILL] = 21;      // Ctrl+U
+  raw[CC_OFFSET + VEOF] = 4;        // Ctrl+D
+  raw[CC_OFFSET + VTIME] = 0;
+  raw[CC_OFFSET + VMIN] = 1;
+  raw[CC_OFFSET + VSWTC] = 0;
+  raw[CC_OFFSET + VSTART] = 17;     // Ctrl+Q
+  raw[CC_OFFSET + VSTOP] = 19;      // Ctrl+S
+  raw[CC_OFFSET + VSUSP] = 26;      // Ctrl+Z
+  raw[CC_OFFSET + VEOL] = 0;
+  raw[CC_OFFSET + VREPRINT] = 18;   // Ctrl+R
+  raw[CC_OFFSET + VDISCARD] = 15;   // Ctrl+O
+  raw[CC_OFFSET + VWERASE] = 23;    // Ctrl+W
+  raw[CC_OFFSET + VLNEXT] = 22;     // Ctrl+V
+  raw[CC_OFFSET + VEOL2] = 0;
+
+  return raw;
 }
 
-export const ttyOf = (x: In | Out | undefined): TtyDevice | undefined => x?.tty;
+class TtyIn implements In {
+  tty: Tty;
 
-export class Tty implements TtyDevice {
-  readonly input: In;
-  readonly output: Out;
-  readonly error: Out;
   private readonly q: Uint8Array[] = [];
   private readonly wait: Array<(b: Uint8Array) => void> = [];
-  private readonly line: number[] = [];
-  private refs = 0;
-  private rrefs = 0;
-  private rows = 24;
-  private cols = 80;
-  private iflag = ICRNL;
-  private oflag = OPOST | ONLCR;
-  private cflag = CREAD | CS8;
-  private lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | IEXTEN;
-  private lineDiscipline = 0;
-  private readonly cc = new Uint8Array(19);
-  private stopped = false;
+
+  constructor(tty: Tty) {
+    this.tty = tty;
+  }
+
+  async rd(): Promise<Uint8Array> {
+    const b = this.q.shift();
+
+    /*
+     * A zero-length array is meaningful: it represents canonical EOF.
+     */
+    if (b !== undefined) {
+      return b;
+    }
+
+    return new Promise(ok => this.wait.push(ok));
+  }
+
+  push(b: Uint8Array): void {
+    const ok = this.wait.shift();
+
+    if (ok) {
+      ok(b);
+    } else {
+      this.q.push(b);
+    }
+  }
+
+  flush(): void {
+    this.q.length = 0;
+  }
+
+  wake(): void {
+    this.push(new Uint8Array());
+  }
+}
+
+class TtyOut implements Out {
+  tty: Tty;
 
   constructor(
-    private readonly writeHost: (s: string, err: boolean) => void | Promise<void>,
-    private readonly signal: (n: 2 | 15) => void,
+    tty: Tty,
+    private readonly err = false,
   ) {
-    this.cc[VINTR] = 3;
-    this.cc[VERASE] = 127;
-    this.cc[VKILL] = 21;
-    this.cc[VEOF] = 4;
-    this.cc[VTIME] = 0;
-    this.cc[VMIN] = 1;
-    this.cc[VSTART] = 17;
-    this.cc[VSTOP] = 19;
-    this.cc[VSUSP] = 26;
-    this.input = new TtyInput(this);
-    this.output = new TtyOutput(this, false);
-    this.error = new TtyOutput(this, true);
+    this.tty = tty;
+  }
+
+  async wr(b: Uint8Array): Promise<number> {
+    this.tty.write(
+      new TextDecoder().decode(b),
+      this.err,
+    );
+
+    return b.length;
+  }
+}
+
+export class Tty {
+  readonly input = new TtyIn(this);
+  readonly output = new TtyOut(this);
+  readonly error = new TtyOut(this, true);
+
+  private line = "";
+  private rows = 24;
+  private cols = 80;
+  private readonly attributes = defaultTermios();
+
+  constructor(
+    private readonly put: (
+      s: string,
+      err?: boolean,
+    ) => void | Promise<void>,
+    private readonly interrupt: (
+      signal?: number,
+    ) => boolean | void,
+  ) {}
+
+  write(s: string, err = false): void {
+    void this.put(s, err);
   }
 
   feed(s: string | Uint8Array): void {
-    const src = typeof s === "string" ? enc(s) : s;
-    if (!(this.lflag & ICANON)) {
-      const out: number[] = [];
-      for (let b of src) {
-        if ((this.iflag & ICRNL) && b === 13) b = 10;
-        if (this.flow(b)) continue;
-        if ((this.lflag & ISIG) && this.sig(b)) continue;
-        out.push(b);
-        if (this.lflag & ECHO) void this.echo(Uint8Array.of(b));
+    const text = typeof s === "string"
+      ? s
+      : new TextDecoder().decode(s);
+
+    if (!this.hasLocalFlag(ICANON)) {
+      let pending = "";
+
+      for (const ch of text) {
+        if (
+          this.hasLocalFlag(ISIG) &&
+          this.isControlCharacter(ch, VINTR)
+        ) {
+          if (pending) {
+            this.input.push(enc(pending));
+            pending = "";
+          }
+
+          this.signalInterrupt();
+          continue;
+        }
+
+        pending += ch;
+
+        if (this.hasLocalFlag(ECHO)) {
+          this.write(ch);
+        }
       }
-      if (out.length) this.put(Uint8Array.from(out));
+
+      /*
+       * Preserve a host key event as one read. This keeps terminal escape
+       * sequences such as ESC [ A intact for the guest line editor.
+       */
+      if (pending) {
+        this.input.push(enc(pending));
+      }
+
       return;
     }
 
-    for (let b of src) {
-      if ((this.iflag & ICRNL) && b === 13) b = 10;
-      if (this.flow(b)) continue;
-      if ((this.lflag & ISIG) && this.sig(b)) { this.line.length = 0; continue; }
-      if (b === this.cc[VEOF]) {
-        if (this.line.length) this.commit(false);
-        else this.put(new Uint8Array());
-        continue;
-      }
-      if (b === this.cc[VERASE] || b === 8) {
-        if (this.line.length) {
-          this.line.pop();
-          if (this.lflag & ECHOE) void this.writeHost("\b \b", false);
-        }
-        continue;
-      }
-      if (b === this.cc[VKILL]) {
-        if (this.line.length && this.lflag & ECHOK) void this.writeHost("^U\r\n", false);
-        this.line.length = 0;
-        continue;
-      }
-      this.line.push(b);
-      if ((this.lflag & ECHO) || (b === 10 && this.lflag & ECHONL)) void this.echo(Uint8Array.of(b));
-      if (b === 10) this.commit(false);
+    for (const ch of text) {
+      this.char(ch);
+    }
+  }
+
+  resize(rows: number, cols: number): void {
+    this.rows = Math.max(1, Math.trunc(rows));
+    this.cols = Math.max(1, Math.trunc(cols));
+  }
+
+  size(): {
+    rows: number;
+    cols: number;
+  } {
+    return {
+      rows: this.rows,
+      cols: this.cols,
+    };
+  }
+
+  termios(): Uint8Array {
+    /*
+     * Return a copy: guest applications may modify the structure before
+     * passing it back through TCSETS.
+     */
+    return this.attributes.slice();
+  }
+
+  lineEditorMode(base: Uint8Array = this.termios()): void {
+    const raw = base.slice();
+    const view = new DataView(
+      raw.buffer,
+      raw.byteOffset,
+      raw.byteLength,
+    );
+    const flags = view.getUint32(LFLAG_OFFSET, true);
+
+    /*
+     * The shell editor consumes and renders key events itself. Preserve the
+     * inherited terminal configuration while disabling kernel line editing,
+     * echo and signal interception at the interactive prompt.
+     */
+    view.setUint32(
+      LFLAG_OFFSET,
+      flags & ~(ISIG | ICANON | ECHO),
+      true,
+    );
+    raw[CC_OFFSET + VMIN] = 1;
+    raw[CC_OFFSET + VTIME] = 0;
+    this.setTermios(raw, false);
+  }
+
+  setTermios(
+    raw: Uint8Array,
+    flush: boolean,
+  ): void {
+    if (raw.byteLength < TERMIOS_SIZE) {
+      throw new RangeError(
+        `termios buffer is ${raw.byteLength} bytes; expected ${TERMIOS_SIZE}`,
+      );
+    }
+
+    this.attributes.set(
+      raw.subarray(0, TERMIOS_SIZE),
+    );
+
+    if (flush) {
+      this.line = "";
+      this.input.flush();
     }
   }
 
   reset(): void {
-    this.iflag = ICRNL;
-    this.oflag = OPOST | ONLCR;
-    this.cflag = CREAD | CS8;
-    this.lflag = ISIG | ICANON | ECHO | ECHOE | ECHOK | IEXTEN;
-    this.lineDiscipline = 0;
-    this.cc[VINTR] = 3;
-    this.cc[VERASE] = 127;
-    this.cc[VKILL] = 21;
-    this.cc[VEOF] = 4;
-    this.cc[VTIME] = 0;
-    this.cc[VMIN] = 1;
-    this.cc[VSTART] = 17;
-    this.cc[VSTOP] = 19;
-    this.cc[VSUSP] = 26;
-    this.line.length = 0;
-    this.stopped = false;
+    this.attributes.set(defaultTermios());
+    this.line = "";
   }
 
-  size(): TtySize { return { rows: this.rows, cols: this.cols }; }
-  resize(rows: number, cols: number): void {
-    if (Number.isFinite(rows) && rows > 0) this.rows = Math.min(65535, Math.floor(rows));
-    if (Number.isFinite(cols) && cols > 0) this.cols = Math.min(65535, Math.floor(cols));
+  private localFlags(): number {
+    return new DataView(
+      this.attributes.buffer,
+      this.attributes.byteOffset,
+      this.attributes.byteLength,
+    ).getUint32(LFLAG_OFFSET, true);
   }
 
-  termios(): Uint8Array {
-    const b = new Uint8Array(TERMIOS_SIZE), v = new DataView(b.buffer);
-    v.setUint32(0, this.iflag, true);
-    v.setUint32(4, this.oflag, true);
-    v.setUint32(8, this.cflag, true);
-    v.setUint32(12, this.lflag, true);
-    b[16] = this.lineDiscipline;
-    b.set(this.cc, 17);
-    return b;
+  private hasLocalFlag(flag: number): boolean {
+    return !!(this.localFlags() & flag);
   }
 
-  setTermios(b: Uint8Array, flush: boolean): void {
-    if (b.length < TERMIOS_SIZE) throw new Error("short termios buffer");
-    const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
-    this.iflag = v.getUint32(0, true);
-    this.oflag = v.getUint32(4, true);
-    this.cflag = v.getUint32(8, true);
-    this.lflag = v.getUint32(12, true);
-    this.lineDiscipline = b[16] ?? 0;
-    this.cc.set(b.subarray(17, 36));
-    if (flush) { this.q.length = 0; this.line.length = 0; }
+  private control(index: number): number {
+    if (index < 0 || index >= NCCS) {
+      throw new RangeError(
+        `invalid termios control-character index ${index}`,
+      );
+    }
+
+    return this.attributes[CC_OFFSET + index]!;
   }
 
-  available(): number { return this.q.reduce((n, b) => n + b.length, 0); }
+  private isControlCharacter(
+    ch: string,
+    index: number,
+  ): boolean {
+    const value = this.control(index);
 
-  async read(): Promise<Uint8Array> {
-    const b = this.q.shift();
-    if (b !== undefined) return b;
-    return new Promise(ok => this.wait.push(ok));
+    /*
+     * Linux uses zero as _POSIX_VDISABLE for these controls.
+     */
+    return value !== 0 &&
+      ch.length === 1 &&
+      ch.charCodeAt(0) === value;
   }
 
-  async write(b: Uint8Array, err = false): Promise<number> {
-    if (!this.stopped) await this.writeHost(dec(b), err);
-    return b.length;
+  private isErase(ch: string): boolean {
+    const erase = this.control(VERASE);
+    const code = ch.charCodeAt(0);
+
+    if (erase !== 0 && code === erase) {
+      return true;
+    }
+
+    /*
+     * Accept both common terminal encodings when the configured erase
+     * character is Backspace or DEL.
+     */
+    return (
+      (erase === 0x7f || erase === 0x08) &&
+      (code === 0x7f || code === 0x08)
+    );
   }
 
-  hold(): void { this.refs++; }
-  close(): void { if (this.refs > 0) this.refs--; }
-  holdR(): void { this.rrefs++; }
-  releaseR(): void { if (this.rrefs > 0) this.rrefs--; }
-  cancel(): void { /* A controlling terminal survives individual processes. */ }
+  private eraseLast(): boolean {
+    const characters = Array.from(this.line);
 
-  private put(b: Uint8Array): void {
-    const fn = this.wait.shift();
-    if (fn) fn(b);
-    else this.q.push(b);
+    if (!characters.length) {
+      return false;
+    }
+
+    characters.pop();
+    this.line = characters.join("");
+
+    if (this.hasLocalFlag(ECHO)) {
+      if (this.hasLocalFlag(ECHOE)) {
+        this.write("\b \b");
+      } else {
+        this.write(
+          String.fromCharCode(this.control(VERASE)),
+        );
+      }
+    }
+
+    return true;
   }
 
-  private commit(addNewline: boolean): void {
-    if (addNewline) this.line.push(10);
-    this.put(Uint8Array.from(this.line));
-    this.line.length = 0;
+  private eraseWord(): void {
+    let characters = Array.from(this.line);
+
+    while (
+      characters.length &&
+      /\s/u.test(characters[characters.length - 1]!)
+    ) {
+      this.eraseLast();
+      characters = Array.from(this.line);
+    }
+
+    while (
+      characters.length &&
+      !/\s/u.test(characters[characters.length - 1]!)
+    ) {
+      this.eraseLast();
+      characters = Array.from(this.line);
+    }
   }
 
-  private async echo(b: Uint8Array): Promise<void> {
-    if (b.length === 1 && b[0] === 10) await this.writeHost("\r\n", false);
-    else await this.writeHost(dec(b), false);
+  private killLine(): void {
+    while (this.eraseLast()) {
+      // Erase the current canonical input buffer.
+    }
+
+    if (
+      this.hasLocalFlag(ECHO) &&
+      this.hasLocalFlag(ECHOK) &&
+      !this.hasLocalFlag(ECHOE)
+    ) {
+      this.write("\r\n");
+    }
   }
 
-  private sig(b: number): boolean {
-    if (b === this.cc[VINTR]) { void this.writeHost("^C\r\n", false); this.signal(2); return true; }
-    if (b === this.cc[VSUSP]) { void this.writeHost("^Z\r\n", false); this.signal(15); return true; }
-    return false;
+  private canonicalEof(): void {
+    const pending = this.line;
+    this.line = "";
+
+    /*
+     * Empty pending input produces a zero-byte read. Non-empty pending
+     * input is returned immediately without appending a newline.
+     */
+    this.input.push(enc(pending));
   }
 
-  private flow(b: number): boolean {
-    if (b === this.cc[VSTOP]) { this.stopped = true; return true; }
-    if (b === this.cc[VSTART]) { this.stopped = false; return true; }
-    return false;
+  private signalInterrupt(): void {
+    const handled = this.interrupt(2) !== false;
+
+    this.line = "";
+
+    /*
+     * A foreground programme may leave the terminal in raw or no-echo mode.
+     * Restore interactive defaults when Ctrl+C returns control to a shell.
+     */
+    if (handled) {
+      this.attributes.set(defaultTermios());
+    }
+
+    if (handled && this.hasLocalFlag(ECHOCTL)) {
+      this.write("^C\r\n");
+    } else if (handled) {
+      this.write("\r\n");
+    }
+
+    this.input.wake();
   }
-}
 
-class TtyInput implements In {
-  readonly tty: TtyDevice;
-  constructor(private readonly dev: Tty) { this.tty = dev; }
-  rd(): Promise<Uint8Array> { return this.dev.read(); }
-  holdR(): void { this.dev.holdR(); }
-  releaseR(): void { this.dev.releaseR(); }
-  cancel(): void { this.dev.cancel(); }
-}
+  private char(ch: string): void {
+    if (
+      this.hasLocalFlag(ISIG) &&
+      this.isControlCharacter(ch, VINTR)
+    ) {
+      this.signalInterrupt();
+      return;
+    }
 
-class TtyOutput implements Out {
-  readonly tty: TtyDevice;
-  constructor(private readonly dev: Tty, private readonly err: boolean) { this.tty = dev; }
-  wr(b: Uint8Array): Promise<number> { return this.dev.write(b, this.err); }
-  hold(): void { this.dev.hold(); }
-  close(): void { this.dev.close(); }
+    if (!this.hasLocalFlag(ICANON)) {
+      this.input.push(enc(ch));
+
+      if (this.hasLocalFlag(ECHO)) {
+        this.write(ch);
+      }
+
+      return;
+    }
+
+    if (this.isErase(ch)) {
+      this.eraseLast();
+      return;
+    }
+
+    if (this.isControlCharacter(ch, VWERASE)) {
+      this.eraseWord();
+      return;
+    }
+
+    if (this.isControlCharacter(ch, VKILL)) {
+      this.killLine();
+      return;
+    }
+
+    if (this.isControlCharacter(ch, VEOF)) {
+      this.canonicalEof();
+      return;
+    }
+
+    if (ch === "\r" || ch === "\n") {
+      if (this.hasLocalFlag(ECHO)) {
+        this.write("\r\n");
+      }
+
+      this.input.push(enc(this.line + "\n"));
+      this.line = "";
+      return;
+    }
+
+    this.line += ch;
+
+    if (this.hasLocalFlag(ECHO)) {
+      this.write(ch);
+    }
+  }
 }

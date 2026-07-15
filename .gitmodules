@@ -1,3 +1,6 @@
+[submodule "kittyx"]
+	path = kittyx
+	url = ../kittyx.git
 [submodule "src/asm"]
 	path = src/asm
 	url = ../thistle-asm.git

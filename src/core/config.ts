@@ -1,4 +1,5 @@
 import type { Cred } from "../fs/vfs.js";
+import { IDENTITY } from "./identity.js";
 
 export interface AccountConfig {
   name: string;
@@ -8,20 +9,25 @@ export interface AccountConfig {
   cred: Cred;
 }
 
+export interface LocalSessionConfig {
+  mode: "direct" | "login";
+  account?: string;
+}
+
 export interface SystemConfig {
+  kernel: {
+    name: string;
+    prettyName: string;
+    id: string;
+    version: string;
+    machine: string;
+  };
   os: {
     name: string;
     prettyName: string;
     id: string;
     version: string;
-    release: string;
-    machine: string;
     homeUrl: string;
-  };
-  distro: {
-    name: string;
-    prettyName: string;
-    id: string;
   };
   hostName: string;
   terminal: {
@@ -32,7 +38,11 @@ export interface SystemConfig {
     cli: AccountConfig;
     web: AccountConfig;
   };
+  sessions: {
+    local: LocalSessionConfig;
+  };
   messages: {
+    tetoBanner: string;
     motd: string;
     issue: string;
     guestReadme: string;
@@ -44,20 +54,44 @@ export interface SystemConfig {
   };
 }
 
+export const rootCred = (): Cred => ({
+  uid: 0,
+  gid: 0,
+  ruid: 0,
+  euid: 0,
+  suid: 0,
+  rgid: 0,
+  egid: 0,
+  sgid: 0,
+  groups: [0],
+});
+
+export const guestCred = (): Cred => ({
+  uid: 1000,
+  gid: 1000,
+  ruid: 1000,
+  euid: 1000,
+  suid: 1000,
+  rgid: 1000,
+  egid: 1000,
+  sgid: 1000,
+  groups: [1000],
+});
+
 export const DEFAULT_CONFIG: SystemConfig = {
-  os: {
-    name: "Thistle",
-    prettyName: "Thistle OS",
+  kernel: {
+    name: IDENTITY.thistle.name,
+    prettyName: IDENTITY.thistle.name,
     id: "thistle",
     version: "2.1.0",
-    release: "2.1.0-thistle",
-    machine: "Thistle64 RV64GC",
-    homeUrl: "https://kittycrow.dev",
+    machine: IDENTITY.guest.architecture,
   },
-  distro: {
-    name: "HatsuneMiku OS",
-    prettyName: "初音ミクOS",
-    id: "hatsunemiku",
+  os: {
+    name: "Thistle",
+    prettyName: "Thistle development system",
+    id: "thistle",
+    version: "2.1.0",
+    homeUrl: "https://kittycrow.dev",
   },
   hostName: "thistle",
   terminal: {
@@ -70,21 +104,25 @@ export const DEFAULT_CONFIG: SystemConfig = {
       displayName: "root",
       home: "/root",
       shell: "/bin/thsh",
-      cred: { uid: 0, gid: 0, groups: [0] },
+      cred: rootCred(),
     },
     web: {
       name: "guest",
-      displayName: "Web Guest",
+      displayName: "Guest",
       home: "/home/guest",
       shell: "/bin/thsh",
-      cred: { uid: 1000, gid: 1000, groups: [1000] },
+      cred: guestCred(),
     },
   },
+  sessions: {
+    local: { mode: "direct" },
+  },
   messages: {
-    motd: "Welcome to Thistle 2.1.0, the 64-bit TypeScript Unix-like system.\nRun 'hello.txe', or compile C and C++ with tcc, clang, and gcc. Run 'help' for userland.\n",
-    issue: "Thistle OS 2.1.0 \\n \\l\n",
-    guestReadme: "Your home is writable; the rest of the system still has opinions.\n",
-    halted: "\nSession halted. Reload the page to start again.\n",
+    tetoBanner: "",
+    motd: "Welcome to the Thistle development system.\n",
+    issue: "初音ミクOS v｡三 \\n \\l\n",
+    guestReadme: "This browser/local guest account is unprivileged. Your home is writable.\n",
+    halted: "\r\nThistle halted.\r\n",
   },
   author: {
     name: "Kitty Crow",

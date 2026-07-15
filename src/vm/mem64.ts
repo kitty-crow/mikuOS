@@ -2,7 +2,32 @@ import { bad } from "../core/err.js";
 
 export const PG = 65536;
 
-export class Mem64 {
+export interface RvMemory {
+  readonly top: bigint;
+  readonly cap: number;
+  readonly used: number;
+  read(at: bigint, n: number): Uint8Array;
+  write(at: bigint, b: Uint8Array): void;
+  drop(at: bigint, n: number): void;
+  u8(at: bigint): number;
+  i8(at: bigint): bigint;
+  u16(at: bigint): number;
+  i16(at: bigint): bigint;
+  u32(at: bigint): number;
+  i32(at: bigint): bigint;
+  u64(at: bigint): bigint;
+  i64(at: bigint): bigint;
+  f32(at: bigint): number;
+  f64(at: bigint): number;
+  set8(at: bigint, n: bigint | number): void;
+  set16(at: bigint, n: bigint | number): void;
+  set32(at: bigint, n: bigint | number): void;
+  set64(at: bigint, n: bigint | number): void;
+  setF32(at: bigint, n: number): void;
+  setF64(at: bigint, n: number): void;
+}
+
+export class Mem64 implements RvMemory {
   readonly page = new Map<number, Uint8Array>();
   used = 0;
 

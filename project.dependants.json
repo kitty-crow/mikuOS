@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "dependants": [
+    {
+      "repository": "kitty-crow/teto",
+      "dependency": "Thistle",
+      "event": "upstream-updated",
+      "impact": [
+        "kernel-source"
+      ]
+    }
+  ]
+}

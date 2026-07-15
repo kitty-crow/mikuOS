@@ -2,14 +2,28 @@ import { bad, KErr } from "../core/err.js";
 import { dec, enc } from "../io/stream.js";
 
 export interface Cred {
-  uid: number;
-  gid: number;
+  uid?: number;
+  gid?: number;
+  ruid?: number;
+  euid?: number;
+  suid?: number;
+  rgid?: number;
+  egid?: number;
+  sgid?: number;
   groups: number[];
 }
 
 export type Kind = "file" | "dir" | "link" | "char";
 export type Rfn = (n: number) => Uint8Array;
 export type Wfn = (b: Uint8Array) => number;
+
+/** A regular-file payload supplied lazily by a static browser root. */
+export interface RegSource {
+  readonly size: number;
+  readonly sum: string;
+  readonly head?: Uint8Array;
+  load(): Promise<Uint8Array>;
+}
 
 let next = 1;
 
@@ -38,10 +52,50 @@ export class Reg extends VNode {
   readonly kind = "file" as const;
   data: Uint8Array;
   sum: string | undefined;
+  source: RegSource | undefined;
+  private loading: Promise<Uint8Array> | undefined;
 
-  constructor(data: Uint8Array | string = "", mode = 0o644, uid = 0, gid = 0) {
+  constructor(
+    data: Uint8Array | string = "",
+    mode = 0o644,
+    uid = 0,
+    gid = 0,
+    source?: RegSource,
+    copy = true,
+  ) {
     super(mode, uid, gid);
-    this.data = typeof data === "string" ? enc(data) : data.slice();
+    const bytes = typeof data === "string" ? enc(data) : data;
+    this.data = copy ? bytes.slice() : bytes;
+    this.source = source;
+    this.sum = source?.sum;
+  }
+
+  get size(): number { return this.source && !this.data.length ? this.source.size : this.data.length; }
+  get residentSize(): number { return this.data.length; }
+  get lazy(): boolean { return !!this.source && !this.data.length && this.source.size > 0; }
+
+  head(n: number): Uint8Array {
+    if (this.data.length || !this.source) return this.data.slice(0, n);
+    return this.source.head?.slice(0, n) ?? new Uint8Array();
+  }
+
+  async materialise(): Promise<Uint8Array> {
+    if (!this.source || this.data.length || this.source.size === 0) return this.data;
+    if (!this.loading) {
+      this.loading = this.source.load().then(bytes => {
+        if (bytes.length !== this.source?.size) throw new Error("lazy regular-file size mismatch");
+        this.data = bytes;
+        return this.data;
+      }).finally(() => { this.loading = undefined; });
+    }
+    return this.loading;
+  }
+
+  replace(bytes: Uint8Array): void {
+    this.data = bytes;
+    this.source = undefined;
+    this.loading = undefined;
+    this.sum = undefined;
   }
 }
 
@@ -91,6 +145,8 @@ export interface Hit {
 
 const seg = (p: string): string[] => p.split("/").filter(x => x && x !== ".");
 const wild = (p: string): boolean => /[*?]|\[[^\]]+\]/.test(p);
+export const credUid = (c: Cred): number => c.uid ?? c.euid ?? c.ruid ?? 0;
+export const credGid = (c: Cred): number => c.gid ?? c.egid ?? c.rgid ?? 0;
 
 const wrx = (p: string): RegExp => {
   let s = "^";
@@ -119,9 +175,12 @@ export const norm = (p: string, cwd = "/"): string => {
 
 export const fmtMode = (n: VNode): string => {
   const k = n.kind === "dir" ? "d" : n.kind === "link" ? "l" : n.kind === "char" ? "c" : "-";
-  const bit = [0o400, 0o200, 0o100, 0o040, 0o020, 0o010, 0o004, 0o002, 0o001];
-  const ch = ["r", "w", "x", "r", "w", "x", "r", "w", "x"];
-  return k + bit.map((b, i) => n.mode & b ? ch[i] : "-").join("");
+  const m = n.mode;
+  const exec = (x: number, special: number, lo: string, hi: string): string => m & special ? m & x ? lo : hi : m & x ? "x" : "-";
+  return k +
+    (m & 0o400 ? "r" : "-") + (m & 0o200 ? "w" : "-") + exec(0o100, 0o4000, "s", "S") +
+    (m & 0o040 ? "r" : "-") + (m & 0o020 ? "w" : "-") + exec(0o010, 0o2000, "s", "S") +
+    (m & 0o004 ? "r" : "-") + (m & 0o002 ? "w" : "-") + exec(0o001, 0o1000, "t", "T");
 };
 
 export class Vfs {
@@ -131,8 +190,9 @@ export class Vfs {
   constructor(cap = 16 * 1024 * 1024) { this.cap = cap; }
 
   private ok(n: VNode, c: Cred, bit: number): boolean {
-    if (c.uid === 0) return true;
-    const sh = c.uid === n.uid ? 6 : c.gid === n.gid || c.groups.includes(n.gid) ? 3 : 0;
+    const uid = credUid(c), gid = credGid(c);
+    if (uid === 0) return true;
+    const sh = uid === n.uid ? 6 : gid === n.gid || c.groups.includes(n.gid) ? 3 : 0;
     return !!((n.mode >> sh) & bit);
   }
 
@@ -186,7 +246,10 @@ export class Vfs {
   readb(p: string, cwd: string, c: Cred): Uint8Array {
     const h = this.at(p, cwd, c);
     this.need(h.node, c, 4, h.path);
-    if (h.node instanceof Reg) return h.node.data.slice();
+    if (h.node instanceof Reg) {
+      if (h.node.lazy) bad("EAGAIN", `${h.path}: file content is loading`);
+      return h.node.data.slice();
+    }
     if (h.node instanceof Chr) return h.node.rfn(65536);
     if (h.node instanceof Dir) bad("EISDIR", h.path);
     return bad("EINVAL", h.path);
@@ -205,7 +268,7 @@ export class Vfs {
     } catch (e) {
       if (!(e instanceof KErr) || e.code !== "ENOENT") throw e;
       const q = this.par(p, cwd, c);
-      n = new Reg("", mode, c.uid, c.gid);
+      n = new Reg("", mode, credUid(c), credGid(c));
       q.dir.ent.set(q.name, n);
       made = { dir: q.dir, name: q.name };
       q.dir.touch(true);
@@ -213,19 +276,22 @@ export class Vfs {
     }
     this.need(n, c, 2, path);
     if (n instanceof Reg) {
+      if (add && n.lazy) bad("EAGAIN", `${path}: file content is loading`);
       const old = n.data;
+      const oldSource = n.source;
       if (add) {
         const x = new Uint8Array(n.data.length + b.length);
         x.set(n.data);
         x.set(b, n.data.length);
-        n.data = x;
-      } else n.data = b.slice();
+        n.replace(x);
+      } else n.replace(b.slice());
       if (this.used() > this.cap) {
         n.data = old;
+        n.source = oldSource;
         if (made) made.dir.ent.delete(made.name);
         bad("ENOSPC", path);
       }
-      n.sum = undefined;
+      if (!made) n.mode &= ~0o6000;
       n.touch(true);
       return;
     }
@@ -245,7 +311,7 @@ export class Vfs {
   mkfile(p: string, data: Uint8Array | string, cwd: string, c: Cred, mode = 0o644): Reg {
     const q = this.par(p, cwd, c);
     if (q.dir.ent.has(q.name)) bad("EEXIST", q.path);
-    const n = new Reg(data, mode, c.uid, c.gid);
+    const n = new Reg(data, mode, credUid(c), credGid(c));
     q.dir.ent.set(q.name, n);
     if (this.used() > this.cap) { q.dir.ent.delete(q.name); bad("ENOSPC", q.path); }
     q.dir.touch(true);
@@ -255,7 +321,7 @@ export class Vfs {
   mkdir(p: string, cwd: string, c: Cred, mode = 0o755): Dir {
     const q = this.par(p, cwd, c);
     if (q.dir.ent.has(q.name)) bad("EEXIST", q.path);
-    const n = new Dir(mode, c.uid, c.gid);
+    const n = new Dir(mode, credUid(c), credGid(c));
     q.dir.ent.set(q.name, n);
     q.dir.touch(true);
     return n;
@@ -264,7 +330,7 @@ export class Vfs {
   char(p: string, r: Rfn, w: Wfn, cwd: string, c: Cred, mode = 0o666, repeat = false): Chr {
     const q = this.par(p, cwd, c);
     if (q.dir.ent.has(q.name)) bad("EEXIST", q.path);
-    const n = new Chr(r, w, mode, c.uid, c.gid, repeat);
+    const n = new Chr(r, w, mode, credUid(c), credGid(c), repeat);
     q.dir.ent.set(q.name, n);
     return n;
   }
@@ -317,7 +383,7 @@ export class Vfs {
   symlink(to: string, p: string, cwd: string, c: Cred): void {
     const q = this.par(p, cwd, c);
     if (q.dir.ent.has(q.name)) bad("EEXIST", q.path);
-    q.dir.ent.set(q.name, new Sym(to, c.uid, c.gid));
+    q.dir.ent.set(q.name, new Sym(to, credUid(c), credGid(c)));
     q.dir.touch(true);
   }
 
@@ -329,22 +395,25 @@ export class Vfs {
 
   chmod(p: string, mode: number, cwd: string, c: Cred): void {
     const h = this.at(p, cwd, c, false);
-    if (c.uid !== 0 && c.uid !== h.node.uid) bad("EPERM", h.path);
+    const uid = credUid(c);
+    if (uid !== 0 && uid !== h.node.uid) bad("EPERM", h.path);
     h.node.mode = mode & 0o7777;
     h.node.touch();
   }
 
   chown(p: string, uid: number, gid: number, cwd: string, c: Cred): void {
-    if (c.uid !== 0) bad("EPERM", p);
+    if (credUid(c) !== 0) bad("EPERM", p);
     const n = this.at(p, cwd, c, false).node;
     n.uid = uid;
     n.gid = gid;
+    n.mode &= ~0o6000;
     n.touch();
   }
 
   utime(p: string, at: number, mt: number, cwd: string, c: Cred, follow = true): void {
     const h = this.at(p, cwd, c, follow);
-    if (c.uid !== 0 && c.uid !== h.node.uid) bad("EPERM", h.path);
+    const uid = credUid(c);
+    if (uid !== 0 && uid !== h.node.uid) bad("EPERM", h.path);
     h.node.at = at;
     h.node.mt = mt;
     h.node.ct = Date.now();
@@ -352,7 +421,7 @@ export class Vfs {
 
   stat(p: string, cwd: string, c: Cred, follow = true): St {
     const n = this.at(p, cwd, c, follow).node;
-    const size = n instanceof Reg ? n.data.length : n instanceof Dir ? n.ent.size : n instanceof Sym ? enc(n.to).length : 0;
+    const size = n instanceof Reg ? n.size : n instanceof Dir ? n.ent.size : n instanceof Sym ? enc(n.to).length : 0;
     return { ino: n.ino, kind: n.kind, mode: n.mode, uid: n.uid, gid: n.gid, nlink: n.nlink, size, at: n.at, mt: n.mt, ct: n.ct };
   }
 
@@ -390,7 +459,7 @@ export class Vfs {
       if (seen.has(v.ino)) return;
       seen.add(v.ino);
       n += 128;
-      if (v instanceof Reg) n += v.data.length;
+      if (v instanceof Reg) n += v.residentSize;
       if (v instanceof Dir) for (const x of v.ent.values()) go(x);
     };
     go(this.root);
