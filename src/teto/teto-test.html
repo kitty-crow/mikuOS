@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teto WebAssembly smoke test</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    body { max-width: 64rem; margin: 3rem auto; padding: 0 1.25rem; background: #111; color: #eee; }
+    h1 { font-size: 1.4rem; }
+    p { line-height: 1.6; }
+    pre { white-space: pre-wrap; padding: 1rem; border: 1px solid #555; border-radius: .5rem; background: #181818; line-height: 1.55; }
+    pre[data-state="pass"] { border-color: #6a6; }
+    pre[data-state="fail"] { border-color: #c66; }
+  </style>
+</head>
+<body>
+  <h1>Teto WebAssembly smoke test</h1>
+  <p>This page tests the generated Teto modules directly. It does not pretend that the current partial Teto milestone is already a complete mikuOS boot.</p>
+  <pre data-teto-status data-state="working">Starting…</pre>
+  <script type="module" src="./teto-test.js"></script>
+</body>
+</html>

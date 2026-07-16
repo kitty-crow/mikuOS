@@ -16,7 +16,10 @@
     "noImplicitOverride": true,
     "useDefineForClassFields": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true
   },
   "include": [
     "src/**/*.ts"

@@ -11,9 +11,11 @@ import { Sys } from "./sys.js";
 import { Wasi } from "../wasm/wasi.js";
 import { Sched } from "./sched.js";
 import { Net } from "../net/net.js";
+import type { TetoImageProvider } from "../teto/loader.js";
 import { Exe, codec, isExe } from "../asm/fmt.js";
 import { Vm } from "../vm/vm.js";
 import { Vm64 } from "../vm/vm64.js";
+import { Rv64 } from "../vm/rv64.js";
 import { Lim } from "./cap.js";
 import { DEFAULT_CONFIG, rootCred } from "./config.js";
 import type { AccountConfig, SystemConfig } from "./config.js";
@@ -101,6 +103,7 @@ export class Kern {
     readonly lim = Lim.host(),
     readonly config: SystemConfig = DEFAULT_CONFIG,
     readonly setId = false,
+    readonly teto?: TetoImageProvider,
   ) {
     this.fs = new Vfs(lim.fs);
     this.name = config.kernel.name;
@@ -309,7 +312,7 @@ export class Kern {
         try { const q = codec.unpack(bin); x = q instanceof Exe ? q : bad("ENOEXEC", `${path}: not an executable`); }
         catch (e) { x = bad("ENOEXEC", `${path}: ${e instanceof Error ? e.message : String(e)}`); }
         code = x.machine === "thistle64"
-          ? x.isa === "rv64gc" ? bad("ENOEXEC", "RV64GC execution is supplied by the Teto fork") : await new Vm64(new Sys(this, p)).run(x, [path, ...argv])
+          ? x.isa === "rv64gc" ? await new Rv64(new Sys(this, p)).run(x, [path, ...argv], bin) : await new Vm64(new Sys(this, p)).run(x, [path, ...argv])
           : await new Vm(new Sys(this, p)).run(x, [path, ...argv]);
       } else {
         const src = new TextDecoder().decode(bin);
