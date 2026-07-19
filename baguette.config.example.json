@@ -1,0 +1,61 @@
+{
+  "$schema": "./docs/baguette.schema.json",
+  "schema": 1,
+  "name": "Teto",
+  "project": "tsconfig.json",
+  "entries": [
+    "src/kernel/main.ts"
+  ],
+  "generatedDir": "build/teto-generated",
+  "outDir": "dist/teto",
+  "moduleBaseName": "teto",
+  "intrinsicModules": [],
+  "typeAliases": {
+    "I32": "i32",
+    "U32": "u32",
+    "I64": "i64",
+    "U64": "u64",
+    "Ptr": "u32"
+  },
+  "abiTypes": {
+    "I32": "number",
+    "U32": "number",
+    "I64": "bigint",
+    "U64": "bigint",
+    "Ptr": "number"
+  },
+  "abi": {
+    "exports": [
+      "kernelInit",
+      "kernelRun"
+    ]
+  },
+  "memory": {
+    "initialPages": 256,
+    "maximumPages": 32768,
+    "import": true,
+    "export": false
+  },
+  "runtime": "stub",
+  "variants": [
+    {
+      "name": "teto",
+      "threaded": false
+    },
+    {
+      "name": "teto-threads",
+      "threaded": true
+    }
+  ],
+  "allowedHostImports": [
+    {
+      "module": "env",
+      "name": "memory",
+      "kind": "memory"
+    }
+  ],
+  "completeKernel": false,
+  "productionKernel": "Thistle",
+  "materialiseInferredTypes": true,
+  "asyncLowering": "state-machine"
+}

@@ -4,3 +4,6 @@
 [submodule "src/asm"]
 	path = src/asm
 	url = ../thistle-asm.git
+[submodule "baguette"]
+	path = baguette
+	url = ../baguette.git

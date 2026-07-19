@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "name": "Teto",
+  "project": "tsconfig.json",
+  "entries": [
+    "src/teto/abi.ts",
+    "src/teto/kernel.ts",
+    "src/teto/vfs.ts",
+    "src/teto/thx.ts",
+    "src/teto/start.ts"
+  ],
+  "generatedDir": "build/teto-generated",
+  "outDir": "dist/teto",
+  "moduleBaseName": "teto",
+  "intrinsicModules": [
+    "src/teto/types.ts",
+    "src/teto/memory.ts",
+    "src/teto/word.ts"
+  ],
+  "abi": {
+    "exports": "all-exported-functions",
+    "verify": {
+      "init": "tetoKernelInit",
+      "initArgs": [
+        0,
+        1,
+        0
+      ],
+      "initExpected": 0,
+      "valid": "tetoKernelValid",
+      "validArgs": [
+        0
+      ],
+      "validExpected": 1
+    }
+  },
+  "memory": {
+    "initialPages": 256,
+    "maximumPages": 32768,
+    "import": true,
+    "export": false
+  },
+  "runtime": "stub",
+  "variants": [
+    {
+      "name": "teto",
+      "threaded": false,
+      "preludeFile": "baguette/prelude/teto-baseline.ts"
+    },
+    {
+      "name": "teto-threads",
+      "threaded": true,
+      "preludeFile": "baguette/prelude/teto-threaded.ts"
+    }
+  ],
+  "allowedHostImports": [
+    {
+      "module": "env",
+      "name": "memory",
+      "kind": "memory"
+    }
+  ],
+  "completeKernel": false,
+  "productionKernel": "Thistle",
+  "typeAliases": {
+    "TetoMemory": "usize",
+    "I8": "i8",
+    "U8": "u8",
+    "I16": "i16",
+    "U16": "u16",
+    "I32": "i32",
+    "U32": "u32",
+    "I64": "i64",
+    "U64": "u64",
+    "F32": "f32",
+    "F64": "f64",
+    "Ptr": "u32"
+  },
+  "abiTypes": {
+    "TetoMemory": "number",
+    "I8": "number",
+    "U8": "number",
+    "I16": "number",
+    "U16": "number",
+    "I32": "number",
+    "U32": "number",
+    "I64": "bigint",
+    "U64": "bigint",
+    "F32": "number",
+    "F64": "number",
+    "Ptr": "number"
+  },
+  "materialiseInferredTypes": true
+}
