@@ -1,0 +1,42 @@
+name: Test thistle upstream
+
+on:
+  repository_dispatch:
+    types: [upstream-updated]
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Exact upstream commit to test
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-thistle
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Merge candidate upstream revision
+        env:
+          REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
+        run: scripts/ci/update-upstream.sh "$REVISION"
+      - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - run: npm test
+      - name: Open draft pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
+        run: scripts/ci/open-upstream-pr.sh "$REVISION"

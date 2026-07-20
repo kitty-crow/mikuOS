@@ -7,7 +7,7 @@
       "path": "src/asm",
       "commit": "e3c616f5db42508856e7ef4100eb25e281076994",
       "relationship": "runtime",
-      "direct": true,
+      "direct": false,
       "updatePolicy": "pull-request"
     },
     {
@@ -16,6 +16,15 @@
       "path": "kittyx",
       "commit": "80dee2d611adb42b7b07608cc308d51d5112e84c",
       "relationship": "contract",
+      "direct": false,
+      "updatePolicy": "pull-request"
+    },
+    {
+      "name": "Baguette",
+      "repository": "kitty-crow/baguette",
+      "path": "baguette",
+      "commit": "2aefed72959712a6022551bd00ad245b2c74e039",
+      "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
     }

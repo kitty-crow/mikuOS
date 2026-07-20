@@ -2,11 +2,12 @@
   "schema": 1,
   "dependants": [
     {
-      "repository": "kitty-crow/teto",
-      "dependency": "Thistle",
+      "repository": "kitty-crow/mikuOS",
+      "dependency": "Teto",
       "event": "upstream-updated",
       "impact": [
-        "kernel-source"
+        "kernel-source",
+        "generated-kernel"
       ]
     }
   ]

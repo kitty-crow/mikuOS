@@ -1,12 +1,11 @@
-# Thistle
+# Teto
 
-**THISTLE** is the **Thistle Hosted Interactive Shell-based
-TypeScript Live Environment**.
+**TETO** is **Teto Executes Thistle Optimally**.
 
-Thistle is a TypeScript kernel for the Thistle32 and Thistle64
-execution environments. It provides processes, scheduling, signals,
-file descriptors, pipes, terminals, a virtual filesystem, devices,
-networking and the system-call layer used by guest programmes.
+Teto is the WebAssembly form of the Thistle kernel. It retains the
+Thistle source tree and adds the RV64GC execution core, the
+WebAssembly host interface, and the build configuration used to
+generate baseline and threaded kernel modules with Baguette.
 
 ## Build and test
 
@@ -15,27 +14,23 @@ networking and the system-call layer used by guest programmes.
     npm run build
     npm test
 
-`npm run build` compiles the TypeScript source into `build/`.
-`npm test` performs the repository checks without constructing an
-operating-system image.
+The build writes:
 
-## Source tree
+- `dist/teto/teto.wasm`;
+- `dist/teto/teto-threads.wasm`;
+- `dist/teto/teto.manifest.json`.
 
-- `src/core` contains kernel and process state;
-- `src/fs` contains the virtual filesystem;
-- `src/io` contains streams and terminal handling;
-- `src/net` contains network transport;
-- `src/vm` contains the Thistle32 and Thistle64 interpreters;
-- `src/wasm` contains WASI support for guest WebAssembly;
-- `src/asm` is the pinned ThistleASM checkout.
+Validate the configured source without replacing the generated
+modules with:
+
+    npm run teto:validate
 
 ## Documentation
 
-- [Kernel architecture](docs/architecture.md)
-- [Processes and descriptors](docs/processes.md)
-- [Filesystem](docs/filesystem.md)
-- [Programme execution](docs/execution.md)
-- [System calls](docs/syscalls.md)
+- [Architecture](docs/architecture.md)
+- [Building Teto](docs/build.md)
+- [Host interface](docs/host-interface.md)
+- [Compatibility path](docs/compatibility.md)
 
 ## Licence
 

@@ -1,14 +1,15 @@
-# Kernel architecture
+# Architecture
 
-`Kernel` owns global process and filesystem state. A process carries
-its credentials, environment, descriptors, working directory and
-execution state. System calls operate on that state through the
-`Sys` interface.
+Teto uses the Thistle source tree as its kernel definition. The
+Teto-specific source under `src/teto` provides the WebAssembly ABI,
+linear-memory layout, virtual filesystem bridge and kernel entry
+points. `src/vm/rv64.ts` connects RV64GC programme execution to that
+generated core.
 
-The virtual filesystem is independent of the host filesystem. Host
-adapters populate or persist a tree, while guest operations continue
-to use the same VFS interfaces.
+Two modules are produced from the same configured source. The
+baseline module uses ordinary WebAssembly memory. The threaded
+module enables the shared-memory path required by the threaded
+runtime.
 
-Terminal input and output are streams. The command-line and browser
-hosts supply different terminal adapters without changing the guest
-process model.
+The generated manifest records inputs, output hashes, ABI exports,
+memory limits and the compiler revision used for the build.
