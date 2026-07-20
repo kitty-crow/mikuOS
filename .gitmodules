@@ -7,3 +7,6 @@
 [submodule "baguette"]
 	path = baguette
 	url = ../baguette.git
+[submodule "thistlecc"]
+	path = thistlecc
+	url = ../thistlecc.git

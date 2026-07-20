@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "built_with": {
+    "KITTYX": "d368310a4db86b339de2621633536379b9590ebe",
+    "ThistleASM": "861cd7bab9485ab7a35ed70b76f3cf3348c5b3f8",
+    "Thistle": "c2d0406de6aeedfb1973d2eefec64aef2e353291",
+    "Baguette": "8ad0972d3f91e1246cdf812cb76fca08bb0addde",
+    "Teto": "14b1b792936604243510c6f5163ea4263630dcde",
+    "ThistleCC": "dea0d82ad4a8fb0349fa22bb7bbcdae133f8c866",
+    "mikuOS": "WORKTREE"
+  },
+  "files": {},
+  "note": "Stage 3 populates file hashes after a verified root-image build."
+}
