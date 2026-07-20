@@ -87,11 +87,11 @@ export const DEFAULT_CONFIG: SystemConfig = {
     machine: IDENTITY.guest.architecture,
   },
   os: {
-    name: "Thistle",
-    prettyName: "Thistle development system",
-    id: "thistle",
-    version: "2.1.0",
-    homeUrl: "https://kittycrow.dev",
+    name: IDENTITY.os.name,
+    prettyName: IDENTITY.os.prettyName,
+    id: "mikuos",
+    version: IDENTITY.os.version,
+    homeUrl: "https://kittycrow.dev/mikuos",
   },
   hostName: "thistle",
   terminal: {
@@ -118,11 +118,11 @@ export const DEFAULT_CONFIG: SystemConfig = {
     local: { mode: "direct" },
   },
   messages: {
-    tetoBanner: "",
-    motd: "Welcome to the Thistle development system.\n",
+    tetoBanner: "[Teto] Baguette-generated WebAssembly RV64 core active; unmigrated syscalls still use the Thistle compatibility bridge.",
+    motd: "Welcome to mikuOS v0.3.\nKernel source: Thistle. Run 'help' for userland.\n",
     issue: "初音ミクOS v｡三 \\n \\l\n",
     guestReadme: "This browser/local guest account is unprivileged. Your home is writable.\n",
-    halted: "\r\nThistle halted.\r\n",
+    halted: "\r\nmikuOS halted.\r\n",
   },
   author: {
     name: "Kitty Crow",

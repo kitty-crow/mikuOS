@@ -1,0 +1,54 @@
+{
+  "kernel": {
+    "name": "Thistle",
+    "prettyName": "Thistle",
+    "id": "thistle",
+    "version": "2.1.0",
+    "machine": "Thistle64 RV64GC"
+  },
+  "os": {
+    "name": "mikuOS",
+    "prettyName": "初音ミクOS v｡三",
+    "id": "mikuos",
+    "version": "0.3",
+    "homeUrl": "https://kittycrow.dev/mikuos"
+  },
+  "hostName": "thistle",
+  "terminal": {
+    "term": "xterm-256color",
+    "lang": "en_GB.UTF-8"
+  },
+  "accounts": {
+    "cli": {
+      "name": "root",
+      "displayName": "root",
+      "home": "/root",
+      "shell": "/bin/thsh",
+      "cred": {
+        "uid": 0,
+        "gid": 0,
+        "groups": [
+          0
+        ]
+      }
+    },
+    "web": {
+      "name": "guest",
+      "displayName": "Guest",
+      "home": "/home/guest",
+      "shell": "/bin/thsh",
+      "cred": {
+        "uid": 1000,
+        "gid": 1000,
+        "groups": [
+          1000
+        ]
+      }
+    }
+  },
+  "sessions": {
+    "local": {
+      "mode": "direct"
+    }
+  }
+}

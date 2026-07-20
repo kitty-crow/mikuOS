@@ -1,0 +1,19 @@
+{
+  "kernel": {
+    "name": "Thistle",
+    "prettyName": "Thistle",
+    "id": "thistle",
+    "version": "2.1.0",
+    "machine": "Thistle64 RV64GC"
+  },
+  "os": {
+    "name": "mikuOS",
+    "prettyName": "初音ミクOS v｡三",
+    "id": "mikuos",
+    "version": "0.3",
+    "homeUrl": "https://kittycrow.dev/mikuos"
+  },
+  "messages": {
+    "tetoBanner": ""
+  }
+}

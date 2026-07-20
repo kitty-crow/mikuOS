@@ -1,0 +1,9 @@
+name: mikuOS
+release: 0.3.0
+kernel:
+  name: Thistle
+  source: authoritative-typescript
+  release: 2.1.0
+  machine: Thistle64 RV64GC
+build_policy: host-only-thistlecc
+host_compiler: thistlecc

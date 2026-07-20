@@ -1,8 +1,23 @@
 export const IDENTITY = {
+  os: {
+    name: "mikuOS",
+    prettyName: "初音ミクOS v｡三",
+    version: "0.3",
+    expansion: "MIKU Is Not the Kernel; it's Userspace.",
+  },
   thistle: {
     name: "Thistle",
     expansion: "Thistle Hosted Interactive Shell-based TypeScript Live Environment.",
-    role: "TypeScript kernel source",
+    role: "sole authoritative human-written TypeScript kernel source",
   },
-  guest: { architecture: "Thistle64", executable: "THX" },
+  teto: {
+    name: "Teto",
+    expansion: "Teto Executes Thistle Optimally.",
+    role: "generated optimised WebAssembly form of Thistle",
+  },
+  guest: {
+    architecture: "Thistle64 RV64GC",
+    executable: "THX",
+  },
 } as const;
+

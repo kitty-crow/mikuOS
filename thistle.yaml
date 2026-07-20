@@ -1,0 +1,28 @@
+name: Thistle
+release: 2.1.0
+kind: user-space-unix-kernel
+language: TypeScript
+targets:
+  - browser
+  - bun
+kernel:
+  scheduler: cooperative
+  filesystem: vfs-with-host-root-mirror
+  process_model: isolated-contexts
+  syscall_boundary: object-capability
+  network: http-fetch
+  native_isa: thistle64
+  compatibility_isa: thistle32
+userland:
+  shell: thsh
+  layout: fhs-inspired
+toolchain:
+  assembler: as
+  linker: ld
+  object: thistle-object-v2
+  executable: thistle-executable-v2
+  compiler_target: riscv64gc-lp64d
+  libc: musl-1.2.6
+  compilers: [tinycc-0.9.28rc, clang-22.1.0, gcc-16.1.0]
+  overlay: 2.1.0-r2
+licence: MIT

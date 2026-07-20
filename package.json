@@ -1,34 +1,58 @@
 {
-  "name": "@kittyx/teto",
-  "version": "0.1.0",
+  "name": "mikuos",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "The Baguette-generated WebAssembly fork of the Thistle kernel.",
+  "description": "mikuOS 0.3, a Unix-like system built on the Thistle kernel.",
   "scripts": {
-    "build": "npm run build:host && npm run teto:build",
-    "build:host": "rm -rf build dist && tsc -p tsconfig.json",
-    "teto:build": "bun baguette/src/compiler.ts",
+    "build": "npm run build:thistle && npm run teto:build",
+    "build:thistle": "npm run clean && tsc -p tsconfig.json && node build/tool/post.js",
+    "teto:build": "bun baguette/src/compiler.ts && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi",
     "teto:validate": "bun baguette/src/compiler.ts --validate-only",
+    "clean": "rm -rf build dist thistle.js vendor",
+    "test": "npm run build && node build/test/all.js",
+    "test:toolchain": "bun run thistlecc/test/test.ts",
+    "test:guest-toolchain": "npm run build && THISTLE_FUEL=0 node build/test/toolchain.js",
+    "test:bun": "npm run build && bun run build/test/bun.js",
+    "start": "npm run build && node build/main/cli.js",
+    "mikuos": "bun run mikuos.ts",
+    "web": "npm run build",
+    "serve:web": "npm run build && bun run build/main/server.js",
+    "host:elf2thx": "node build/tool/elf2thx.js",
+    "release:source": "npm run build && node build/tool/release.js",
+    "pack:root": "node build/tool/pkg.js --root staging/root --out assets/thistle-toolchain.tpk.gz --release 2.1.0-r2",
+    "check": "npm test",
+    "teto:test:cli": "bun baguette.ts --test-cli",
+    "teto:test:web": "bun baguette.ts --test-web",
     "teto:build:fast": "bun baguette/src/compiler.ts --skip-determinism-check",
-    "test": "npm run build && npm run teto:validate",
-    "check": "npm test"
+    "baguette:check": "tsc -p baguette/tsconfig.json --noEmit"
+  },
+  "mikuos": {
+    "version": "0.3"
+  },
+  "thistle": {
+    "version": "2.1.0",
+    "target": "2.2"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "@types/node": "^26.1.1",
     "assemblyscript": "0.28.19",
-    "binaryen": "130.0.0-nightly.20260609",
     "bun": "1.3.14",
     "esbuild": "0.28.1",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "binaryen": "130.0.0-nightly.20260609"
   },
   "engines": {
     "bun": ">=1.1.0",
     "node": ">=20.0.0"
   },
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0"
+  },
   "author": {
     "name": "Kitty Crow",
     "url": "https://kittycrow.dev"
-  },
-  "license": "MIT"
+  }
 }
