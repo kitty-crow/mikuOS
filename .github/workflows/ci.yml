@@ -22,4 +22,6 @@ jobs:
       - name: Install
     run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
   - name: Check 1
+    run: npm run build
+  - name: Check 2
     run: npm test

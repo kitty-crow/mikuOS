@@ -40,7 +40,7 @@ jobs:
       - name: Install
         run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Compatibility suite
-        run: npm test
+        run: npm run build && npm test
       - name: Open or update approval-only pull request
         env:
           GH_TOKEN: ${{ github.token }}

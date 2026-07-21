@@ -1,4 +1,4 @@
-name: Test thistle upstream
+name: Test teto upstream
 
 on:
   repository_dispatch:
@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: upstream-thistle
+  group: upstream-teto
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
         run: scripts/ci/update-upstream.sh "$REVISION"
       - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - run: npm test
+      - run: npm run build && npm test
       - name: Open draft pull request
         env:
           GH_TOKEN: ${{ github.token }}

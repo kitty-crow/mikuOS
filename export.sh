@@ -1,0 +1,29 @@
+GZIP=-4 tar -caf "../mikuos-context-$(date -u +%Y%m%dT%H%M%SZ).tar.gz" \
+  --exclude-vcs \
+  --exclude='./node_modules' \
+  --exclude='./build' \
+  --exclude='./dist' \
+  --exclude='./vendor' \
+  --exclude='./coverage' \
+  --exclude='./.cache' \
+  --exclude='./.parcel-cache' \
+  --exclude='./.thistle/usr/bin' \
+  --exclude='./.thistle/usr/lib' \
+  --exclude='./.thistle/usr/libexec' \
+  --exclude='./.thistle/usr/share' \
+  --exclude='./.thistle/tmp' \
+  --exclude='./.thistle/var/tmp' \
+  --exclude='./.thistle/var/cache' \
+  --exclude='./*.tar' \
+  --exclude='./*.tar.gz' \
+  --exclude='./*.tar.zst' \
+  --exclude='./*.tgz' \
+  --exclude='./*.zip' \
+  --exclude='./*.wasm' \
+  --exclude='./*.map' \
+  --exclude='./core' \
+  --exclude='./core.*' \
+  --exclude='*.before-*' \
+  --exclude='*.log' \
+  --exclude='*.tmp' \
+  .
