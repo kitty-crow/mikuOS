@@ -34,4 +34,25 @@ Thumbs.db
 /*.tar.gz
 /*.tgz
 
+/recovery/
+/deprecated/
+/upstream/
+/backups/
+/upload/
+/assets/thistle-toolchain.tpk.gz
+/.shadow-utils-stage/
+/.sudo-stage/
+/ports/**/*.o
+/ports/account/passwd
+/ports/account/su
+/ports/account/login
+/ports/account/useradd
+/ports/account/userdel
+/ports/account/usermod
+/ports/account/groupadd
+/ports/account/groupdel
+/ports/account/groupmod
+/ports/account/gpasswd
+/ports/account/sudo
+
 node_modules/

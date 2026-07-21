@@ -1,15 +1,14 @@
-# Architecture
+# System architecture
 
-Teto uses the Thistle source tree as its kernel definition. The
-Teto-specific source under `src/teto` provides the WebAssembly ABI,
-linear-memory layout, virtual filesystem bridge and kernel entry
-points. `src/vm/rv64.ts` connects RV64GC programme execution to that
-generated core.
+MIKU provides the userspace shared by both kernel modes. Teto is the
+default; `--kernel=thistle` selects the direct TypeScript kernel.
+Both modes use the same process model, root image, accounts, shell
+and command set.
 
-Two modules are produced from the same configured source. The
-baseline module uses ordinary WebAssembly memory. The threaded
-module enables the shared-memory path required by the threaded
-runtime.
+`src/main` contains the command-line and browser hosts. `src/apps`
+contains built-in commands. `src/sh` contains the shell and line
+editor. System configuration and the packaged filesystem are loaded
+by the main boot path.
 
-The generated manifest records inputs, output hashes, ABI exports,
-memory limits and the compiler revision used for the build.
+Kernel selection is a launch decision. Userland code should not
+branch on it unless a test is explicitly comparing the two modes.

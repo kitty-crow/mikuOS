@@ -1,9 +1,12 @@
-# Static web build
+# Static browser build
 
-`npm run web` retains the current `npm run build` behaviour and produces a
-static `dist/web` tree. Teto is the default kernel, while `?kernel=thistle`
-selects the direct source path. Assets use relative URLs so the same output
-can be served from a GitHub Pages subdirectory.
+`npm run web` performs the normal build and leaves a static site in
+`dist/web`. The page loads the compiled host, the packaged root image
+and the Teto modules using relative URLs.
 
-The deployed page has no Node, Bun, WebSocket or central-server requirement.
-A local server is used only to preview or test the static files.
+Teto is the default browser kernel. Add `?kernel=thistle` to select
+the direct TypeScript path.
+
+The deployed site does not require Node, Bun, a WebSocket service or
+a central mikuOS server. `npm run serve:web` starts a local preview
+server for testing the generated files.

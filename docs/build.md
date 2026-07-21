@@ -1,18 +1,21 @@
-# Building Teto
+# Build and generated files
 
-`npm run build` first compiles the TypeScript host and then invokes
-the pinned Baguette checkout with `baguette.config.json`.
+A complete build starts from a recursive checkout:
 
-The configuration selects the kernel entry modules, ABI exports,
-memory layout, allowed host imports and output variants. Baguette
-validates the source before writing either module. A normal build
-also performs its deterministic-output check.
-
-Useful commands:
-
+    git submodule update --init --recursive
+    npm install
     npm run build
-    npm run teto:validate
-    npm run teto:build:fast
 
-`teto:build:fast` is intended for local iteration. Release and
-compatibility builds use the normal deterministic path.
+`npm run build` runs `build:thistle` followed by `teto:build`.
+`build:thistle` compiles the TypeScript host and prepares the static
+host files. `teto:build` runs the pinned Baguette compiler and then
+updates the browser copy when the web tree exists.
+
+Important outputs are:
+
+- `build/` for compiled host JavaScript;
+- `dist/teto/teto.wasm` and `teto-threads.wasm`;
+- `dist/teto/teto.manifest.json`;
+- `dist/web/` for the static site and packaged root image.
+
+`npm test` rebuilds the project and runs the integration suite.

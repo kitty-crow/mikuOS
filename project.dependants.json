@@ -1,14 +1,4 @@
 {
   "schema": 1,
-  "dependants": [
-    {
-      "repository": "kitty-crow/mikuOS",
-      "dependency": "Teto",
-      "event": "upstream-updated",
-      "impact": [
-        "kernel-source",
-        "generated-kernel"
-      ]
-    }
-  ]
+  "dependants": []
 }

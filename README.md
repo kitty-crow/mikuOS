@@ -1,37 +1,46 @@
-# Teto
+# MIKU
 
-**TETO** is **Teto Executes Thistle Optimally**.
+**MIKU** (**MIKU Is Not the Kernel; it's Userspace**) is the
+userspace of **初音ミクOS**, written **mikuOS** in Latin script.
 
-Teto is the WebAssembly form of the Thistle kernel. It retains the
-Thistle source tree and adds the RV64GC execution core, the
-WebAssembly host interface, and the build configuration used to
-generate baseline and threaded kernel modules with Baguette.
+The 0.3 release is styled **v｡三**.
 
-## Build and test
+## Build
 
     git submodule update --init --recursive
     npm install
     npm run build
-    npm test
 
-The build writes:
+The build compiles the TypeScript host, generates the baseline and
+threaded Teto kernels, validates their manifest and prepares the
+static browser files.
 
-- `dist/teto/teto.wasm`;
-- `dist/teto/teto-threads.wasm`;
-- `dist/teto/teto.manifest.json`.
+## Run
 
-Validate the configured source without replacing the generated
-modules with:
+Start with the default Teto kernel:
 
-    npm run teto:validate
+    bun mikuos.ts
+
+Start with the direct Thistle kernel:
+
+    bun mikuos.ts --kernel=thistle
+
+Build the static site:
+
+    npm run web
+
+The resulting site is in `dist/web`.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md)
-- [Building Teto](docs/build.md)
-- [Host interface](docs/host-interface.md)
-- [Compatibility path](docs/compatibility.md)
+- [System architecture](docs/architecture.md)
+- [Build and generated files](docs/build.md)
+- [Dependencies](docs/dependencies.md)
+- [Root image and userland](docs/userland.md)
+- [Static browser build](docs/web.md)
+- [Userland migration plan](docs/userland-migration.md)
 
 ## Licence
 
-MIT. See `LICENSE`.
+Original project code is MIT licensed. Bundled and installed
+third-party software retains its own licence; see `THIRD_PARTY.md`.

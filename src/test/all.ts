@@ -1,4 +1,5 @@
 import { boot } from "../main/boot.js";
+import { ROOT_IMAGE_VERSION } from "../main/image.js";
 import { FnApp } from "../apps/base.js";
 import type { Ch, Os } from "../main/boot.js";
 import { KErr } from "../core/err.js";
@@ -2311,7 +2312,7 @@ test("versioned image migration changes stock identity but preserves local ident
   eq(b.s.read("/etc/issue"), DEFAULT_CONFIG.messages.issue);
   eq(b.s.read("/etc/os-release"), "locally branded\n");
   eq(b.s.read("/etc/motd"), DEFAULT_CONFIG.messages.motd);
-  eq(tree.imageVersion, 4);
+  eq(tree.imageVersion, ROOT_IMAGE_VERSION);
 });
 
 test("an invalid optional root package does not prevent base-system boot", async () => {
