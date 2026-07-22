@@ -32,7 +32,7 @@
       "name": "ThistleCC",
       "repository": "kitty-crow/thistlecc",
       "path": "thistlecc",
-      "commit": "d8031bcc77ed5ccb0262ab75b117b6675d982981",
+      "commit": "1a7848486cf2516adbe7f10806bfe4e76d039c8c",
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
