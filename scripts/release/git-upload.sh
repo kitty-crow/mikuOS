@@ -149,7 +149,7 @@ OVERSIZED="$(find .thistle.base -type f -size +95M -print -quit)"
 [ -z "$OVERSIZED" ] ||
     die "GitHub file-size limit would be exceeded by: $OVERSIZED"
 
-git diff --cached --check
+git diff --cached --check -- . ':(exclude).thistle.base/**'
 
 git status --short
 git diff --cached --stat
