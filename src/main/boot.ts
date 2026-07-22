@@ -68,7 +68,16 @@ export class Os {
       }
     }
     if (!this.sh.prefs.showWelcome) return;
-    try { await this.host.put(this.s.read("/etc/motd"), "sys"); }
+    try {
+      const kernelSource = this.activeKernelMode === "teto"
+        ? "Teto"
+        : "Thistle";
+      const motd = this.s.read("/etc/motd").replace(
+        /Kernel source: (?:Thistle|Teto)\./,
+        `Kernel source: ${kernelSource}.`,
+      );
+      await this.host.put(motd, "sys");
+    }
     catch { /* A deleted motd should not brick the login. */ }
   }
 

@@ -1446,6 +1446,19 @@ test("mikuOS boot mode selects generated Teto without manual guest environment o
   eq(rig.os.s.env("MIKUOS_KERNEL_MODE"), "teto");
   eq(rig.os.s.env("THISTLE_RV_CORE"), "teto-wasm-core");
   eq(rig.os.k.name, "Teto");
+  await rig.os.hello();
+  ok(
+    rig.out.includes(
+      "Kernel source: Teto. Run 'help' for userland.",
+    ),
+    "Teto startup banner did not report Teto",
+  );
+  ok(
+    !rig.out.includes(
+      "Kernel source: Thistle. Run 'help' for userland.",
+    ),
+    "Teto startup banner incorrectly reported Thistle",
+  );
   const uname = await rig.run("uname -s");
   eq(uname.out, "Teto\n");
   ok(rig.os.s.read("/proc/version").startsWith("Teto version "));
@@ -1461,6 +1474,45 @@ test("mikuOS auto mode falls back cleanly when Teto validation fails", async () 
   eq(rig.os.activeKernelMode, "thistle");
   eq(rig.os.s.env("MIKUOS_KERNEL_MODE"), "thistle");
   eq(rig.os.s.env("THISTLE_RV_CORE"), undefined);
+  await rig.os.hello();
+  ok(
+    rig.out.includes(
+      "Kernel source: Thistle. Run 'help' for userland.",
+    ),
+    "Thistle fallback banner did not report Thistle",
+  );
+  ok(
+    !rig.out.includes(
+      "Kernel source: Teto. Run 'help' for userland.",
+    ),
+    "Thistle fallback banner incorrectly reported Teto",
+  );
+});
+
+test("explicit Thistle mode reports Thistle in the startup banner", async () => {
+  const rig = new Rig(
+    undefined,
+    false,
+    undefined,
+    "thistle",
+  );
+
+  await rig.os.hello();
+
+  eq(rig.os.activeKernelMode, "thistle");
+  eq(rig.os.k.name, "Thistle");
+  ok(
+    rig.out.includes(
+      "Kernel source: Thistle. Run 'help' for userland.",
+    ),
+    "explicit Thistle banner did not report Thistle",
+  );
+  ok(
+    !rig.out.includes(
+      "Kernel source: Teto. Run 'help' for userland.",
+    ),
+    "explicit Thistle banner incorrectly reported Teto",
+  );
 });
 
 test("configuration separates kernel and OS identity with legacy compatibility", () => {
