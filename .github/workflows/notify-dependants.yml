@@ -14,15 +14,34 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
+    env:
+      KITTYX_AUTOMATION_APP_ID: ${{ vars.KITTYX_AUTOMATION_APP_ID }}
+      KITTYX_AUTOMATION_PRIVATE_KEY: ${{ secrets.KITTYX_AUTOMATION_PRIVATE_KEY }}
     steps:
+      - name: Check automation configuration
+        id: automation
+        shell: bash
+        run: |
+          if [ -n "$KITTYX_AUTOMATION_APP_ID" ] && [ -n "$KITTYX_AUTOMATION_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dependency notification skipped because the KITTYX automation credentials are not configured."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.automation.outputs.configured == 'true'
+
       - uses: actions/create-github-app-token@v2
+        if: steps.automation.outputs.configured == 'true'
         id: app-token
         with:
-          app-id: ${{ vars.KITTYX_AUTOMATION_APP_ID }}
-          private-key: ${{ secrets.KITTYX_AUTOMATION_PRIVATE_KEY }}
+          app-id: ${{ env.KITTYX_AUTOMATION_APP_ID }}
+          private-key: ${{ env.KITTYX_AUTOMATION_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+
       - name: Dispatch exact revision
+        if: steps.automation.outputs.configured == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           SOURCE_REPOSITORY: ${{ github.repository }}
