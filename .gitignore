@@ -56,3 +56,73 @@ Thumbs.db
 /ports/account/sudo
 
 node_modules/
+
+# BEGIN KITTYX REPOSITORY HYGIENE
+# Dependencies and generated build products
+/node_modules/
+/build/
+/dist/
+/coverage/
+*.tsbuildinfo
+
+# Caches and test output
+/.cache/
+/.parcel-cache/
+/.turbo/
+/.bun/
+.eslintcache
+*.lcov
+*.profraw
+*.profdata
+
+# Local runtime state and logs
+/.thistle/
+/.thistle-web/
+/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local configuration and credentials
+/.env
+/.env.*
+!/.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editors and operating-system metadata
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary, rejected, emergency and crash files
+*.tmp
+*.bak
+*.orig
+*.rej
+*.before-*
+/*.tar
+/*.tar.gz
+/*.tar.zst
+/*.tgz
+/*.zip
+/core
+/core.*
+
+# Local mikuOS rebuild workspace and generated root-package inputs
+/.rebuild-userland/
+/staging/
+/assets/*.tpk.gz
+/assets/*.tpk.gz.sha256
+
+# Local context-export helper; scripts/ remains source-controlled
+/export.sh
+# END KITTYX REPOSITORY HYGIENE
