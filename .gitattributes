@@ -1,2 +1,6 @@
 # The committed base filesystem is generated build/runtime content.
 .thistle.base/** linguist-generated
+
+# Shell and Python files are project automation/support tooling, not the implementation.
+*.sh linguist-detectable=false
+*.py linguist-detectable=false
