@@ -1,0 +1,8 @@
+os_name: mikuOS
+os_release: v0.3
+kernel_name: Thistle
+kernel_source: Thistle
+kernel_release: 2.1.0
+machine: Thistle64 RV64GC
+host_compiler: thistlecc
+build_policy: host-only-thistlecc

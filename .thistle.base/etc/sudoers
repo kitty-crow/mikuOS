@@ -1,0 +1,4 @@
+Defaults env_reset
+Defaults secure_path="/bin:/usr/bin:/sbin:/usr/sbin"
+root ALL=(ALL:ALL) ALL
+guest ALL=(ALL:ALL) NOPASSWD: ALL

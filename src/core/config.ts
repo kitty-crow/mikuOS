@@ -93,7 +93,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
     version: IDENTITY.os.version,
     homeUrl: "https://kittycrow.dev/mikuos",
   },
-  hostName: "thistle",
+  hostName: "mikuos",
   terminal: {
     term: "xterm-256color",
     lang: "en_GB.UTF-8",

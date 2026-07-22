@@ -1,0 +1,39 @@
+.arch thistle64
+.code64
+.include "/usr/include/thistle/sys.tas"
+.section .rodata
+digits: .asciz "0123456789"
+nl: .byte 10
+
+.text
+.global _start
+_start:
+  li r0, 5
+  call fib
+  addi r1, r0, 48
+  push r1
+  li r0, 1
+  mov r1, sp
+  li r2, 1
+  sys SYS_write
+  addi sp, sp, 8
+  write 1, nl, 1
+  exit 0
+
+.type fib, @function
+fib:
+  enter 8
+  st32 [fp - 4], r0
+  cmpi r0, 1
+  jle .base
+  subi r0, r0, 1
+  call fib
+  st32 [fp - 8], r0
+  ld32 r0, [fp - 4]
+  subi r0, r0, 2
+  call fib
+  ld32 r1, [fp - 8]
+  add r0, r0, r1
+.base:
+  leave
+  ret

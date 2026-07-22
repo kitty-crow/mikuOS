@@ -116,10 +116,9 @@ export const refreshBuiltinRescues = (k: Kern): void => {
           migrationPolicy: "retain as mikuOS-specific infrastructure",
         },
       ],
-      publicDrivers: [
-        "cc", "c++", "cpp", "gcc", "g++", "clang", "clang++", "tcc",
-        "riscv64-unknown-linux-musl-gcc", "riscv64-unknown-linux-musl-g++",
-      ],
+      // Guest compilers are not shipped in the browser base.
+      // mikuOS uses the host-only thistlecc build pipeline.
+      publicDrivers: [],
     }, null, 2)}\n`,
     0o644,
   );

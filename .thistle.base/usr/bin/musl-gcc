@@ -1,0 +1,2 @@
+#!/bin/sh
+exec "${REALGCC:-riscv64-linux-gnu-gcc}" "$@" -specs "/usr/lib/musl-gcc.specs"

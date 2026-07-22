@@ -1,0 +1,11 @@
+.arch thistle64
+.code64
+.include "/usr/include/thistle/sys.tas"
+.text
+.global _start
+.extern main
+.type _start, @function
+_start:
+  call main
+  sys SYS_exit
+.size _start, . - _start

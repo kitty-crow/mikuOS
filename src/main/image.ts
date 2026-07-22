@@ -167,7 +167,7 @@ export const image = (k: Kern): void => {
   f("/etc/group", "root:x:0:\nusers:x:1000:guest\n");
   f("/etc/shadow", "root:!:19723:0:99999:7:::\nguest:!:19723:0:99999:7:::\n", 0o600);
   f("/etc/gshadow", "root:!::\nusers:!::guest\n", 0o600);
-  f("/etc/hosts", "127.0.0.1 localhost thistle\n::1 localhost thistle\n");
+  f("/etc/hosts", "127.0.0.1 localhost mikuos\n::1 localhost mikuos\n");
   f("/etc/fstab", "hostfs / thistlefs rw 0 0\nproc /proc procfs ro 0 0\ndev /dev devfs rw 0 0\n");
   f("/etc/profile", "export PATH=/bin:/usr/bin:/sbin:/usr/sbin\nexport LANG=en_GB.UTF-8\n");
   f("/root/readme.txt", "This home belongs to root. Try the pipelines in /usr/share/examples.thsh.\n", 0o600);

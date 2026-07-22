@@ -1,0 +1,53 @@
+.arch thistle32
+.code32
+.equ SYS_exit, 0
+.equ SYS_read, 1
+.equ SYS_write, 2
+.equ SYS_open, 3
+.equ SYS_close, 4
+.equ SYS_seek, 5
+.equ SYS_unlink, 6
+.equ SYS_mkdir, 7
+.equ SYS_getpid, 8
+.equ SYS_getppid, 9
+.equ SYS_brk, 10
+.equ SYS_clock, 11
+.equ SYS_yield, 12
+.equ SYS_stat, 13
+.equ SYS_getcwd, 14
+.equ SYS_chdir, 15
+.equ SYS_rmdir, 16
+.equ SYS_rename, 17
+.equ SYS_chmod, 18
+.equ SYS_random, 19
+.equ SYS_spawn, 20
+.equ SYS_wait, 21
+.equ SYS_kill, 22
+.equ SYS_sleep, 23
+.equ SYS_getuid, 24
+.equ SYS_getgid, 25
+.equ SYS_dup, 26
+.equ SYS_link, 27
+.equ SYS_symlink, 28
+.equ SYS_readlink, 29
+.equ SYS_truncate, 30
+
+.equ O_RDONLY, 0
+.equ O_WRONLY, 1
+.equ O_RDWR, 2
+.equ O_CREAT, 0x40
+.equ O_EXCL, 0x80
+.equ O_TRUNC, 0x200
+.equ O_APPEND, 0x400
+
+.macro exit code
+  li r0, \code
+  sys SYS_exit
+.endm
+
+.macro write fd, ptr, len
+  li r0, \fd
+  la r1, \ptr
+  li r2, \len
+  sys SYS_write
+.endm

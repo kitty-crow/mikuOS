@@ -1,0 +1,5 @@
+#!/bin/thsh
+echo 'three one two two' | tr ' ' '\n' | sort | uniq -c
+mkdir -p /tmp/thistle-demo
+echo 'written through a redirect' > /tmp/thistle-demo/note
+cat /tmp/thistle-demo/note

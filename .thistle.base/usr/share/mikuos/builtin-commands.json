@@ -1,0 +1,696 @@
+{
+  "schema": 1,
+  "rescueRoot": "/usr/libexec/mikuos/builtin",
+  "commands": [
+    {
+      "name": "[",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Evaluate file, string and integer expressions.",
+      "usage": "[ expression",
+      "activePath": "/bin/[",
+      "rescuePath": "/usr/libexec/mikuos/builtin/[",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "as",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Assemble Thistle64 or compatibility Thistle32 source.",
+      "usage": "as [--64|--32] [-g] [-I dir] [-D name[=value]] [-o file] [--listing file] source",
+      "activePath": "/bin/as",
+      "rescuePath": "/usr/libexec/mikuos/builtin/as",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "base64",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Encode or decode base64 data.",
+      "usage": "base64 [-d] [file]",
+      "activePath": "/bin/base64",
+      "rescuePath": "/usr/libexec/mikuos/builtin/base64",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "basename",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Strip directory components.",
+      "usage": "basename path",
+      "activePath": "/bin/basename",
+      "rescuePath": "/usr/libexec/mikuos/builtin/basename",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "cat",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Concatenate files to standard output.",
+      "usage": "cat [-n] [file ...]",
+      "activePath": "/bin/cat",
+      "rescuePath": "/usr/libexec/mikuos/builtin/cat",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "chmod",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Change file mode bits.",
+      "usage": "chmod mode path ...",
+      "activePath": "/bin/chmod",
+      "rescuePath": "/usr/libexec/mikuos/builtin/chmod",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "chown",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Change file owner and group.",
+      "usage": "chown uid[:gid] path ...",
+      "activePath": "/bin/chown",
+      "rescuePath": "/usr/libexec/mikuos/builtin/chown",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "clear",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Clear the terminal.",
+      "usage": "clear",
+      "activePath": "/bin/clear",
+      "rescuePath": "/usr/libexec/mikuos/builtin/clear",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "cp",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Copy files and directory trees.",
+      "usage": "cp [-r] source ... dest",
+      "activePath": "/bin/cp",
+      "rescuePath": "/usr/libexec/mikuos/builtin/cp",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "cut",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Select fields or characters.",
+      "usage": "cut -d delim -f list | -c list [file ...]",
+      "activePath": "/bin/cut",
+      "rescuePath": "/usr/libexec/mikuos/builtin/cut",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "date",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the current date and time.",
+      "usage": "date [-u] [+format]",
+      "activePath": "/bin/date",
+      "rescuePath": "/usr/libexec/mikuos/builtin/date",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "df",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Show virtual filesystem space.",
+      "usage": "df [-h]",
+      "activePath": "/bin/df",
+      "rescuePath": "/usr/libexec/mikuos/builtin/df",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "dirname",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Strip the final path component.",
+      "usage": "dirname path",
+      "activePath": "/bin/dirname",
+      "rescuePath": "/usr/libexec/mikuos/builtin/dirname",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "dis",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Inspect and disassemble Thistle objects and executables.",
+      "usage": "dis [-hdr] file ...",
+      "activePath": "/bin/dis",
+      "rescuePath": "/usr/libexec/mikuos/builtin/dis",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "dmesg",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the kernel ring buffer.",
+      "usage": "dmesg",
+      "activePath": "/bin/dmesg",
+      "rescuePath": "/usr/libexec/mikuos/builtin/dmesg",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "echo",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print arguments.",
+      "usage": "echo [-ne] [arg ...]",
+      "activePath": "/bin/echo",
+      "rescuePath": "/usr/libexec/mikuos/builtin/echo",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "elf2thx",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Import a static RV64 ELF executable into THX.",
+      "usage": "elf2thx [-o file] input",
+      "activePath": "/bin/elf2thx",
+      "rescuePath": "/usr/libexec/mikuos/builtin/elf2thx",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "env",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print an environment or run with modified values.",
+      "usage": "env [NAME=value ...] [command [arg ...]]",
+      "activePath": "/bin/env",
+      "rescuePath": "/usr/libexec/mikuos/builtin/env",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "expr",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Evaluate a simple integer or string expression.",
+      "usage": "expr value operator value",
+      "activePath": "/bin/expr",
+      "rescuePath": "/usr/libexec/mikuos/builtin/expr",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "false",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Return an unsuccessful exit status.",
+      "usage": "false",
+      "activePath": "/bin/false",
+      "rescuePath": "/usr/libexec/mikuos/builtin/false",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "file",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Identify executable and data formats.",
+      "usage": "file path ...",
+      "activePath": "/bin/file",
+      "rescuePath": "/usr/libexec/mikuos/builtin/file",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "find",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Walk a directory tree.",
+      "usage": "find [path] [-name glob] [-type f|d|l]",
+      "activePath": "/bin/find",
+      "rescuePath": "/usr/libexec/mikuos/builtin/find",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "free",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Show virtual kernel memory use.",
+      "usage": "free [-h]",
+      "activePath": "/bin/free",
+      "rescuePath": "/usr/libexec/mikuos/builtin/free",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "grep",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Select lines matching a pattern.",
+      "usage": "grep [-ivncE] pattern [file ...]",
+      "activePath": "/bin/grep",
+      "rescuePath": "/usr/libexec/mikuos/builtin/grep",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "head",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the first lines of input.",
+      "usage": "head [-n count] [file ...]",
+      "activePath": "/bin/head",
+      "rescuePath": "/usr/libexec/mikuos/builtin/head",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "help",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "List installed programs or describe one.",
+      "usage": "help [command]",
+      "activePath": "/bin/help",
+      "rescuePath": "/usr/libexec/mikuos/builtin/help",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "hostname",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Get or set the kernel host name.",
+      "usage": "hostname [name]",
+      "activePath": "/bin/hostname",
+      "rescuePath": "/usr/libexec/mikuos/builtin/hostname",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "id",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print process identity.",
+      "usage": "id",
+      "activePath": "/bin/id",
+      "rescuePath": "/usr/libexec/mikuos/builtin/id",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "kill",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Send a signal to a process or process group.",
+      "usage": "kill [-SIGNAL] pid ...",
+      "activePath": "/bin/kill",
+      "rescuePath": "/usr/libexec/mikuos/builtin/kill",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "ld",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Link Thistle objects into a native executable.",
+      "usage": "ld [-e symbol] [-o file] [--Map file] [--image-base n] [--memory n] object ...",
+      "activePath": "/bin/ld",
+      "rescuePath": "/usr/libexec/mikuos/builtin/ld",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "ln",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Create hard or symbolic links.",
+      "usage": "ln [-s] target link",
+      "activePath": "/bin/ln",
+      "rescuePath": "/usr/libexec/mikuos/builtin/ln",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "ls",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "List directory contents.",
+      "usage": "ls [-alhR] [path ...]",
+      "activePath": "/bin/ls",
+      "rescuePath": "/usr/libexec/mikuos/builtin/ls",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "mkdir",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Create directories.",
+      "usage": "mkdir [-p] [-m mode] dir ...",
+      "activePath": "/bin/mkdir",
+      "rescuePath": "/usr/libexec/mikuos/builtin/mkdir",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "mount",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Show mounted kernel filesystems.",
+      "usage": "mount",
+      "activePath": "/bin/mount",
+      "rescuePath": "/usr/libexec/mikuos/builtin/mount",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "mv",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Move or rename files.",
+      "usage": "mv source ... dest",
+      "activePath": "/bin/mv",
+      "rescuePath": "/usr/libexec/mikuos/builtin/mv",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "nm",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "List symbols in Thistle objects and executables.",
+      "usage": "nm [-gun] file ...",
+      "activePath": "/bin/nm",
+      "rescuePath": "/usr/libexec/mikuos/builtin/nm",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "objdump",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Inspect and disassemble Thistle objects and executables.",
+      "usage": "objdump [-hdr] file ...",
+      "activePath": "/bin/objdump",
+      "rescuePath": "/usr/libexec/mikuos/builtin/objdump",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "printenv",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print environment values.",
+      "usage": "printenv [NAME ...]",
+      "activePath": "/bin/printenv",
+      "rescuePath": "/usr/libexec/mikuos/builtin/printenv",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "printf",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Format and print values.",
+      "usage": "printf format [value ...]",
+      "activePath": "/bin/printf",
+      "rescuePath": "/usr/libexec/mikuos/builtin/printf",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "ps",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Report live kernel processes.",
+      "usage": "ps [-ef]",
+      "activePath": "/bin/ps",
+      "rescuePath": "/usr/libexec/mikuos/builtin/ps",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "pwd",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the current working directory.",
+      "usage": "pwd",
+      "activePath": "/bin/pwd",
+      "rescuePath": "/usr/libexec/mikuos/builtin/pwd",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "readlink",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print symbolic-link targets.",
+      "usage": "readlink link ...",
+      "activePath": "/bin/readlink",
+      "rescuePath": "/usr/libexec/mikuos/builtin/readlink",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "rm",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Remove files or directory trees.",
+      "usage": "rm [-rf] path ...",
+      "activePath": "/bin/rm",
+      "rescuePath": "/usr/libexec/mikuos/builtin/rm",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "rmdir",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Remove empty directories.",
+      "usage": "rmdir dir ...",
+      "activePath": "/bin/rmdir",
+      "rescuePath": "/usr/libexec/mikuos/builtin/rmdir",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "sed",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Apply a substitution to text.",
+      "usage": "sed [-n] 's/pattern/replacement/[gp]' [file ...]",
+      "activePath": "/bin/sed",
+      "rescuePath": "/usr/libexec/mikuos/builtin/sed",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "seq",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print a numeric sequence.",
+      "usage": "seq [first [step]] last",
+      "activePath": "/bin/seq",
+      "rescuePath": "/usr/libexec/mikuos/builtin/seq",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "sh",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Run the Thistle command shell.",
+      "usage": "sh [-c command] [script [arg ...]]",
+      "activePath": "/bin/sh",
+      "rescuePath": "/usr/libexec/mikuos/builtin/sh",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "size",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Show section sizes in Thistle binaries.",
+      "usage": "size file ...",
+      "activePath": "/bin/size",
+      "rescuePath": "/usr/libexec/mikuos/builtin/size",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "sleep",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Pause for a duration.",
+      "usage": "sleep number[s|m|h]",
+      "activePath": "/bin/sleep",
+      "rescuePath": "/usr/libexec/mikuos/builtin/sleep",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "sort",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Sort text lines.",
+      "usage": "sort [-nru] [file ...]",
+      "activePath": "/bin/sort",
+      "rescuePath": "/usr/libexec/mikuos/builtin/sort",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "stat",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Display inode metadata.",
+      "usage": "stat path ...",
+      "activePath": "/bin/stat",
+      "rescuePath": "/usr/libexec/mikuos/builtin/stat",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "strings",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print readable strings in binary data.",
+      "usage": "strings [-n length] file ...",
+      "activePath": "/bin/strings",
+      "rescuePath": "/usr/libexec/mikuos/builtin/strings",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "tail",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the final lines of input.",
+      "usage": "tail [-n count] [file ...]",
+      "activePath": "/bin/tail",
+      "rescuePath": "/usr/libexec/mikuos/builtin/tail",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "tee",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Copy standard input to files and output.",
+      "usage": "tee [-a] [file ...]",
+      "activePath": "/bin/tee",
+      "rescuePath": "/usr/libexec/mikuos/builtin/tee",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "test",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Evaluate file, string and integer expressions.",
+      "usage": "test expression",
+      "activePath": "/bin/test",
+      "rescuePath": "/usr/libexec/mikuos/builtin/test",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "thsh",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Run the Thistle command shell.",
+      "usage": "thsh [-c command] [script [arg ...]]",
+      "activePath": "/bin/thsh",
+      "rescuePath": "/usr/libexec/mikuos/builtin/thsh",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "time",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Run a command and report elapsed time.",
+      "usage": "time command [arg ...]",
+      "activePath": "/bin/time",
+      "rescuePath": "/usr/libexec/mikuos/builtin/time",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "touch",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Create files or update their modification time.",
+      "usage": "touch file ...",
+      "activePath": "/bin/touch",
+      "rescuePath": "/usr/libexec/mikuos/builtin/touch",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "tr",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Translate or delete characters.",
+      "usage": "tr [-d] set1 [set2]",
+      "activePath": "/bin/tr",
+      "rescuePath": "/usr/libexec/mikuos/builtin/tr",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "true",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Return a successful exit status.",
+      "usage": "true",
+      "activePath": "/bin/true",
+      "rescuePath": "/usr/libexec/mikuos/builtin/true",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "uname",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print kernel information.",
+      "usage": "uname [-asrnm]",
+      "activePath": "/bin/uname",
+      "rescuePath": "/usr/libexec/mikuos/builtin/uname",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "uniq",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Filter adjacent duplicate lines.",
+      "usage": "uniq [-cd] [file]",
+      "activePath": "/bin/uniq",
+      "rescuePath": "/usr/libexec/mikuos/builtin/uniq",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "uptime",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Show time since kernel boot.",
+      "usage": "uptime",
+      "activePath": "/bin/uptime",
+      "rescuePath": "/usr/libexec/mikuos/builtin/uptime",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "wasm",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Execute a WebAssembly/WASI binary.",
+      "usage": "wasm path [arg ...]",
+      "activePath": "/bin/wasm",
+      "rescuePath": "/usr/libexec/mikuos/builtin/wasm",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "wc",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Count lines, words and bytes.",
+      "usage": "wc [-lwc] [file ...]",
+      "activePath": "/bin/wc",
+      "rescuePath": "/usr/libexec/mikuos/builtin/wc",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "wget",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Retrieve files over HTTP or HTTPS.",
+      "usage": "wget [-qS] [--spider] [-O file] [-T sec] [--max-size bytes] URL ...",
+      "activePath": "/bin/wget",
+      "rescuePath": "/usr/libexec/mikuos/builtin/wget",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "which",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Locate commands in PATH.",
+      "usage": "which command ...",
+      "activePath": "/bin/which",
+      "rescuePath": "/usr/libexec/mikuos/builtin/which",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "whoami",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Print the effective user name.",
+      "usage": "whoami",
+      "activePath": "/bin/whoami",
+      "rescuePath": "/usr/libexec/mikuos/builtin/whoami",
+      "defaultProvider": "built-in"
+    },
+    {
+      "name": "yes",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "description": "Repeat a line until interrupted.",
+      "usage": "yes [text]",
+      "activePath": "/bin/yes",
+      "rescuePath": "/usr/libexec/mikuos/builtin/yes",
+      "defaultProvider": "built-in"
+    }
+  ]
+}

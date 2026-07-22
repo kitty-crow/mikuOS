@@ -126,3 +126,9 @@ Thumbs.db
 # Local context-export helper; scripts/ remains source-controlled
 /export.sh
 # END KITTYX REPOSITORY HYGIENE
+
+# Controlled public browser root and atomic-sync scratch
+/.thistle.base.tmp-*/
+/.thistle.base.previous/
+!/.thistle.base/
+!/.thistle.base/**

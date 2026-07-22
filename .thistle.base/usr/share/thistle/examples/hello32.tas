@@ -1,0 +1,16 @@
+.arch thistle32
+.code32
+.include "/usr/include/thistle32/sys.tas"
+.file 1 "hello.tas"
+.section .rodata
+msg:
+  .ascii "Hello from Thistle 1 compatibility assembly!\n"
+.equ msg_len, . - msg
+
+.text
+.global _start
+.type _start, @function
+_start:
+  write 1, msg, msg_len
+  exit 0
+.size _start, . - _start

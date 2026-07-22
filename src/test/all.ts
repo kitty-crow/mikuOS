@@ -1663,7 +1663,7 @@ test("canonical mikuOS release metadata stays aligned", async () => {
   ok(thistleEntry.includes('import "./src/main/cli.ts"'));
 });
 
-test("classic thistle.js boots the complete static Teto guest without a runtime server", async () => {
+test("classic thistle.js boots the static Teto guest without a runtime server", async () => {
   interface HFs {
     readFile(path: URL, encoding: "utf8"): Promise<string>;
     readFile(path: URL): Promise<Uint8Array>;
@@ -1777,9 +1777,7 @@ test("classic thistle.js boots the complete static Teto guest without a runtime 
     eq(handle.session.os.k.setId, true);
     ok(handle.session.os.k.mounts()[0]!.opt.includes("suid"));
     eq(handle.session.os.s.stat("/usr/bin/sudo").mode, 0o4755);
-    ok(handle.session.os.s.stat("/usr/bin/gcc").size > 0, "static browser root omitted the GCC launcher");
-    ok(handle.session.os.s.stat("/usr/libexec/thistle/gcc").size > 1024 * 1024, "static browser root omitted the real compiler");
-    ok(handle.session.os.k.fs.used() < 96 * 1024 * 1024, "static browser root eagerly expanded the compiler toolchain");
+    ok(handle.session.os.k.fs.used() < 96 * 1024 * 1024, "static browser root eagerly expanded its packed userland");
 
     output = "";
     handle.session.key("whoami\r");
@@ -2233,7 +2231,7 @@ test("nosuid execution ignores file privilege bits", async () => {
 test("boot image and init", async () => {
   const r = new Rig();
   eq(r.os.k.ps()[0]?.pid, 1);
-  eq(r.os.s.read("/etc/hostname"), "thistle\n");
+  eq(r.os.s.read("/etc/hostname"), "mikuos\n");
   const release = r.os.s.read("/etc/os-release");
   ok(release.includes('NAME="mikuOS"'));
   ok(release.includes('PRETTY_NAME="初音ミクOS v｡三"'));
@@ -2374,7 +2372,7 @@ test("an invalid optional root package does not prevent base-system boot", async
     pkg: { install: async () => { throw new Error("truncated test package"); } },
   });
   await os.ready;
-  eq(os.s.read("/etc/hostname"), "thistle\n");
+  eq(os.s.read("/etc/hostname"), "mikuos\n");
   ok(error.includes("Optional root package was not installed: truncated test package"));
   ok(os.k.logs.some(line => line.includes("pkg: install failed: truncated test package")));
 });
@@ -2397,7 +2395,7 @@ test("host directory uses ordinary files and real hard links", async () => {
   try {
     const a = boot({ put: () => {}, tree: new DirTree(dir) });
     await a.ready;
-    eq(dec(await hfs.readFile(`${dir}/etc/hostname`)), "thistle\n", "first boot did not seed the complete host root");
+    eq(dec(await hfs.readFile(`${dir}/etc/hostname`)), "mikuos\n", "first boot did not seed the complete host root");
     eq((await hfs.lstat(`${dir}/root`)).mode & 0o777, 0o700, "guest directory mode was not applied to the host root");
     a.s.mkdir("/var/persistence-test");
     a.s.write("/var/persistence-test/a.txt", "one\n"); a.s.link("/var/persistence-test/a.txt", "/var/persistence-test/b.txt"); a.s.chmod("/var/persistence-test/a.txt", 0o640);

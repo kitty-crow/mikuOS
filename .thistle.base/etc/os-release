@@ -1,0 +1,9 @@
+NAME="mikuOS"
+PRETTY_NAME="初音ミクOS v｡三"
+VERSION="v0.3"
+VERSION_ID="0.3"
+ID=mikuos
+KERNEL_NAME=Thistle
+KERNEL_VERSION=2.1.0
+KERNEL_SOURCE=Thistle
+HOME_URL="https://kittycrow.dev/mikuos"

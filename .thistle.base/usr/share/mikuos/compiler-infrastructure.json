@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "buildPolicy": "host cross-compile to static RV64GC LP64D musl ELF, then host elf2thx",
+  "integration": [
+    {
+      "path": "/usr/libexec/thistle/thx-cc",
+      "origin": "mikuOS",
+      "implementation": "native compiler-driver wrapper",
+      "role": "select an upstream compiler and convert final static ELF output to THX2",
+      "migrationPolicy": "minimise; retain only the target integration and ELF-to-THX transition"
+    },
+    {
+      "path": "/bin/elf2thx",
+      "origin": "mikuOS",
+      "implementation": "TypeScript built-in",
+      "rescuePath": "/usr/libexec/mikuos/builtin/elf2thx",
+      "role": "THX2 format importer",
+      "migrationPolicy": "retain as mikuOS-specific infrastructure"
+    }
+  ],
+  "publicDrivers": [
+    "cc",
+    "c++",
+    "cpp",
+    "gcc",
+    "g++",
+    "clang",
+    "clang++",
+    "tcc",
+    "riscv64-unknown-linux-musl-gcc",
+    "riscv64-unknown-linux-musl-g++"
+  ]
+}

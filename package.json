@@ -25,7 +25,10 @@
     "teto:test:cli": "bun baguette.ts --test-cli",
     "teto:test:web": "bun baguette.ts --test-web",
     "teto:build:fast": "bun baguette/src/compiler.ts --skip-determinism-check",
-    "baguette:check": "tsc -p baguette/tsconfig.json --noEmit"
+    "baguette:check": "tsc -p baguette/tsconfig.json --noEmit",
+    "sync:base": "python3 scripts/release/sync-thistle-base.py",
+    "audit:base": "python3 scripts/release/sync-thistle-base.py --check",
+    "git:upload": "bash scripts/release/git-upload.sh"
   },
   "mikuos": {
     "version": "0.3"

@@ -8,12 +8,12 @@
   },
   "os": {
     "name": "mikuOS",
-    "prettyName": "初音ミクOS v｡三",
+    "prettyName": "\u521d\u97f3\u30df\u30afOS v\uff61\u4e09",
     "id": "mikuos",
     "version": "0.3",
     "homeUrl": "https://kittycrow.dev/mikuos"
   },
-  "hostName": "thistle",
+  "hostName": "mikuos",
   "terminal": {
     "term": "xterm-256color",
     "lang": "en_GB.UTF-8"

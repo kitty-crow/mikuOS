@@ -1,0 +1,3 @@
+hostfs / thistlefs rw 0 0
+proc /proc procfs ro 0 0
+dev /dev devfs rw 0 0

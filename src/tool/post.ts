@@ -17,7 +17,7 @@ const web = new URL("dist/web/", root);
 const webAssets = new URL("assets/", web);
 const vendor = new URL("vendor/", web);
 const bundle = new URL("thistle.js", web);
-const cliRoot = new URL(".thistle/", root);
+const cliRoot = new URL(".thistle.base/", root);
 const webRoot = new URL("root/", web);
 
 await fs.mkdir(assets, { recursive: true });

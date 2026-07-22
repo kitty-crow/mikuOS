@@ -41,21 +41,7 @@ jobs:
         run: npm ci
 
       - name: Build mikuOS
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          # Compile first so the CLI is available.
-          npm run clean
-          npx tsc -p tsconfig.json
-
-          # GitHub runners have no ignored .thistle runtime directory.
-          # Boot the source kernel once to create a clean canonical root.
-          printf 'true\n' | node build/main/cli.js --kernel=thistle
-
-          # Package that root for the browser, then generate Teto.
-          node build/tool/post.js
-          npm run teto:build
+        run: npm run build
 
       - name: Verify static Pages output
         shell: bash
