@@ -55,6 +55,7 @@ REMOVE_PATHS = (
 )
 
 PRIVATE_NAMES = {
+    ".thsh_history",
     ".bash_history",
     ".zsh_history",
     ".ash_history",

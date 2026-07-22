@@ -18,16 +18,5 @@
       "migrationPolicy": "retain as mikuOS-specific infrastructure"
     }
   ],
-  "publicDrivers": [
-    "cc",
-    "c++",
-    "cpp",
-    "gcc",
-    "g++",
-    "clang",
-    "clang++",
-    "tcc",
-    "riscv64-unknown-linux-musl-gcc",
-    "riscv64-unknown-linux-musl-g++"
-  ]
+  "publicDrivers": []
 }
