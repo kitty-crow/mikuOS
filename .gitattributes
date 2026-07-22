@@ -1,0 +1,2 @@
+# The committed base filesystem is generated build/runtime content.
+.thistle.base/** linguist-generated
