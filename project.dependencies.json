@@ -5,7 +5,7 @@
       "name": "KITTYX",
       "repository": "kitty-crow/kittyx",
       "path": "kittyx",
-      "commit": "80dee2d611adb42b7b07608cc308d51d5112e84c",
+      "commit": "6d6dbac796d59e8ea07c52cbcd3a0b7f181da163",
       "relationship": "contract",
       "direct": false,
       "updatePolicy": "pull-request"
@@ -14,7 +14,7 @@
       "name": "ThistleASM",
       "repository": "kitty-crow/thistle-asm",
       "path": "src/asm",
-      "commit": "6e532282425f543969999f815bf88a108d958cff",
+      "commit": "2e6ce603ceeb5b202aa68c0b1a5001fba85b8d77",
       "relationship": "runtime",
       "direct": true,
       "updatePolicy": "pull-request"
@@ -23,7 +23,7 @@
       "name": "Baguette",
       "repository": "kitty-crow/baguette",
       "path": "baguette",
-      "commit": "8e5f02655c530f432773af62721fc73b21b611f8",
+      "commit": "51314b0eb0fa6eae17772b59332e299052446726",
       "relationship": "build",
       "direct": false,
       "updatePolicy": "pull-request"
@@ -32,7 +32,7 @@
       "name": "ThistleCC",
       "repository": "kitty-crow/thistlecc",
       "path": "thistlecc",
-      "commit": "1a7848486cf2516adbe7f10806bfe4e76d039c8c",
+      "commit": "0639f51d58979a888138d410daba4731b1045619",
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"

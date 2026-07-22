@@ -17,12 +17,15 @@ static browser files.
 
 ## Run
 
-Start with the default Teto kernel:
+Automatic selection prefers Teto and falls back to Thistle if the
+generated kernel cannot be loaded:
 
     bun mikuos.ts
+    bun mikuos.ts --kernel=auto
 
-Start with the direct Thistle kernel:
+Select either kernel explicitly:
 
+    bun mikuos.ts --kernel=teto
     bun mikuos.ts --kernel=thistle
 
 Build the static site:
