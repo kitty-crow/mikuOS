@@ -74,11 +74,11 @@ PRIVATE_NAMES = {
 }
 
 PRIVATE_KEY_MARKERS = (
-    b"-----BEGIN OPENSSH PRIVATE KEY-----",
-    b"-----BEGIN RSA PRIVATE KEY-----",
-    b"-----BEGIN EC PRIVATE KEY-----",
-    b"-----BEGIN DSA PRIVATE KEY-----",
-    b"-----BEGIN PRIVATE KEY-----",
+    b"-----BEGIN OPENSSH " + b"PRIVATE KEY-----",
+    b"-----BEGIN RSA " + b"PRIVATE KEY-----",
+    b"-----BEGIN EC " + b"PRIVATE KEY-----",
+    b"-----BEGIN DSA " + b"PRIVATE KEY-----",
+    b"-----BEGIN " + b"PRIVATE KEY-----",
 )
 
 HOST_PATH_PATTERN = re.compile(
