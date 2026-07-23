@@ -29,8 +29,8 @@ export const neruCliRequest = (
   argv: readonly string[],
   environment: Readonly<Record<string, string | undefined>>,
 ): NeruCliRequest | undefined => {
-  const kernel = requestedKernel(argv, environment);
-  if (kernel !== "neru" && kernel !== "linux") return undefined;
+  const kernel = requestedKernel(argv, environment)?.toLowerCase();
+  if (kernel !== "neru" && kernel !== "linux" && kernel !== "neru/linux") return undefined;
   const variant = option(argv, "--neru-variant") ?? environment.NERU_LINUX_VARIANT;
   if (variant && variant !== "wasm32_nommu" && variant !== "wasm64_nommu") {
     throw new Error(`Unsupported NERU variant: ${variant}`);
@@ -65,7 +65,7 @@ export const runNeruCli = async (request: NeruCliRequest): Promise<number> => {
   }
   const command = neruCommand(request);
   return await new Promise((resolve, reject) => {
-    const child = spawn(command.executable, command.argv, { stdio: "inherit" });
+    const child = spawn(command.executable, command.argv, { stdio: "inherit", env: process.env });
     child.once("error", reject);
     child.once("close", (code: number | null) => resolve(code ?? 1));
   });
