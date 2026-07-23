@@ -1,4 +1,5 @@
 import { bootNeruBrowser } from "../neru/src/browser.ts";
+import { staticBrowserConfig } from "../src/main/config.ts";
 
 interface TerminalLike {
   loadAddon?(addon: unknown): void;
@@ -37,9 +38,19 @@ const launch = async (): Promise<void> => {
   terminal.focus?.();
   addon?.fit?.();
 
+  const config = await staticBrowserConfig();
+  const query = new URL(location.href).searchParams;
+  const sharedFs = query.get("shared-fs") ?? config.storage.shared.url;
+  if (!sharedFs) {
+    throw new Error("NERU requires a common authoritative mikuOS filesystem endpoint");
+  }
+  const sharedFsToken = query.get("shared-fs-token") ?? config.storage.shared.token;
+
   if (status) status.textContent = "Starting mikuOS through NERU/Linux…";
   const machine = await bootNeruBrowser({
     base: new URL("./neru/", document.baseURI),
+    sharedFs: new URL(sharedFs, document.baseURI),
+    ...(sharedFsToken ? { sharedFsToken } : {}),
     write: text => terminal.write(text),
     log: message => console.debug(`NERU: ${message}`),
   });
@@ -49,11 +60,12 @@ const launch = async (): Promise<void> => {
   fit();
 
   document.documentElement.dataset.kernel = "neru";
-  if (status) status.textContent = "NERU Linux active";
+  if (status) status.textContent = "NERU Linux active · shared mikuOS userspace mounted";
 
   globals.MikuOS = {
     kernel: "neru",
-    persistent: false,
+    persistent: true,
+    sharedUserspace: sharedFs,
     dispose(): void {
       data.dispose();
       window.removeEventListener("resize", fit);
