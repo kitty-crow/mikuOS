@@ -23,6 +23,7 @@ export type TreeListener = (entries: TreeEnt[], imageVersion: number, generation
 
 export interface Tree {
   readonly label: string;
+  readonly authoritative?: boolean;
   readonly imageVersion?: number;
   readonly generation?: number;
   pull(): Promise<TreeEnt[] | null>;
