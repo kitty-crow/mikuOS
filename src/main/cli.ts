@@ -1,6 +1,7 @@
 import { boot } from "./boot.js";
 import { isExe } from "../asm/fmt.js";
 import { DirTree } from "./dir.js";
+import { AuthoritativeTree } from "./authoritativetree.js";
 import type { Host } from "./boot.js";
 import { hostConfig } from "./config.js";
 import { LineEditor } from "../sh/editor.js";
@@ -30,6 +31,12 @@ interface HostFs { readFile(p: string): Promise<Uint8Array>; }
 
 const hp = (globalThis as unknown as { process: Hp }).process;
 const bh = (globalThis as unknown as { Bun?: BunHost }).Bun;
+const option = (name: string): string | undefined => {
+  const joined = hp.argv.find(value => value.startsWith(`${name}=`));
+  if (joined) return joined.slice(name.length + 1);
+  const index = hp.argv.indexOf(name);
+  return index >= 0 ? hp.argv[index + 1] : undefined;
+};
 const config = await hostConfig();
 const session = localSessionPlan(config);
 const kernelArg = hp.argv.find(value => value.startsWith("--kernel="))?.slice("--kernel=".length);
@@ -52,6 +59,8 @@ let live = true;
 const noRoot = hp.argv.includes("--no-root"), di = hp.argv.indexOf("--root");
 const root = di >= 0 ? hp.argv[di + 1] : hp.env?.MIKUOS_ROOT ?? hp.env?.THISTLE_ROOT ?? new URL("../../.thistle", import.meta.url);
 if (di >= 0 && !root) throw new Error("--root needs a host directory path");
+const sharedEndpoint = option("--shared-fs") ?? hp.env?.MIKUOS_FS_URL;
+const sharedToken = option("--shared-fs-token") ?? hp.env?.MIKUOS_FS_TOKEN;
 const host: Host = {
   put: (s, ch) => (ch === "err" ? hp.stderr : hp.stdout).write(s),
   halt: () => { live = false; hp.stdin.setRawMode?.(false); hp.stdin.pause(); },
@@ -65,7 +74,12 @@ if (session.command && !hp.stdin.isTTY) {
   throw new Error("local login mode requires a terminal");
 }
 if (!noRoot) {
-  host.tree = new DirTree(root!);
+  host.tree = sharedEndpoint
+    ? new AuthoritativeTree(sharedEndpoint, {
+        ...(sharedToken ? { token: sharedToken } : {}),
+        clientId: `cli-${requestedKernel}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+      })
+    : new DirTree(root!);
   host.pkg = rootPkg;
 }
 const os = boot(host);
