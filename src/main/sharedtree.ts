@@ -200,6 +200,10 @@ export class SharedTree implements Tree {
     const operations: Operation[] = [];
     const oldByInode = new Map<string, string[]>();
     const newById = new Map<number, string[]>();
+    const mutatedInodes = new Set<string>();
+    const contentDone = new Set<string>();
+    const modeDone = new Set<string>();
+    const ownerDone = new Set<string>();
     for (const entry of this.baseline.values()) {
       const paths = oldByInode.get(entry.inode) ?? [];
       paths.push(entry.path); oldByInode.set(entry.inode, paths);
@@ -220,6 +224,7 @@ export class SharedTree implements Tree {
       if (from === to || current.has(from) || this.baseline.has(to)) continue;
       const old = this.baseline.get(from)!;
       operations.push({ op: "rename", from, to, expectedVersion: old.version, expectedTargetVersion: null });
+      mutatedInodes.add(old.inode);
       renamedOld.add(from); renamedNew.add(to);
     }
 
@@ -230,6 +235,7 @@ export class SharedTree implements Tree {
       operations.push(entry.kind === "directory"
         ? { op: "rmdir", path: entry.path, expectedVersion: entry.version }
         : { op: "unlink", path: entry.path, expectedVersion: entry.version });
+      mutatedInodes.add(entry.inode);
     }
 
     const firstById = new Map<number, string>();
@@ -261,11 +267,34 @@ export class SharedTree implements Tree {
         : entry.p;
       const old = oldPath ? this.baseline.get(oldPath) : undefined;
       if (!old) continue;
-      if (entry.k === "f" && (old.kind !== "file" || old.checksum !== contentSum(entry))) {
-        operations.push({ op: "write", path: entry.p, offset: 0, truncate: true, expectedVersion: old.version, data: encode(entry.data ?? new Uint8Array()) });
+      const expected = (): { expectedVersion?: number } =>
+        mutatedInodes.has(old.inode) ? {} : { expectedVersion: old.version };
+      if (
+        entry.k === "f" &&
+        !contentDone.has(old.inode) &&
+        (old.kind !== "file" || old.checksum !== contentSum(entry))
+      ) {
+        operations.push({
+          op: "write",
+          path: entry.p,
+          offset: 0,
+          truncate: true,
+          ...expected(),
+          data: encode(entry.data ?? new Uint8Array()),
+        });
+        mutatedInodes.add(old.inode);
+        contentDone.add(old.inode);
       }
-      if (old.mode !== entry.mode) operations.push({ op: "chmod", path: entry.p, mode: entry.mode, expectedVersion: old.version });
-      if (old.uid !== entry.uid || old.gid !== entry.gid) operations.push({ op: "chown", path: entry.p, uid: entry.uid, gid: entry.gid, expectedVersion: old.version });
+      if (!modeDone.has(old.inode) && old.mode !== entry.mode) {
+        operations.push({ op: "chmod", path: entry.p, mode: entry.mode, ...expected() });
+        mutatedInodes.add(old.inode);
+        modeDone.add(old.inode);
+      }
+      if (!ownerDone.has(old.inode) && (old.uid !== entry.uid || old.gid !== entry.gid)) {
+        operations.push({ op: "chown", path: entry.p, uid: entry.uid, gid: entry.gid, ...expected() });
+        mutatedInodes.add(old.inode);
+        ownerDone.add(old.inode);
+      }
     }
     return operations;
   }
