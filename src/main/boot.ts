@@ -6,7 +6,7 @@ import { image, live, migrateImage, ROOT_IMAGE_VERSION } from "./image.js";
 import { norm } from "../fs/vfs.js";
 import { Net } from "../net/net.js";
 import { treeFs } from "../fs/tree.js";
-import type { Tree } from "../fs/tree.js";
+import type { Tree, TreeEnt } from "../fs/tree.js";
 import { DEFAULT_CONFIG } from "../core/config.js";
 import type { AccountConfig, SystemConfig } from "../core/config.js";
 import type { TetoImageProvider } from "../teto/loader.js";
@@ -37,6 +37,11 @@ export class Os {
   busy = false;
   activeKernelMode: "thistle" | "teto" = "thistle";
   private save = Promise.resolve();
+  private applyingRemote = false;
+  private appliedGeneration = 0;
+  private idleWaiters = new Set<() => void>();
+  private applyWaiters = new Set<() => void>();
+  private stopTreeWatch?: () => void;
 
   constructor(readonly host: Host, net = new Net()) {
     const config = host.config ?? DEFAULT_CONFIG;
@@ -50,7 +55,10 @@ export class Os {
     this.p = this.k.session({ sin: this.tty.input, sout: this.tty.output, serr: this.tty.error }, host.account ?? config.accounts.cli);
     this.s = new Sys(this.k, this.p);
     this.sh = new Shell(this.s);
-    this.k.setHalt(() => host.halt?.());
+    this.k.setHalt(() => {
+      this.stopTreeWatch?.();
+      host.halt?.();
+    });
     this.k.log("thsh: interactive session ready");
     this.ready = this.init();
   }
@@ -87,15 +95,20 @@ export class Os {
     recordHistory = true,
   ): Promise<number> {
     await this.ready;
+    await this.waitForRemoteApply();
     this.busy = true;
     try {
       return await this.sh.run(line, recordHistory, heredocBodies);
     }
     catch (e) { if (e instanceof ShExit) { this.host.halt?.(); return e.code; } throw e; }
     finally {
-      this.busy = false;
       this.tty.reset();
-      await this.flush();
+      try {
+        await this.flush();
+      } finally {
+        this.busy = false;
+        this.releaseIdleWaiters();
+      }
     }
   }
 
@@ -116,17 +129,26 @@ export class Os {
   async flush(): Promise<void> {
     if (!this.host.tree) return;
     const ent = this.snapshot();
-    this.save = this.save.then(async () => {
+    const task = this.save.then(async () => {
       const merged = await this.host.tree!.push(ent, ROOT_IMAGE_VERSION);
       if (merged) {
         treeFs.load(this.k.fs, merged);
         live(this.k);
       }
-    }).catch(async e => {
-      this.k.log(`persist: save failed: ${e instanceof Error ? e.message : String(e)}`);
-      await this.host.put(`Persistence save failed: ${e instanceof Error ? e.message : String(e)}\n`, "err");
+      this.appliedGeneration = Math.max(
+        this.appliedGeneration,
+        this.host.tree?.generation ?? this.appliedGeneration,
+      );
     });
-    await this.save;
+    this.save = task.then(() => undefined, () => undefined);
+    try {
+      await task;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.k.log(`persist: save failed: ${message}`);
+      await this.host.put(`Persistence save failed: ${message}\n`, "err");
+      if (this.host.tree.authoritative) throw e;
+    }
   }
 
   private async restore(): Promise<void> {
@@ -136,23 +158,87 @@ export class Os {
       const before = this.host.tree.imageVersion ?? 0;
       if (ent) treeFs.load(this.k.fs, ent);
       this.k.disk = true;
+      this.appliedGeneration = this.host.tree.generation ?? 0;
       const after = ent ? migrateImage(this.k, before) : ROOT_IMAGE_VERSION;
       live(this.k);
       if (ent) {
         if (after !== before) await this.host.tree.push(this.snapshot(), after);
+        this.appliedGeneration = this.host.tree.generation ?? this.appliedGeneration;
         this.k.log(`hostfs: restored / from ${ent.length} entries in ${this.host.tree.label}`);
       } else {
         await this.host.tree.push(this.snapshot(), after);
+        this.appliedGeneration = this.host.tree.generation ?? this.appliedGeneration;
         this.k.log(`hostfs: initialized / in ${this.host.tree.label}`);
       }
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
       this.k.disk = false;
+      this.k.log(`persist: restore failed: ${message}`);
+      await this.host.put(`Persistent root was not mounted: ${message}\n`, "err");
+      if (this.host.tree.authoritative) {
+        throw new Error(`Authoritative mikuOS userspace was not mounted: ${message}`);
+      }
       live(this.k);
-      this.k.log(`persist: restore failed: ${e instanceof Error ? e.message : String(e)}`);
-      await this.host.put(`Persistent root was not mounted: ${e instanceof Error ? e.message : String(e)}\n`, "err");
     }
   }
 
+  private async watchTree(): Promise<void> {
+    const tree = this.host.tree;
+    if (!tree?.subscribe) return;
+    this.stopTreeWatch = await tree.subscribe(async (entries, imageVersion, generation) => {
+      if (generation <= this.appliedGeneration) return;
+      await this.applyRemoteTree(entries, imageVersion, generation);
+    });
+  }
+
+  private async applyRemoteTree(entries: TreeEnt[], imageVersion: number, generation: number): Promise<void> {
+    while (true) {
+      await this.waitForIdle();
+      this.applyingRemote = true;
+      if (this.busy) {
+        this.applyingRemote = false;
+        this.releaseApplyWaiters();
+        continue;
+      }
+      break;
+    }
+    try {
+      await this.save;
+      if (generation <= this.appliedGeneration) return;
+      treeFs.load(this.k.fs, entries);
+      live(this.k);
+      this.appliedGeneration = generation;
+      this.k.log(`hostfs: applied generation ${generation} (image ${imageVersion}) from ${this.host.tree?.label ?? "shared tree"}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.k.log(`persist: remote generation ${generation} failed: ${message}`);
+      await this.host.put(`Persistent root update failed: ${message}\n`, "err");
+      throw error;
+    } finally {
+      this.applyingRemote = false;
+      this.releaseApplyWaiters();
+    }
+  }
+
+  private waitForIdle(): Promise<void> {
+    if (!this.busy) return Promise.resolve();
+    return new Promise(resolve => this.idleWaiters.add(resolve));
+  }
+
+  private waitForRemoteApply(): Promise<void> {
+    if (!this.applyingRemote) return Promise.resolve();
+    return new Promise(resolve => this.applyWaiters.add(resolve));
+  }
+
+  private releaseIdleWaiters(): void {
+    for (const resolve of this.idleWaiters) resolve();
+    this.idleWaiters.clear();
+  }
+
+  private releaseApplyWaiters(): void {
+    for (const resolve of this.applyWaiters) resolve();
+    this.applyWaiters.clear();
+  }
 
   private async configureKernelMode(): Promise<void> {
     const requested = this.host.kernelMode ?? "thistle";
@@ -213,11 +299,12 @@ export class Os {
         await this.host.put(`Optional root package was not installed: ${message}\n`, "err");
       }
     }
+    await this.watchTree();
   }
 
   private snapshot(): ReturnType<typeof treeFs.dump> {
     return treeFs.dump(this.k.fs).filter(entry =>
-      !["/dev", "/proc"].some(path => entry.p === path || entry.p.startsWith(`${path}/`)),
+      !["/dev", "/proc", "/sys", "/run", "/tmp"].some(path => entry.p === path || entry.p.startsWith(`${path}/`)),
     );
   }
 }
