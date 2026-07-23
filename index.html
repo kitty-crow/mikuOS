@@ -10,7 +10,62 @@
     <link rel="stylesheet" href="./style.css">
     <script defer src="./vendor/xterm.js"></script>
     <script defer src="./vendor/xterm-fit.js"></script>
-    <script defer src="./thistle.js"></script>
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        const parameters = new URL(location.href).searchParams;
+        const kernel = parameters.get("kernel");
+        const neru = kernel === "neru" || kernel === "linux";
+        const status = document.querySelector("#runtime-status");
+
+        const loadRuntime = () => {
+          const script = document.createElement("script");
+          script.src = neru ? "./neru-entry.js" : "./thistle.js";
+          script.addEventListener("error", () => {
+            if (status) status.textContent = `Failed to load ${script.src}`;
+          });
+          document.head.appendChild(script);
+        };
+
+        const launch = async () => {
+          if (!neru || globalThis.crossOriginIsolated) {
+            sessionStorage.removeItem("mikuos-neru-coi-reload");
+            loadRuntime();
+            return;
+          }
+
+          if (!globalThis.isSecureContext || !("serviceWorker" in navigator)) {
+            if (status) {
+              status.textContent =
+                "NERU requires HTTPS and cross-origin isolation (COOP/COEP).";
+            }
+            return;
+          }
+
+          if (status) status.textContent = "Enabling NERU browser isolation…";
+          await navigator.serviceWorker.register("./coi-serviceworker.js", { scope: "./" });
+          await navigator.serviceWorker.ready;
+
+          const reloaded = sessionStorage.getItem("mikuos-neru-coi-reload") === "1";
+          if (!navigator.serviceWorker.controller || !reloaded) {
+            sessionStorage.setItem("mikuos-neru-coi-reload", "1");
+            location.reload();
+            return;
+          }
+
+          if (status) {
+            status.textContent =
+              "This host prevented cross-origin isolation required by NERU.";
+          }
+        };
+
+        void launch().catch(error => {
+          console.error(error);
+          if (status) {
+            status.textContent = error instanceof Error ? error.message : String(error);
+          }
+        });
+      }, { once: true });
+    </script>
   </head>
   <body>
     <div id="runtime-status" role="status" aria-live="polite">Starting mikuOS…</div>

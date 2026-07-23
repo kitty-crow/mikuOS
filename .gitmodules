@@ -10,3 +10,6 @@
 [submodule "thistlecc"]
 	path = thistlecc
 	url = https://github.com/kitty-crow/thistlecc.git
+[submodule "neru"]
+	path = neru
+	url = https://github.com/kitty-crow/neru.git

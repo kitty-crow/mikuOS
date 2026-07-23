@@ -6,8 +6,9 @@ export interface Ent {
 }
 
 export interface FsP {
+  access(p: Path): Promise<void>;
   mkdir(p: Path, o: { recursive: boolean }): Promise<unknown>;
-  writeFile(p: Path, b: Uint8Array): Promise<void>;
+  writeFile(p: Path, b: Uint8Array | string): Promise<void>;
   readFile(p: Path, encoding: "utf8"): Promise<string>;
   copyFile(a: Path, b: Path): Promise<void>;
   readdir(p: Path, o: { withFileTypes: true }): Promise<Ent[]>;

@@ -17,6 +17,9 @@ const web = new URL("dist/web/", root);
 const webAssets = new URL("assets/", web);
 const vendor = new URL("vendor/", web);
 const bundle = new URL("thistle.js", web);
+const neruBundle = new URL("neru-entry.js", web);
+const neruEntry = new URL("web/neru-entry.ts", root);
+const neruBrowser = new URL("neru/src/browser.ts", root);
 const cliRoot = new URL(".thistle.base/", root);
 const webRoot = new URL("root/", web);
 
@@ -80,27 +83,13 @@ console.log(
 );
 await Promise.all([
   fs.copyFile(new URL("index.html", root), new URL("index.html", web)),
+  fs.copyFile(new URL("coi-serviceworker.js", root), new URL("coi-serviceworker.js", web)),
   fs.copyFile(new URL("style.css", root), new URL("style.css", web)),
-  fs.copyFile(
-    new URL("mikuos.config.json", root),
-    new URL("mikuos.config.json", web),
-  ),
-  fs.copyFile(
-    new URL("thistle.config.json", root),
-    new URL("thistle.config.json", web),
-  ),
-  fs.copyFile(
-    new URL("node_modules/@xterm/xterm/lib/xterm.js", root),
-    new URL("xterm.js", vendor),
-  ),
-  fs.copyFile(
-    new URL("node_modules/@xterm/addon-fit/lib/addon-fit.js", root),
-    new URL("xterm-fit.js", vendor),
-  ),
-  fs.copyFile(
-    new URL("node_modules/@xterm/xterm/css/xterm.css", root),
-    new URL("xterm.css", vendor),
-  ),
+  fs.copyFile(new URL("mikuos.config.json", root), new URL("mikuos.config.json", web)),
+  fs.copyFile(new URL("thistle.config.json", root), new URL("thistle.config.json", web)),
+  fs.copyFile(new URL("node_modules/@xterm/xterm/lib/xterm.js", root), new URL("xterm.js", vendor)),
+  fs.copyFile(new URL("node_modules/@xterm/addon-fit/lib/addon-fit.js", root), new URL("xterm-fit.js", vendor)),
+  fs.copyFile(new URL("node_modules/@xterm/xterm/css/xterm.css", root), new URL("xterm.css", vendor)),
   fs.copyFile(new URL("hello.thx", assets), new URL("hello.thx", webAssets)),
   fs.copyFile(new URL("hello.39", assets), new URL("hello.39", webAssets)),
   fs.copyFile(new URL("hello-rv64.thx", assets), new URL("hello-rv64.thx", webAssets)),
@@ -125,6 +114,39 @@ await build({
   logLevel: "warning",
 });
 
+let haveNeruSource = true;
+try {
+  await fs.access(neruBrowser);
+} catch {
+  haveNeruSource = false;
+}
+
+if (haveNeruSource) {
+  await build({
+    entryPoints: [decodeURIComponent(neruEntry.pathname)],
+    outfile: decodeURIComponent(neruBundle.pathname),
+    bundle: true,
+    platform: "browser",
+    format: "iife",
+    globalName: "NeruEntry",
+    target: ["es2022"],
+    charset: "utf8",
+    legalComments: "none",
+    sourcemap: false,
+    minify: false,
+    treeShaking: true,
+    external: ["node:*"],
+    logOverride: { "empty-import-meta": "silent" },
+    logLevel: "warning",
+  });
+} else {
+  await fs.writeFile(
+    neruBundle,
+    "document.querySelector('#runtime-status').textContent = " +
+      "'NERU is unavailable: initialise the neru submodule and run npm run build:neru';\n",
+  );
+}
+
 const runtime = await fs.readFile(bundle, "utf8");
 const forbidden: Array<[RegExp, string]> = [
   [/\bWebSocket\b/, "WebSocket"],
@@ -137,10 +159,7 @@ const forbidden: Array<[RegExp, string]> = [
   [/\bimport\s*\(/, "unresolved dynamic import"],
 ];
 
-if (
-  !runtime.includes("var Thistle =") ||
-  !runtime.includes("launchThistle")
-) {
+if (!runtime.includes("var Thistle =") || !runtime.includes("launchThistle")) {
   throw new Error("static web bundle does not expose the Thistle launch API");
 }
 
