@@ -18,46 +18,56 @@ const encode = (bytes: Uint8Array): string => {
 const persistent = (path: string): boolean =>
   !["/dev", "/proc", "/sys", "/run", "/tmp"].some(root => path === root || path.startsWith(`${root}/`));
 
-const checksum = (entries: unknown): string => {
-  let value = 0x811c9dc5;
-  for (const byte of new TextEncoder().encode(JSON.stringify(entries))) {
-    value ^= byte;
-    value = Math.imul(value, 0x01000193);
-  }
-  return (value >>> 0).toString(16).padStart(8, "0");
+const canonical = (value: unknown): string => {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+    .join(",")}}`;
 };
 
-const entry = (source: TreeEnt) => ({
-  path: source.p,
-  inode: String(source.id),
-  kind: source.k === "d" ? "directory" as const : source.k === "f" ? "file" as const : "symlink" as const,
-  mode: source.mode,
-  uid: source.uid,
-  gid: source.gid,
-  atimeMs: source.at,
-  mtimeMs: source.mt,
-  ctimeMs: source.ct,
-  version: 1,
-  nlink: 1,
-  ...(source.k === "f" ? {
-    size: source.data?.length ?? source.size ?? 0,
-    checksum: source.sum ?? fileSum(source.data ?? new Uint8Array()),
-    data: encode(source.data ?? new Uint8Array()),
-  } : {}),
-  ...(source.k === "l" ? { target: source.to ?? "" } : {}),
-});
+const checksum = (value: unknown): string => {
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(canonical(value))) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+};
 
 export const sharedSeedSnapshot = async (root: string | URL, imageGeneration: number): Promise<object | null> => {
-  const entries = await new DirTree(root).pull();
-  if (!entries) return null;
-  const converted = entries.filter(item => persistent(item.p)).map(entry);
+  const source = await new DirTree(root).pull();
+  if (!source) return null;
+  const persistentEntries = source.filter(item => persistent(item.p));
+  const links = new Map<number, number>();
+  for (const item of persistentEntries) links.set(item.id, (links.get(item.id) ?? 0) + 1);
+  const entries = persistentEntries.map(item => ({
+    path: item.p,
+    inode: String(item.id),
+    kind: item.k === "d" ? "directory" as const : item.k === "f" ? "file" as const : "symlink" as const,
+    mode: item.mode,
+    uid: item.uid,
+    gid: item.gid,
+    atimeMs: item.at,
+    mtimeMs: item.mt,
+    ctimeMs: item.ct,
+    version: 1,
+    nlink: links.get(item.id) ?? 1,
+    ...(item.k === "f" ? {
+      size: item.data?.length ?? item.size ?? 0,
+      checksum: item.sum ?? fileSum(item.data ?? new Uint8Array()),
+      data: encode(item.data ?? new Uint8Array()),
+    } : {}),
+    ...(item.k === "l" ? { target: item.to ?? "" } : {}),
+  }));
   const payload = {
     schema: 1 as const,
     filesystemId: `mikuos-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
     generation: 1,
     imageGeneration,
     committedAt: new Date().toISOString(),
-    entries: converted,
+    entries,
   };
   return { ...payload, checksum: checksum(payload) };
 };
