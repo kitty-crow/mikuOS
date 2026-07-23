@@ -16,7 +16,7 @@
     "test:toolchain": "bun run thistlecc/test/test.ts",
     "test:guest-toolchain": "npm run build && THISTLE_FUEL=0 node build/test/toolchain.js",
     "test:bun": "npm run build && bun run build/test/bun.js",
-    "start": "npm run build && node build/main/cli.js",
+    "start": "npm run build && bun run mikuos.ts",
     "mikuos": "bun run mikuos.ts",
     "web": "npm run build",
     "serve:web": "npm run build && bun run build/main/server.js",
