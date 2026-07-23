@@ -19,11 +19,15 @@ export interface TreeEnt {
   to?: string;
 }
 
+export type TreeListener = (entries: TreeEnt[], imageVersion: number, generation: number) => void | Promise<void>;
+
 export interface Tree {
   readonly label: string;
   readonly imageVersion?: number;
+  readonly generation?: number;
   pull(): Promise<TreeEnt[] | null>;
   push(ent: TreeEnt[], imageVersion?: number): Promise<TreeEnt[] | void>;
+  subscribe?(listener: TreeListener): Promise<() => void>;
 }
 
 const root = { uid: 0, gid: 0, groups: [0] };
