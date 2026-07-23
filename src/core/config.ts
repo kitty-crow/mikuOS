@@ -14,6 +14,12 @@ export interface LocalSessionConfig {
   account?: string;
 }
 
+export interface SharedStorageConfig {
+  url?: string;
+  token?: string;
+  required?: boolean;
+}
+
 export interface SystemConfig {
   kernel: {
     name: string;
@@ -40,6 +46,9 @@ export interface SystemConfig {
   };
   sessions: {
     local: LocalSessionConfig;
+  };
+  storage: {
+    shared: SharedStorageConfig;
   };
   messages: {
     tetoBanner: string;
@@ -116,6 +125,9 @@ export const DEFAULT_CONFIG: SystemConfig = {
   },
   sessions: {
     local: { mode: "direct" },
+  },
+  storage: {
+    shared: {},
   },
   messages: {
     tetoBanner: "[Teto] Baguette-generated WebAssembly RV64 core active; unmigrated syscalls still use the Thistle compatibility bridge.",
