@@ -5,6 +5,7 @@ import { staticBrowserConfig } from "./config.js";
 import { fetchTetoProvider, kernelMode } from "../teto/provider.js";
 import type { KernelMode } from "../teto/provider.js";
 import { WebTree } from "./webtree.js";
+import { AuthoritativeTree } from "./authoritativetree.js";
 
 interface TerminalCtor {
   new(options?: { convertEol?: boolean }): TerminalLike;
@@ -39,6 +40,8 @@ interface LaunchOptions {
   kernel?: KernelMode;
   tetoBase?: string | URL;
   rootBase?: string | URL;
+  sharedFs?: string | URL;
+  sharedFsToken?: string;
 }
 
 interface LaunchHandle {
@@ -89,6 +92,15 @@ const terminalNode = (): unknown =>
   document.querySelector("[data-thistle-terminal]") ??
   document.querySelector("#terminal");
 
+const configuredSharedUrl = (
+  options: LaunchOptions,
+  config: SystemConfig,
+  query: URLSearchParams | undefined,
+): string | URL | undefined =>
+  options.sharedFs ??
+  query?.get("shared-fs") ??
+  config.storage.shared.url;
+
 export const launchThistle = async (options: LaunchOptions = {}): Promise<LaunchHandle> => {
   const node = options.terminal ?? terminalNode();
   if (!node) throw new Error("missing terminal element");
@@ -134,15 +146,29 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
   }
 
   const config = options.config ?? await staticBrowserConfig();
-  const query = typeof location === "undefined" ? undefined : new URL(location.href).searchParams.get("kernel");
-  const requestedKernel = options.kernel ?? kernelMode(query, "teto");
+  const query = typeof location === "undefined" ? undefined : new URL(location.href).searchParams;
+  const requestedKernel = options.kernel ?? kernelMode(query?.get("kernel"), "teto");
   const teto = requestedKernel === "thistle"
     ? undefined
     : fetchTetoProvider(options.tetoBase ?? new URL("./teto/", document.baseURI));
-  const tree = new WebTree(
-    options.rootBase ?? new URL("./root/", document.baseURI),
-    options.persistence !== false,
-  );
+  const sharedUrl = configuredSharedUrl(options, config, query);
+  if (!sharedUrl && config.storage.shared.required) {
+    throw new Error("authoritative mikuOS userspace is required but no shared filesystem endpoint is configured");
+  }
+  const tree = sharedUrl
+    ? new AuthoritativeTree(
+        sharedUrl instanceof URL ? sharedUrl : new URL(sharedUrl, document.baseURI),
+        {
+          ...(options.sharedFsToken ?? config.storage.shared.token
+            ? { token: options.sharedFsToken ?? config.storage.shared.token }
+            : {}),
+          clientId: `web-${requestedKernel}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+        },
+      )
+    : new WebTree(
+        options.rootBase ?? new URL("./root/", document.baseURI),
+        options.persistence !== false,
+      );
   const session = new WebSession(
     { write: text => term.write(text) },
     { config, tree, kernelMode: requestedKernel, ...(teto ? { teto } : {}) },
@@ -199,7 +225,7 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
       ? "Teto WASM core active"
       : "Thistle TypeScript core active";
   }
-  const command = typeof location === "undefined" ? null : new URL(location.href).searchParams.get("command");
+  const command = query?.get("command") ?? null;
   if (command) {
     const code = await session.os.run(command);
     if (typeof document !== "undefined") {
@@ -209,7 +235,7 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
     }
   }
   return {
-    persistent: tree.persistent,
+    persistent: tree instanceof AuthoritativeTree || tree.persistent,
     kernel: session.os.activeKernelMode,
     session,
     dispose: () => {
