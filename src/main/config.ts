@@ -4,6 +4,8 @@ import type { AccountConfig, LocalSessionConfig, SystemConfig } from "../core/co
 const obj = (x: unknown): Record<string, unknown> => x && typeof x === "object" && !Array.isArray(x) ? x as Record<string, unknown> : {};
 const own = (x: Record<string, unknown>, key: string): boolean => Object.prototype.hasOwnProperty.call(x, key);
 const str = (x: unknown, d: string): string => typeof x === "string" ? x : d;
+const optionalString = (x: unknown): string | undefined => typeof x === "string" && x.length ? x : undefined;
+const bool = (x: unknown, d = false): boolean => typeof x === "boolean" ? x : d;
 const nat = (x: unknown, d: number): number => Number.isSafeInteger(x) && Number(x) >= 0 ? Number(x) : d;
 const nums = (x: unknown, d: number[]): number[] => Array.isArray(x) && x.every(n => Number.isSafeInteger(n) && Number(n) >= 0) ? x.map(Number) : [...d];
 const accountName = (x: unknown): string | undefined => {
@@ -69,8 +71,11 @@ export const mergeConfig = (x: unknown): SystemConfig => {
   const legacyKernel = obj(q.os);
   const kernel = obj(legacy ? q.os : q.kernel);
   const os = obj(legacy ? q.distro : q.os);
-  const terminal = obj(q.terminal), accounts = obj(q.accounts), sessions = obj(q.sessions), messages = obj(q.messages), author = obj(q.author);
+  const terminal = obj(q.terminal), accounts = obj(q.accounts), sessions = obj(q.sessions), storage = obj(q.storage), messages = obj(q.messages), author = obj(q.author);
+  const shared = obj(storage.shared);
   const d = DEFAULT_CONFIG;
+  const sharedUrl = optionalString(shared.url);
+  const sharedToken = optionalString(shared.token);
   return {
     kernel: {
       name: str(kernel.name, d.kernel.name),
@@ -100,6 +105,13 @@ export const mergeConfig = (x: unknown): SystemConfig => {
     },
     sessions: {
       local: localSession(sessions.local, d.sessions.local),
+    },
+    storage: {
+      shared: {
+        ...(sharedUrl ? { url: sharedUrl } : {}),
+        ...(sharedToken ? { token: sharedToken } : {}),
+        required: bool(shared.required, d.storage.shared.required ?? false),
+      },
     },
     messages: {
       tetoBanner: str(
