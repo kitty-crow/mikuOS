@@ -8,6 +8,7 @@
 # Local runtime state
 /.thistle/
 /.thistle-web/
+/.mikuos-authority/
 /logs/
 *.log
 
@@ -78,6 +79,7 @@ node_modules/
 # Local runtime state and logs
 /.thistle/
 /.thistle-web/
+/.mikuos-authority/
 /logs/
 *.log
 npm-debug.log*
