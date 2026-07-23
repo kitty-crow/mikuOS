@@ -13,8 +13,8 @@
     <script>
       window.addEventListener("DOMContentLoaded", () => {
         const parameters = new URL(location.href).searchParams;
-        const kernel = parameters.get("kernel");
-        const neru = kernel === "neru" || kernel === "linux";
+        const kernel = parameters.get("kernel")?.toLowerCase();
+        const neru = kernel === "neru" || kernel === "linux" || kernel === "neru/linux";
         const status = document.querySelector("#runtime-status");
 
         const loadRuntime = () => {
