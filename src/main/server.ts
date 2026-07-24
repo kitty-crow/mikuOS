@@ -34,6 +34,7 @@ const mime: Record<string, string> = {
   ".thx": "application/x-thistle-executable",
   ".txe": "application/x-thistle-executable",
   ".wasm": "application/wasm",
+  ".gz": "application/gzip",
 };
 
 const extension = (path: string): string => {
@@ -45,13 +46,15 @@ const allowed = (path: string): boolean =>
   path === "/index.html" ||
   path === "/style.css" ||
   path === "/thistle.js" ||
+  path === "/neru-entry.js" ||
   path === "/mikuos.config.json" ||
   path === "/thistle.config.json" ||
   path === "/teto-test.html" ||
   path === "/teto-test.js" ||
   path.startsWith("/vendor/") ||
   path.startsWith("/assets/") ||
-  path.startsWith("/teto/");
+  path.startsWith("/teto/") ||
+  path.startsWith("/neru/");
 
 export const app = bun.serve({
   hostname,

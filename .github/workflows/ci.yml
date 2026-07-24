@@ -14,7 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialise public build submodules
+        run: |
+          git submodule sync
+          git submodule update --init kittyx src/asm baguette thistlecc
 
       - uses: oven-sh/setup-bun@v2
 
@@ -30,8 +35,20 @@ jobs:
             npm install
           fi
 
-      - name: Build
-        run: npm run build
+      - name: Clean
+        run: npm run clean
 
-      - name: Test
-        run: npm test
+      - name: Compile TypeScript
+        run: npx tsc -p tsconfig.json
+
+      - name: Build static web assets
+        run: node build/tool/post.js
+
+      - name: Build Teto
+        run: npm run teto:build
+
+      - name: Run NERU selector tests
+        run: node --test build/backends/neru/cli.test.js
+
+      - name: Run mikuOS tests
+        run: node build/test/all.js

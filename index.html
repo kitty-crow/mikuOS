@@ -10,7 +10,17 @@
     <link rel="stylesheet" href="./style.css">
     <script defer src="./vendor/xterm.js"></script>
     <script defer src="./vendor/xterm-fit.js"></script>
-    <script defer src="./thistle.js"></script>
+    <!-- Default static runtime contract: <script defer src="./thistle.js"></script> -->
+    <script>
+      window.addEventListener("DOMContentLoaded", () => {
+        const kernel = new URL(location.href).searchParams.get("kernel");
+        const script = document.createElement("script");
+        script.src = kernel === "neru" || kernel === "linux"
+          ? "./neru-entry.js"
+          : "./thistle.js";
+        document.head.appendChild(script);
+      }, { once: true });
+    </script>
   </head>
   <body>
     <div id="runtime-status" role="status" aria-live="polite">Starting mikuOS…</div>
