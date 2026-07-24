@@ -14,17 +14,29 @@ test("accepts NERU and Linux as the same kernel selection", () => {
   assert.ok(neruCliRequest([], { MIKUOS_KERNEL: "neru" }));
 });
 
-test("orchestrates an ahead-of-time build from the shared userland root", () => {
+test("passes the same selected root into the kernel-only NERU runtime", () => {
   const request = neruCliRequest(
-    ["--kernel=neru", "--neru-output=/tmp/neru", "--neru-variant=wasm32_nommu"],
+    [
+      "--kernel=neru",
+      "--root=/tmp/mikuos-root",
+      "--neru-output=/tmp/neru",
+      "--neru-variant=wasm32_nommu",
+    ],
     {},
   );
   if (!request) throw new Error("expected NERU request");
   const command = neruCommand(request, "/usr/bin/bun");
   assert.equal(command.executable, "/usr/bin/bun");
-  assert.equal(command.argv.includes("--userland"), true);
-  assert.equal(command.argv.some(value => value.endsWith("/.thistle.base/")), true);
+  assert.equal(command.argv.includes("--fs-root"), true);
+  assert.equal(command.argv.includes("/tmp/mikuos-root"), true);
+  assert.equal(command.argv.includes("--userland"), false);
+  assert.equal(command.argv.some(value => value.endsWith("/.thistle.base/")), false);
   assert.equal(command.argv.includes("--boot"), true);
-  assert.equal(command.argv.includes("--image"), false);
-  assert.equal(command.argv.includes("--guest-image"), false);
+});
+
+test("rejects an ephemeral NERU root", () => {
+  assert.throws(
+    () => neruCliRequest(["--kernel=neru", "--no-root"], {}),
+    /requires the same persistent root/,
+  );
 });
