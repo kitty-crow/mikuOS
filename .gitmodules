@@ -13,3 +13,4 @@
 [submodule "neru"]
 	path = neru
 	url = https://github.com/kitty-crow/neru.git
+	branch = main
