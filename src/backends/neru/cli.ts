@@ -69,16 +69,14 @@ export const neruCommand = (
 ): { executable: string; argv: string[] } => {
   const root = new URL("../../../", import.meta.url);
   const launcher = fileURLToPath(new URL("neru/neru.ts", root));
-  const output = request.output ?? fileURLToPath(new URL("build/neru-runtime/", root));
   const argv = [
     "run",
     launcher,
     "--fs-root",
     request.root,
-    "--output",
-    output,
     "--boot",
   ];
+  if (request.output !== undefined) argv.push("--output", request.output);
   if (request.endpoint) argv.push("--fs-endpoint", request.endpoint);
   if (request.variant) argv.push("--variant", request.variant);
   if (request.rebuildLinux) argv.push("--rebuild-linux");
