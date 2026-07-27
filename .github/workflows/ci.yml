@@ -17,9 +17,19 @@ jobs:
           submodules: false
 
       - name: Initialise public build submodules
+        shell: bash
         run: |
+          set -o pipefail
           git submodule sync
-          git submodule update --init kittyx src/asm baguette thistlecc
+          git submodule update --init kittyx src/asm baguette thistlecc bake 2>&1 | tee /tmp/mikuos-submodules.log
+
+      - name: Upload failed submodule log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikuos-submodule-log
+          path: /tmp/mikuos-submodules.log
+          if-no-files-found: ignore
 
       - uses: oven-sh/setup-bun@v2
 
@@ -45,7 +55,18 @@ jobs:
         run: node build/tool/post.js
 
       - name: Build Teto
-        run: npm run teto:build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run teto:build 2>&1 | tee /tmp/mikuos-build.log
+
+      - name: Upload failed build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikuos-build-log
+          path: /tmp/mikuos-build.log
+          if-no-files-found: ignore
 
       - name: Run NERU selector tests
         run: node --test build/backends/neru/cli.test.js
