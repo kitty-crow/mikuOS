@@ -14,7 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialise recursive submodules
+        shell: bash
+        run: |
+          set -o pipefail
+          git submodule sync --recursive
+          git submodule update --init --recursive 2>&1 | tee /tmp/mikuos-submodules.log
+
+      - name: Upload failed submodule log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikuos-submodule-log
+          path: /tmp/mikuos-submodules.log
+          if-no-files-found: ignore
 
       - uses: oven-sh/setup-bun@v2
 
@@ -42,7 +57,7 @@ jobs:
         with:
           name: mikuos-build-log
           path: /tmp/mikuos-build.log
-          if-no-files-found: error
+          if-no-files-found: ignore
 
       - name: Test
         run: npm test
