@@ -1,21 +1,21 @@
 {
   "schema": 1,
   "name": "Teto",
-  "project": "tsconfig.json",
+  "project": "build/teto-baked/tsconfig.json",
   "entries": [
-    "src/teto/abi.ts",
-    "src/teto/kernel.ts",
-    "src/teto/vfs.ts",
-    "src/teto/thx.ts",
-    "src/teto/start.ts"
+    "build/teto-baked/abi.ts",
+    "build/teto-baked/kernel.ts",
+    "build/teto-baked/vfs.ts",
+    "build/teto-baked/thx.ts",
+    "build/teto-baked/start.ts"
   ],
   "generatedDir": "build/teto-generated",
   "outDir": "dist/teto",
   "moduleBaseName": "teto",
   "intrinsicModules": [
-    "src/teto/types.ts",
-    "src/teto/memory.ts",
-    "src/teto/word.ts"
+    "build/teto-baked/types.ts",
+    "build/teto-baked/memory.ts",
+    "build/teto-baked/word.ts"
   ],
   "abi": {
     "exports": "all-exported-functions",
