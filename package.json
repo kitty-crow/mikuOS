@@ -28,10 +28,7 @@
     "baguette:check": "tsc -p baguette/tsconfig.json --noEmit",
     "sync:base": "python3 scripts/release/sync-thistle-base.py",
     "audit:base": "python3 scripts/release/sync-thistle-base.py --check",
-    "git:upload": "bash scripts/release/git-upload.sh",
-    "preteto:build": "bun scripts/teto-bake.ts",
-    "preteto:validate": "bun scripts/teto-bake.ts",
-    "preteto:build:fast": "bun scripts/teto-bake.ts"
+    "git:upload": "bash scripts/release/git-upload.sh"
   },
   "mikuos": {
     "version": "0.3"
