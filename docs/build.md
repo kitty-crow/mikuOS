@@ -10,32 +10,31 @@ A complete build starts from a recursive checkout:
 `build:thistle` compiles the TypeScript host and prepares the static
 host files.
 
-The npm `preteto:*` lifecycle hooks turn each Teto command into a two-stage
-kernel compiler pipeline without changing Baguette itself:
+Teto compilation has one canonical toolchain dependency:
 
     src/teto TypeScript
-        -> pinned sibling Bake tool
-        -> build/teto-baked TypeScript
-        -> pinned sibling Baguette compiler
+        -> pinned Baguette compiler
+        -> Baguette's pinned Bake validation and safe lowering stage
+        -> Baguette subset validation and AOT compilation
         -> dist/teto WebAssembly
 
-Bake receives only the five Teto kernel entries from `tsconfig.teto.json`
-and their imported kernel dependencies. Browser loaders, host adapters and
-alternative kernels are outside that project boundary. The committed
-`baguette.config.json` consumes the generated tree, and Baguette remains the
-final validator and WebAssembly compiler.
+mikuOS tracks Baguette as a submodule. Bake is owned and pinned recursively by
+Baguette, so mikuOS does not carry a separate Bake dependency or preprocessing
+script. Baguette isolates the five Teto kernel entries from `tsconfig.teto.json`
+and their imported kernel dependencies before passing them through Bake. Browser
+loaders, host adapters and alternative kernels remain outside that project
+boundary.
 
-Both Bake and Baguette are independent sibling submodules. Recursive checkout
-pins the exact compiler revisions and avoids a circular dependency between
-them. `BAKE_CLI` may select another Bake CLI for local development.
-`MIKUOS_BAKE_ENGINE` may select `auto`, `host` or `wasm`; `auto` is the
-default.
+Baguette remains the final validator and WebAssembly compiler. Its Bake stage is
+compile-time tooling only and introduces no runtime, interpreter or virtual
+machine into Teto. `BAGUETTE_BAKE_ENGINE` may select Bake's `auto`, `host` or
+`wasm` core; `auto` is the default.
 
 Important outputs are:
 
 - `build/` for compiled host JavaScript;
-- `build/teto-baked/` for Bake-lowered kernel TypeScript;
-- `build/teto-bake-report.json` for Bake diagnostics and provenance;
+- `build/baguette-bake/` for Baguette's Bake input, lowered source and report;
+- `build/teto-generated/` for Baguette's generated TypeScript;
 - `dist/teto/teto.wasm` and `teto-threads.wasm`;
 - `dist/teto/teto.manifest.json`;
 - `dist/web/` for the static site and packaged root image.
