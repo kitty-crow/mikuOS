@@ -8,6 +8,27 @@
     <title>初音ミクOS v｡三</title>
     <link rel="stylesheet" href="./vendor/xterm.css">
     <link rel="stylesheet" href="./style.css">
+    <style>
+      .floatingchat-container-wrap,
+      .floatingchat-container-wrap-mobi {
+        left: 16px !important;
+        right: auto !important;
+        width: fit-content !important;
+        overflow: visible !important;
+      }
+
+      .floatingchat-container-wrap > iframe,
+      .floatingchat-container-wrap-mobi > iframe {
+        width: 230px !important;
+      }
+
+      .floating-chat-kofi-popup-iframe,
+      .floating-chat-kofi-popup-iframe-mobi,
+      .floating-chat-kofi-popup-iframe-closer-mobi {
+        left: 16px !important;
+        right: auto !important;
+      }
+    </style>
     <script defer src="./vendor/xterm.js"></script>
     <script defer src="./vendor/xterm-fit.js"></script>
     <script defer src="./thistle.js"></script>
@@ -16,5 +37,14 @@
     <div id="runtime-status" role="status" aria-live="polite">Starting mikuOS…</div>
     <main id="terminal" data-thistle-terminal aria-label="Terminal"></main>
     <noscript>This terminal requires JavaScript.</noscript>
+    <script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
+    <script>
+      kofiWidgetOverlay.draw('kittycrow', {
+        'type': 'floating-chat',
+        'floating-chat.donateButton.text': 'Buy me a coffee?',
+        'floating-chat.donateButton.background-color': '#5bc0de',
+        'floating-chat.donateButton.text-color': '#323842'
+      });
+    </script>
   </body>
 </html>
