@@ -4,6 +4,36 @@
   "use strict";
   const decoder = new TextDecoder("utf-8");
 
+  // xterm.js lays out complete character cells from the left edge. The
+  // remaining fractional width ends up on the right, which visibly shifts
+  // a centred ANSI panel left. Centre the rendered grid within the actual
+  // terminal viewport during boot, then restore its original placement.
+  // The splash artwork and progress UI still render entirely inside WASM.
+  function centreBootGrid(terminal) {
+    const host = terminal.element;
+    const screen = host?.querySelector?.(".xterm-screen");
+    if (!host?.getBoundingClientRect || !screen?.getBoundingClientRect ||
+        !screen.style) {
+      return { align() {}, restore() {} };
+    }
+
+    const previous = screen.style.transform;
+    function align() {
+      screen.style.transform = previous;
+      const viewport = host.getBoundingClientRect();
+      const grid = screen.getBoundingClientRect();
+      const offset = Math.round(
+        viewport.left + viewport.width / 2 - grid.left - grid.width / 2
+      );
+      if (Number.isFinite(offset) && offset !== 0) {
+        screen.style.transform = (previous ? previous + " " : "") +
+          "translateX(" + offset + "px)";
+      }
+    }
+    align();
+    return { align, restore() { screen.style.transform = previous; } };
+  }
+
   async function create(terminal, base) {
     const source = new URL("boot.wasm", base || document.baseURI);
     const response = await fetch(source);
@@ -20,10 +50,13 @@
     instance = module.instance;
     const wasm = instance.exports;
     let finished = false;
+    const alignment = centreBootGrid(terminal);
     wasm.boot_start(terminal.cols || 60, terminal.rows || 24);
     const spinner = setInterval(() => { if (!finished) wasm.boot_tick(); }, 150);
-    const resize = terminal.onResize?.(size =>
-      wasm.boot_resize(size.cols, size.rows));
+    const resize = terminal.onResize?.(size => {
+      alignment.align();
+      wasm.boot_resize(size.cols, size.rows);
+    });
     return {
       report(phase, done = 0, total = 0) {
         if (!finished) wasm.boot_update(phase, done, total);
@@ -35,6 +68,7 @@
         clearInterval(spinner);
         resize?.dispose();
         wasm.boot_finish();
+        alignment.restore();
       },
       fail(error) {
         if (finished) return;
@@ -48,6 +82,7 @@
           clearInterval(spinner);
           resize?.dispose();
           wasm.boot_finish();
+        alignment.restore();
         }
       },
     };
