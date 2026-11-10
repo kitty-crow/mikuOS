@@ -154,7 +154,7 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
   const tree = new WebTree(
     options.rootBase ?? new URL("./root/", document.baseURI),
     options.persistence !== false,
-    phase => bootScreen?.report(phase),
+    (phase, done, total) => bootScreen?.report(phase, done, total),
   );
   // Hold the MOTD and the first shell prompt outside the boot screen's
   // alternate terminal buffer. They are rendered when the C programme exits.
