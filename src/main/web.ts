@@ -32,8 +32,15 @@ class FallbackTerminal implements TerminalLike {
   onData(): { dispose(): void } { return { dispose: () => {} }; }
 }
 
+interface BootDisplay {
+  report(phase: number, done?: number, total?: number): void;
+  finish(): void;
+  fail(error: unknown): void;
+}
 interface LaunchOptions {
   terminal?: TerminalLike | object;
+  /** A C/WASM boot screen that may already be running before thistle.js loaded. */
+  boot?: BootDisplay;
   config?: SystemConfig;
   persistence?: boolean;
   kernel?: KernelMode;
@@ -53,6 +60,7 @@ const globals = globalThis as unknown as {
   MikuOS?: LaunchHandle;
   FitAddon?: { FitAddon?: FitAddonCtor };
   ResizeObserver?: new(callback: () => void) => { observe(node: unknown): void; disconnect(): void };
+  MikuBoot?: { create(term: TerminalLike, base?: string | URL): Promise<BootDisplay> };
 };
 
 type FrameCallback = (time: number) => void;
@@ -133,6 +141,10 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
     addon.fit?.();
   }
 
+  const bootScreen = options.boot ?? await globals.MikuBoot?.create(
+    term, new URL("./", document.baseURI),
+  );
+  bootScreen?.report(1);
   const config = options.config ?? await staticBrowserConfig();
   const query = typeof location === "undefined" ? undefined : new URL(location.href).searchParams.get("kernel");
   const requestedKernel = options.kernel ?? kernelMode(query, "teto");
@@ -142,10 +154,23 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
   const tree = new WebTree(
     options.rootBase ?? new URL("./root/", document.baseURI),
     options.persistence !== false,
+    phase => bootScreen?.report(phase),
   );
+  // Hold the MOTD and the first shell prompt outside the boot screen's
+  // alternate terminal buffer. They are rendered when the C programme exits.
+  const pending: string[] = [];
+  let showShell = !bootScreen;
+  const terminalOutput = { write: (text: string): void => {
+    if (showShell) term.write(text);
+    else pending.push(text);
+  } };
   const session = new WebSession(
-    { write: text => term.write(text) },
-    { config, tree, kernelMode: requestedKernel, ...(teto ? { teto } : {}) },
+    terminalOutput,
+    {
+      config, tree, kernelMode: requestedKernel,
+      ...(teto ? { teto } : {}),
+      onBootProgress: phase => bootScreen?.report(phase),
+    },
   );
 
   /*
@@ -187,7 +212,15 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
 
   fitTerminal();
 
-  await session.ready;
+  try {
+    await session.ready;
+    bootScreen?.finish();
+    showShell = true;
+    for (const message of pending) term.write(message);
+  } catch (error) {
+    bootScreen?.fail(error);
+    throw error;
+  }
 
   fitTerminal();
   requestFrame(fitTerminal);
