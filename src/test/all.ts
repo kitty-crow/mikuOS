@@ -2706,7 +2706,7 @@ test("web account boots as the configured unprivileged user", async () => {
 test("browser OPFS overlay recovers from stale entry types across reloads", async () => {
   class MemoryFile {
     readonly kind = "file" as const;
-    bytes = new Uint8Array();
+    bytes: Uint8Array = new Uint8Array();
     constructor(readonly name: string) {}
     async getFile(): Promise<File> {
       const bytes = Uint8Array.from(this.bytes);
@@ -2788,12 +2788,13 @@ test("browser OPFS overlay recovers from stale entry types across reloads", asyn
     configurable: true,
     value: { storage: { getDirectory: async () => storage } },
   });
-  globalThis.fetch = async input => {
+  const mockFetch = async (input: RequestInfo | URL): Promise<Response> => {
     const path = String(input);
     if (path.endsWith("/root/manifest.json")) return new Response(JSON.stringify(manifest));
     if (path.endsWith("/root/core.gz")) return new Response(emptyGzip.buffer);
     throw new Error(`Unexpected static root request: ${path}`);
   };
+  globalThis.fetch = Object.assign(mockFetch, { preconnect: () => {} });
 
   try {
     const path = "/home/guest/.thsh_history";
