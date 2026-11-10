@@ -15,10 +15,16 @@ server for testing the generated files.
 
 `src/boot/boot.c` is a freestanding C programme compiled to a small
 `dist/web/boot.wasm` before the main browser bundle is built. It
-draws the supplied mikuOS logo, a dark Mac OS 9-inspired panel, a
-spinner and a progress bar entirely through ANSI terminal sequences.
-The supplied SVG was palette-reduced for true-colour half-block
-terminal rendering, so no CSS or image addon is required.
+draws the supplied **Unicode Art Studio** artwork, a dark Mac OS
+9-inspired panel, a spinner and a progress bar entirely through ANSI
+terminal sequences. The original `src/boot/logo.txt` retains every
+Unicode glyph and its `<#RRGGBB>` true-colour markup. The source
+`src/boot/colour.h` is the canonical parser, vendored from
+`kitty-crow/unicode-art-studio/extras/term/colour.h` under MIT.
+A small native C build tool compiles two responsive crops into the
+freestanding WASM programme without colour loss. Narrow terminals
+show the original logo symbol without redrawing or approximating it.
+No CSS or image addon is required.
 
 `dist/web/bootloader.js` is only the minimal browser bridge needed
 to instantiate WASM, connect its byte output to xterm.js, and drive
@@ -54,5 +60,8 @@ clang --target=wasm32 -Oz -fno-builtin -nostdlib \
   -Wl,--strip-all -o dist/web/boot.wasm src/boot/boot.c
 ```
 
-The regular `npm run build` already performs this compilation before
-building the main browser runtime.
+The regular `npm run build` first uses the host C compiler to
+convert `src/boot/logo.txt` with `colour.h` to
+`build/boot/generated-logo.h`, then includes that generated header
+when compiling the freestanding WASM before the main browser runtime.
+No artwork parsing or filesystem access happens during the boot splash.
