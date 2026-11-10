@@ -18,6 +18,7 @@ export interface WebSessionOptions {
   net?: Net;
   kernelMode?: KernelMode;
   teto?: TetoImageProvider;
+  onBootProgress?: (phase: number) => void;
 }
 
 /** A complete kernel, guest session, and line editor running in this process. */
@@ -39,6 +40,7 @@ export class WebSession {
       account: options.config.accounts.web,
       setId: true,
       kernelMode: options.kernelMode ?? "thistle",
+      ...(options.onBootProgress ? { onBootProgress: options.onBootProgress } : {}),
       ...(options.teto ? { teto: options.teto } : {}),
     };
 
@@ -81,7 +83,9 @@ export class WebSession {
     await this.os.ready;
     await this.os.hello();
     this.os.sh.ensureUserState(true);
+    this.output.write(""); // Keep renderer output ordering deterministic.
     this.editor.afterCommand();
+    this.os.host.onBootProgress?.(7);
   }
 
   private execute(source: string, bodies: readonly string[]): void {
