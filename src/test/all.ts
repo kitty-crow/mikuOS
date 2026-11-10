@@ -1664,6 +1664,41 @@ test("canonical mikuOS release metadata stays aligned", async () => {
   ok(thistleEntry.includes('import "./src/main/cli.ts"'));
 });
 
+test("independent C/WASM boot display reports real milestones and cleans up xterm", async () => {
+  const fs = (globalThis as unknown as {
+    process: { getBuiltinModule(name: string): { promises: {
+      readFile(path: URL): Promise<Uint8Array>
+    } } }
+  }).process.getBuiltinModule("fs").promises;
+  const wasm = await fs.readFile(new URL("../../dist/web/boot.wasm", import.meta.url));
+  ok(WebAssembly.validate(Uint8Array.from(wasm)), "early C boot screen is not valid WASM");
+  let instance: WebAssembly.Instance | undefined;
+  const chunks: string[] = [];
+  const module = await WebAssembly.instantiate(Uint8Array.from(wasm), {
+    env: { emit(pointer: number, size: number): void {
+      const memory = instance!.exports.memory as WebAssembly.Memory;
+      chunks.push(new TextDecoder().decode(new Uint8Array(memory.buffer, pointer, size)));
+    } },
+  });
+  instance = module.instance;
+  const boot = instance.exports as unknown as {
+    boot_start(cols: number, rows: number): void;
+    boot_update(step: number, done: number, total: number): void;
+    boot_tick(): void;
+    boot_finish(): void;
+  };
+  boot.boot_start(50, 24);
+  boot.boot_update(3, 0, 0);
+  boot.boot_tick();
+  boot.boot_update(8, 0, 0);
+  boot.boot_finish();
+  const emitted = chunks.join("");
+  ok(emitted.includes("Unpacking guest filesystem"));
+  ok(emitted.includes("100%"));
+  ok(emitted.includes("\x1b[?1049h") && emitted.includes("\x1b[?1049l"),
+    "Boot screen must restore the original terminal buffer");
+});
+
 test("classic thistle.js boots the static Teto guest without a runtime server", async () => {
   interface HFs {
     readFile(path: URL, encoding: "utf8"): Promise<string>;
@@ -1728,7 +1763,10 @@ test("classic thistle.js boots the static Teto guest without a runtime server", 
 
   ok(page.includes('<script defer src="./vendor/xterm.js"></script>'));
   ok(page.includes('<script defer src="./vendor/xterm-fit.js"></script>'));
-  ok(page.includes('<script defer src="./thistle.js"></script>'));
+  ok(page.includes('<script defer src="./bootloader.js"></script>'));
+  ok(page.includes('<script defer src="./boot-standalone.js"></script>'));
+  ok(!page.includes('<script defer src="./thistle.js"></script>'),
+    "The full runtime must not load before the small boot WASM");
   ok(!page.includes('type="module"'), "static page retained a module graph");
   ok(xterm.includes("Terminal"), "static xterm.js asset is invalid");
   ok(fit.includes("FitAddon"), "static fit-addon asset is invalid");
