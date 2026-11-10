@@ -2703,6 +2703,79 @@ test("web account boots as the configured unprivileged user", async () => {
   eq(r.s.uid, 1000); eq(r.s.gid, 1000); eq(r.s.env("USER"), "guest"); eq(r.s.cwd, "/home/guest");
 });
 
+test("shell restores commands when saved history has become a directory", async () => {
+  const tree = new MemTree();
+  const output: string[] = [];
+  const session = (): Os => boot({
+    put: value => { output.push(value); },
+    tree,
+    config: DEFAULT_CONFIG,
+    account: DEFAULT_CONFIG.accounts.web,
+    setId: true,
+  });
+  const history = "/home/guest/.thsh_history";
+  const first = session();
+  await first.ready;
+  eq(await first.run("pwd"), 0);
+  ok(first.s.read(history).includes("pwd"));
+
+  // Recreate a damaged legacy snapshot: a root-owned, non-empty directory
+  // occupies the history filename before the next browser visit.
+  const original = tree.ent!.find(entry => entry.p === history);
+  ok(original);
+  const identifier = Math.max(...tree.ent!.map(entry => entry.id)) + 1;
+  tree.ent = [
+    ...tree.ent!.map(entry => entry.p === history
+      ? { p: entry.p, k: "d" as const, id: entry.id, uid: 0, gid: 0, mode: 0o755,
+        at: entry.at, mt: entry.mt, ct: entry.ct }
+      : entry),
+    { ...original, p: `${history}/important.txt`, k: "f", id: identifier,
+      data: enc("preserve this directory"), uid: 0, gid: 0, mode: 0o644 },
+  ];
+
+  const reopened = session();
+  await reopened.ready;
+  eq(reopened.s.stat(history).kind, "dir");
+  output.length = 0;
+  eq(await reopened.run("pwd"), 0);
+  ok(output.join("").includes("/home/guest"), "the command did not execute");
+  eq(reopened.s.stat(history).kind, "file");
+  const backups = reopened.s.list("/home/guest")
+    .map(([name]) => name)
+    .filter(name => name.startsWith(".thsh_history.recovered-"));
+  eq(backups.length, 1);
+  eq(reopened.s.read(`/home/guest/${backups[0]}/important.txt`), "preserve this directory");
+  ok(reopened.s.read(history).includes("pwd"));
+
+  const third = session();
+  await third.ready;
+  eq(third.s.stat(history).kind, "file");
+  ok(third.s.read(history).includes("pwd"));
+  eq(await third.run("help"), 0);
+});
+
+test("failed shell history writes warn once and never prevent commands", async () => {
+  const errors: string[] = [];
+  const os = boot({
+    put: (value, channel) => { if (channel === "err") errors.push(value); },
+    config: DEFAULT_CONFIG,
+    account: DEFAULT_CONFIG.accounts.web,
+    setId: true,
+  });
+  await os.ready;
+  const originalWrite = os.s.write.bind(os.s);
+  os.s.write = (path, content, append, mode) => {
+    if (path.endsWith("/.thsh_history")) throw new KErr("EIO", path);
+    originalWrite(path, content, append, mode);
+  };
+
+  eq(await os.run("pwd"), 0);
+  eq(await os.run("help"), 0);
+  eq(errors.filter(value => value.includes("history not saved")).length, 1);
+  ok(os.sh.hist.includes("pwd"), "failed history write lost in-memory history");
+  ok(os.sh.hist.includes("help"), "subsequent command was not recorded");
+});
+
 test("browser OPFS overlay recovers from stale entry types across reloads", async () => {
   class MemoryFile {
     readonly kind = "file" as const;
