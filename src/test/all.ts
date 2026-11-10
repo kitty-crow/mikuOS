@@ -2754,7 +2754,7 @@ test("shell restores commands when saved history has become a directory", async 
   eq(await third.run("help"), 0);
 });
 
-test("unwritable shell history warns once and never prevents commands", async () => {
+test("failed shell history writes warn once and never prevent commands", async () => {
   const errors: string[] = [];
   const os = boot({
     put: (value, channel) => { if (channel === "err") errors.push(value); },
@@ -2763,7 +2763,12 @@ test("unwritable shell history warns once and never prevents commands", async ()
     setId: true,
   });
   await os.ready;
-  os.s.chmod("/home/guest", 0o555);
+  const originalWrite = os.s.write.bind(os.s);
+  os.s.write = (path, content, append, mode) => {
+    if (path.endsWith("/.thsh_history")) throw new KErr("EIO", path);
+    originalWrite(path, content, append, mode);
+  };
+
   eq(await os.run("pwd"), 0);
   eq(await os.run("help"), 0);
   eq(errors.filter(value => value.includes("history not saved")).length, 1);
