@@ -80,6 +80,7 @@ export class Shell {
   lastBg = 0;
   private jid = 1;
   private fg = 0;
+  private historyWarning = false;
 
   constructor(readonly s: Sys) {}
 
@@ -93,7 +94,46 @@ export class Shell {
     if(this.hist.length>this.prefs.historySize)this.hist.splice(0,this.hist.length-this.prefs.historySize);
   }
   reloadPreferences():string[]{let prefs=defaultPrefs();const warnings:string[]=[];for(const path of ["/opt/prefs",`${this.home().replace(/\/$/,"")}/.mikuos-prefs`]){const raw=this.maybeRead(path);if(raw===undefined)continue;const parsed=parsePrefs(raw,prefs);prefs=parsed.prefs;warnings.push(...parsed.warnings.map(x=>`${path}: ${x}`));}this.prefs=prefs;return warnings;}
-  saveHistory():void{if(!this.prefs.history)return;const path=this.historyFile();this.s.write(path,encodeHistory(this.hist),false,0o600);this.s.chmod(path,0o600);}
+
+  private prepareHistoryFile(path: string): void {
+    let current: ReturnType<Sys["stat"]>;
+    try {
+      current = this.s.stat(path, false);
+    } catch (error) {
+      if (error instanceof KErr && error.code === "ENOENT") return;
+      throw error;
+    }
+
+    if (current.kind === "file" && current.uid === this.s.euid) {
+      if (!(current.mode & 0o200)) this.s.chmod(path, 0o600);
+      return;
+    }
+
+    // Keep the unexpected directory, link or foreign-owned file intact.
+    // Only its reserved history pathname must be reclaimed.
+    const timestamp = Date.now();
+    for (let index = 0; index < 100; index++) {
+      const backup = `${path}.recovered-${timestamp}${index ? `-${index}` : ""}`;
+      try {
+        this.s.stat(backup, false);
+      } catch (error) {
+        if (!(error instanceof KErr) || error.code !== "ENOENT") throw error;
+        this.s.mv(path, backup);
+        return;
+      }
+    }
+    bad("EEXIST", `no free backup filename for ${path}`);
+  }
+
+  saveHistory(): void {
+    if (!this.prefs.history) return;
+    const path = this.historyFile();
+    this.prepareHistoryFile(path);
+    this.s.write(path, encodeHistory(this.hist), false, 0o600);
+    this.s.chmod(path, 0o600);
+    this.historyWarning = false;
+  }
+
   private recordHistory(src:string):void{this.ensureUserState();if(!this.prefs.history||(this.prefs.historyIgnoreSpace&&/^[ \t]/.test(src)))return;const entry=src.replace(/\r\n/g,"\n").replace(/\r/g,"\n").replace(/\n+$/,"");if(!entry.trim()||this.prefs.historyIgnorePatterns.some(p=>globMatches(p,entry)))return;if(this.hist.at(-1)===entry)return;if(this.prefs.historyDeduplicate){for(let i=this.hist.length-1;i>=0;i--)if(this.hist[i]===entry)this.hist.splice(i,1);}this.hist.push(entry);if(this.hist.length>this.prefs.historySize)this.hist.splice(0,this.hist.length-this.prefs.historySize);this.saveHistory();}
   historyMatches(prefix:string):string[]{this.ensureUserState();return this.prefs.autocomplete?findHistoryMatches(this.hist,prefix,this.prefs.autocompleteCaseSensitive):[];}
   clearHistory():void{this.hist.splice(0,this.hist.length);this.saveHistory();}
@@ -240,7 +280,18 @@ export class Shell {
   ): Promise<number> {
     if (!src.trim()) return this.last;
     this.ensureUserState();
-    if (save) this.recordHistory(src);
+    if (save) {
+      try {
+        this.recordHistory(src);
+      } catch (error) {
+        // History is auxiliary state. A broken or unwritable history path
+        // must never stop the command the user actually submitted.
+        if (!this.historyWarning) {
+          this.historyWarning = true;
+          await this.s.err(`thsh: history not saved (${msg(error)}); commands will still run\n`);
+        }
+      }
+    }
 
     let commandSource = src;
     let bodies = heredocBodies;
