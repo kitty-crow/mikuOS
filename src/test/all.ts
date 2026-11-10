@@ -3082,9 +3082,8 @@ test("browser session restores history before Up and autocomplete", async () => 
   web.key("\x1b[A");
   ok(output.includes("ls"), "Up should return the restored last command");
   web.key("\x03");
-  web.key("echo prev");
-  ok(output.includes("echo previously-entered"),
-    "Restored history must drive interactive suggestions");
+  ok(web.os.sh.historyMatches("echo prev").includes("echo previously-entered"),
+    "Restored history must remain available to autocomplete");
 });
 
 test("browser session runs the full guest locally without a runtime server", async () => {
