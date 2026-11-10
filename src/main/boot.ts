@@ -25,6 +25,8 @@ export interface Host {
   setId?: boolean;
   teto?: TetoImageProvider;
   kernelMode?: KernelMode;
+  /** Real browser startup milestones; no simulated elapsed-time progress. */
+  onBootProgress?: (phase: number) => void;
 }
 
 export class Os {
@@ -133,6 +135,7 @@ export class Os {
     if (!this.host.tree) { live(this.k); return; }
     try {
       const ent = await this.host.tree.pull();
+      this.host.onBootProgress?.(4);
       const before = this.host.tree.imageVersion ?? 0;
       if (ent) treeFs.load(this.k.fs, ent);
       this.k.disk = true;
@@ -155,6 +158,7 @@ export class Os {
 
 
   private async configureKernelMode(): Promise<void> {
+    this.host.onBootProgress?.(5);
     const requested = this.host.kernelMode ?? "thistle";
     if (requested === "thistle") {
       this.activeKernelMode = "thistle";
@@ -197,6 +201,7 @@ export class Os {
   private async init(): Promise<void> {
     await this.restore();
     await this.configureKernelMode();
+    this.host.onBootProgress?.(6);
     this.sh.ensureUserState(true);
     if (this.host.pkg) {
       try {
