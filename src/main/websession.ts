@@ -67,6 +67,14 @@ export class WebSession {
     if (this.live) this.editor.key(data);
   }
 
+  /** Restore browser-hosted command history without creating a guest home. */
+  restoreHistory(entries: readonly string[]): void {
+    this.os.sh.ensureUserState();
+    this.os.sh.hist.splice(0, this.os.sh.hist.length,
+      ...entries.slice(-this.os.sh.prefs.historySize));
+    this.editor.afterCommand(false);
+  }
+
   resize(rows: number, columns: number): void {
     this.os.resize(
       Math.max(1, Math.trunc(rows)),
