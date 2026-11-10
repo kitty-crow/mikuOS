@@ -46,15 +46,16 @@ static void draw(void){
  int width=min(cols-2,64);
  if(width<26){move(1,1);fg(3);put("mikuOS  ");spinner_x=9;spinner_y=1;put(spin[frame%4]);reset();move(1,2);put(labels[stage]);}
  else{
-  int x=(cols-width)/2+1, h=18, top=(rows-h)/2+1;
+  int x=(cols-width)/2+1, h=min(rows-2,18), top=(rows-h)/2+1;
   if(top<1)top=1;
+  /* A compact dark Classic Mac-style framed panel, without HTML/CSS. */
+  for(int py=0;py<h;py++){move(x,top+py);bg(0);fg(1);chr('|');for(int j=0;j<width-2;j++)chr(' ');chr('|');reset();}
   fg(2);move(x,top);chr('+');for(int j=0;j<width-2;j++)chr('-');chr('+');
-  centre("mikuOS",top+1,width,x);
+  centre("Welcome to mikuOS",top+1,width,x);
   reset();
-  if(width>=34 && rows>=14)art(x,top+3,width);
+  if(width>=32 && h>=15)art(x,top+3,width);
   else{move(x+3,top+3);fg(3);put("mikuOS boot");reset();}
-  int line=top+(rows>=14?12:5);
-  if(line>=rows-3)line=rows-3;
+  int line=top+h-5;
   spinner_x=x+2;spinner_y=line;
   move(spinner_x,spinner_y);fg(3);put(spin[frame%4]);reset();chr(' ');
   const char *label=labels[stage];
