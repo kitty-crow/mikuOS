@@ -13,7 +13,7 @@ static const char *labels[]={
  "Initialising userland", "Preparing interactive shell", "Starting mikuOS session"
 };
 static const char *spin[]={"|","/","-","\\"};
-static const char *colours[]={"22;24;29", "0;106;129", "0;148;166", "45;206;210"};
+static const char *colours[]={"0;0;0", "0;106;129", "0;148;166", "45;206;210"};
 #include "generated-logo.h"
 static void put(const char *s){while(*s && used<19995)screen[used++]=*s++;}
 static void chr(char c){if(used<19995)screen[used++]=c;}
@@ -50,7 +50,7 @@ static void draw(void){
   /* A compact dark Classic Mac-style framed panel, without HTML/CSS. */
   for(int py=0;py<h;py++){move(x,top+py);bg(0);fg(1);chr('|');for(int j=0;j<width-2;j++)chr(' ');chr('|');reset();}
   fg(2);move(x,top);chr('+');for(int j=0;j<width-2;j++)chr('-');chr('+');
-  centre("Welcome to mikuOS",top+1,width,x);
+  centre("Loading mikuOS",top+1,width,x);
   reset();
   if(width>=LOGO_ICON_COLS+4 && h>=18)art(x,top+3,width,h>=22?LOGO_ROWS:h-10);
   else{move(x+3,top+3);fg(3);put("mikuOS boot");reset();}
@@ -66,7 +66,6 @@ static void draw(void){
   if(total>0 && loaded>0)bp=(stage*100)/8+(loaded*100)/(total*8);
   if(bp>100)bp=100;
   fg(2);for(int j=0;j<n;j++)put(j*100<bp*n?"\342\226\210":"\342\226\221");reset();
-  move(x+2,barline+1);fg(3);put(" ");num(bp);put("%  ");reset();
   move(x,top+h-1);fg(2);chr('+');for(int j=0;j<width-2;j++)chr('-');chr('+');reset();
  }
  emit(screen,used);
