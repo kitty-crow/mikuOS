@@ -1,4 +1,5 @@
 import { demoWasm } from "../wasm/demo.js";
+import { execFileSync } from "node:child_process";
 import { fsp } from "./host.js";
 import { Asm } from "../asm/asm.js";
 import { Link } from "../asm/link.js";
@@ -19,6 +20,33 @@ const vendor = new URL("vendor/", web);
 const bundle = new URL("thistle.js", web);
 const cliRoot = new URL(".thistle.base/", root);
 const webRoot = new URL("root/", web);
+
+// Build the independent C boot programme before generating the main mikuOS
+// browser bundle. This WASM does not depend on Teto or the guest filesystem.
+const bootC = new URL("src/boot/boot.c", root);
+const bootWasm = new URL("boot.wasm", web);
+await fs.mkdir(web, { recursive: true });
+try {
+  execFileSync("clang", [
+    "--target=wasm32", "-Oz", "-fno-builtin", "-nostdlib",
+    "-Wl,--no-entry", "-Wl,--export-memory",
+    "-Wl,--initial-memory=131072", "-Wl,--strip-all",
+    "-o", decodeURIComponent(bootWasm.pathname), decodeURIComponent(bootC.pathname),
+  ], { stdio: "inherit" });
+} catch (error) {
+  throw new Error("The independent mikuOS boot programme requires clang with wasm32 support", { cause: error });
+}
+await build({
+  entryPoints: [decodeURIComponent(new URL("src/boot/loader.js", root).pathname)],
+  outfile: decodeURIComponent(new URL("bootloader.js", web).pathname),
+  bundle: false,
+  platform: "browser",
+  format: "iife",
+  target: ["es2022"],
+  minify: true,
+  legalComments: "none",
+});
+console.log("Early mikuOS boot programme compiled from C into boot.wasm");
 
 await fs.mkdir(assets, { recursive: true });
 await fs.writeFile(new URL("hello.wasm", assets), demoWasm());
