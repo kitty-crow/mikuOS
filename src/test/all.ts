@@ -1732,6 +1732,13 @@ test("independent C/WASM boot display reports real milestones and cleans up xter
   boot.boot_update(8, 0, 0);
   boot.boot_finish();
   const emitted = chunks.join("");
+  ok(emitted.includes("Loading mikuOS"), "The unfinished boot must say Loading mikuOS");
+  ok(!emitted.includes("Welcome to mikuOS"), "Do not welcome users before boot finishes");
+  ok(emitted.includes("\x1b[48;2;0;0;0m"), "The entire logo surround must be pure black");
+  ok(!emitted.includes("\x1b[48;2;22;24;29m"), "No dark-grey boot panel behind the logo");
+  ok(!emitted.includes("100%"), "The progress bar does not need a numeric percentage");
+  ok(emitted.includes("█") && emitted.includes("░"),
+    "Keep the existing visual progress bar");
   ok(emitted.includes("⣿"), "The original Unicode Braille artwork must survive WASM compilation");
   ok(emitted.includes("\x1b[38;2;0;211;230m"),
     "The supplied Studio artwork must retain its original 24-bit cyan colours");
