@@ -187,6 +187,44 @@ export class WebTree implements Tree {
     );
   }
 
+  /**
+   * TreeFs.dump() numbers its inodes afresh on each snapshot. Those local
+   * numbers cannot be written into the overlay: they may collide with
+   * unrelated immutable image entries when the tree is restored.
+   *
+   * Keep base inode IDs for pre-existing paths and allocate overlay-only
+   * IDs above both the immutable base and earlier overlay records.
+   * Every link sharing one snapshot inode receives the same stable ID.
+   */
+  private stableInodeIds(entries: TreeEnt[]): Map<number, number> {
+    const assigned = new Map<number, number>();
+    const used = new Set<number>();
+    const oldOverlay = new Map((this.overlay?.entries ?? []).map(entry => [entry.p, entry]));
+    let nextId = Math.max(0, ...this.baseEntries.map(entry => entry.id),
+      ...(this.overlay?.entries ?? []).map(entry => entry.id));
+
+    const oldPaths = entries.filter(entry =>
+      this.base.has(entry.p) || oldOverlay.has(entry.p));
+    const candidates = [...oldPaths, ...entries];
+
+    for (const entry of candidates) {
+      if (assigned.has(entry.id)) continue;
+
+      const base = this.base.get(entry.p);
+      const saved = oldOverlay.get(entry.p);
+      const candidate = base?.k === entry.k ? base.id
+        : saved?.k === entry.k ? saved.id
+        : undefined;
+      const id = candidate !== undefined && !used.has(candidate)
+        ? candidate
+        : ++nextId;
+      assigned.set(entry.id, id);
+      used.add(id);
+    }
+
+    return assigned;
+  }
+
   async push(entries: TreeEnt[], imageVersion = this.image): Promise<void> {
     await this.basePromise;
     const root = await this.root;
@@ -195,12 +233,14 @@ export class WebTree implements Tree {
     const now = new Map(entries.map(entry => [entry.p, entry]));
     const whiteouts = this.whiteouts(now);
     const changed: OverlayMeta[] = [];
+    const inodeIds = this.stableInodeIds(entries);
 
     for (const entry of entries) {
       const original = this.base.get(entry.p);
       if (original && sameBase(entry, original)) continue;
 
       const out = metadata(entry);
+      out.id = inodeIds.get(entry.id) ?? entry.id;
       if (entry.k === "f") {
         if (original && baseContent(entry, original)) {
           out.base = true;
