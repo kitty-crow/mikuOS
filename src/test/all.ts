@@ -1693,6 +1693,9 @@ test("independent C/WASM boot display reports real milestones and cleans up xter
   boot.boot_update(8, 0, 0);
   boot.boot_finish();
   const emitted = chunks.join("");
+  ok(emitted.includes("⣿"), "The original Unicode Braille artwork must survive WASM compilation");
+  ok(emitted.includes("\x1b[38;2;0;211;230m"),
+    "The supplied Studio artwork must retain its original 24-bit cyan colours");
   ok(emitted.includes("Unpacking guest filesystem"));
   ok(emitted.includes("100%"));
   ok(emitted.includes("\x1b[?1049h") && emitted.includes("\x1b[?1049l"),
