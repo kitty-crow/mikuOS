@@ -5,6 +5,7 @@ __attribute__((import_module("env"), import_name("emit")))
 extern void emit(const char *bytes, int size);
 static char screen[20000];
 static int used, cols=60, rows=24, stage, loaded, total, frame, started;
+static int spinner_x=1, spinner_y=1;
 static const char *labels[]={
  "Loading mikuOS runtime", "Preparing browser runtime", "Reading guest filesystem index",
  "Unpacking guest filesystem", "Restoring persistent changes", "Initialising execution kernel",
@@ -43,7 +44,7 @@ static void draw(void){
  used=0;
  put("\033[H\033[2J\033[?25l");
  int width=min(cols-2,64);
- if(width<26){move(1,1);fg(3);put("mikuOS  ");put(spin[frame%4]);reset();move(1,2);put(labels[stage]);}
+ if(width<26){move(1,1);fg(3);put("mikuOS  ");spinner_x=9;spinner_y=1;put(spin[frame%4]);reset();move(1,2);put(labels[stage]);}
  else{
   int x=(cols-width)/2+1, h=18, top=(rows-h)/2+1;
   if(top<1)top=1;
@@ -54,7 +55,8 @@ static void draw(void){
   else{move(x+3,top+3);fg(3);put("mikuOS boot");reset();}
   int line=top+(rows>=14?12:5);
   if(line>=rows-3)line=rows-3;
-  move(x+2,line);fg(3);put(spin[frame%4]);reset();chr(' ');
+  spinner_x=x+2;spinner_y=line;
+  move(spinner_x,spinner_y);fg(3);put(spin[frame%4]);reset();chr(' ');
   const char *label=labels[stage];
   int room=width-7;
   for(int i=0;label[i] && i<room;i++)chr(label[i]);
@@ -78,7 +80,13 @@ __attribute__((export_name("boot_update"))) void boot_update(int phase,int done,
  if(phase<stage)return;
  stage=phase;loaded=done<0?0:done;total=size<0?0:size;draw();
 }
-__attribute__((export_name("boot_tick"))) void boot_tick(void){frame++;draw();}
+/* Update only the spinner cell on each tick. The expensive logo and
+ * progress bar are redrawn exclusively when an actual boot event occurs. */
+__attribute__((export_name("boot_tick"))) void boot_tick(void){
+ if(!started)return;
+ frame++;used=0;move(spinner_x,spinner_y);
+ fg(3);put(spin[frame%4]);reset();emit(screen,used);
+}
 __attribute__((export_name("boot_resize"))) void boot_resize(int width,int height){cols=width>0?width:60;rows=height>0?height:24;draw();}
 __attribute__((export_name("boot_finish"))) void boot_finish(void){
  if(!started)return;started=0;static const char done[]="\033[?1049l\033[?25h";emit(done,sizeof(done)-1);
