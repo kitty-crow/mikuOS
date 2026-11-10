@@ -107,6 +107,7 @@ console.log(
   `${packagedRoot.core.packedSize} packed bytes`,
 );
 await Promise.all([
+  fs.copyFile(new URL("src/boot/standalone.js", root), new URL("boot-standalone.js", web)),
   fs.copyFile(new URL("index.html", root), new URL("index.html", web)),
   fs.copyFile(new URL("style.css", root), new URL("style.css", web)),
   fs.copyFile(
