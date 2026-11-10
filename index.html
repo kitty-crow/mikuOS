@@ -30,8 +30,10 @@
       }
     </style>
     <script defer src="./vendor/xterm.js"></script>
+    <link rel="preload" href="./boot.wasm" as="fetch" crossorigin="anonymous">
     <script defer src="./vendor/xterm-fit.js"></script>
-    <script defer src="./thistle.js"></script>
+    <script defer src="./bootloader.js"></script>
+    <script defer src="./boot-standalone.js"></script>
   </head>
   <body>
     <div id="runtime-status" role="status" aria-live="polite">Starting mikuOS…</div>
