@@ -1733,6 +1733,17 @@ test("independent C/WASM boot display reports real milestones and cleans up xter
   boot.boot_update(8, 0, 0);
   boot.boot_finish();
   const emitted = chunks.join("");
+  console.log("[boot UI checks]", {
+    heading: emitted.includes("Loading mikuOS"),
+    oldHeading: emitted.includes("Welcome to mikuOS"),
+    black: emitted.includes("\x1b[48;2;0;0;0m"),
+    grey: emitted.includes("\x1b[48;2;22;24;29m"),
+    percent: emitted.includes("100%"),
+    filled: emitted.includes("█"),
+    empty: emitted.includes("░"),
+    glyph: emitted.includes("⣿"),
+    stage: emitted.includes("Unpacking guest filesystem"),
+  });
   ok(emitted.includes("Loading mikuOS"), "The unfinished boot must say Loading mikuOS");
   ok(!emitted.includes("Welcome to mikuOS"), "Do not welcome users before boot finishes");
   ok(emitted.includes("\x1b[48;2;0;0;0m"), "The entire logo surround must be pure black");
