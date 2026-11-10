@@ -2798,11 +2798,11 @@ test("browser OPFS overlay recovers from stale entry types across reloads", asyn
 
   try {
     const path = "/home/guest/.thsh_history";
-    const original = new WebTree("https://example.test/root/");
+    const original = new WebTree(new URL("https://example.test/root/"));
     await original.pull();
     await original.push([...root, file(path, "ls\n", 4)]);
 
-    const reopened = new WebTree("https://example.test/root/");
+    const reopened = new WebTree(new URL("https://example.test/root/"));
     const before = await reopened.pull();
     eq(dec(before.find(entry => entry.p === path)?.data ?? new Uint8Array()), "ls\n");
 
@@ -2816,7 +2816,7 @@ test("browser OPFS overlay recovers from stale entry types across reloads", asyn
     await stale.getFileHandle("old", { create: true });
     await reopened.push([...root, file(path, "ls\npwd\n", 4)]);
 
-    const recovered = new WebTree("https://example.test/root/");
+    const recovered = new WebTree(new URL("https://example.test/root/"));
     const after = await recovered.pull();
     eq(dec(after.find(entry => entry.p === path)?.data ?? new Uint8Array()), "ls\npwd\n");
 
@@ -2827,10 +2827,10 @@ test("browser OPFS overlay recovers from stale entry types across reloads", asyn
       ...root, file(path, "ls\npwd\n", 4),
       folder(scratch, 6), file(`${scratch}/nested`, "nested\n", 7),
     ]);
-    const asDirectory = new WebTree("https://example.test/root/");
+    const asDirectory = new WebTree(new URL("https://example.test/root/"));
     eq(dec((await asDirectory.pull()).find(entry => entry.p === `${scratch}/nested`)?.data ?? new Uint8Array()), "nested\n");
     await asDirectory.push([...root, file(path, "ls\npwd\n", 4), file(scratch, "second\n", 8)]);
-    const asFile = new WebTree("https://example.test/root/");
+    const asFile = new WebTree(new URL("https://example.test/root/"));
     const final = await asFile.pull();
     eq(dec(final.find(entry => entry.p === scratch)?.data ?? new Uint8Array()), "second\n");
     ok(!final.some(entry => entry.p === `${scratch}/nested`), "deleted directory child survived");
