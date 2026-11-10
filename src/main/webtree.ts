@@ -71,7 +71,11 @@ const inflate = async (
         },
       }))
     : response.body;
-  const stream = compressed.pipeThrough(new DecompressionStream("gzip"));
+  // The DOM typing also accepts ArrayBuffer for the decompressor's writable
+  // side, but this stream supplies only Uint8Array chunks.
+  const decoder = new DecompressionStream("gzip") as unknown as
+    ReadableWritablePair<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBufferLike>>;
+  const stream = compressed.pipeThrough(decoder);
   return new Uint8Array(await new Response(stream).arrayBuffer());
 };
 
