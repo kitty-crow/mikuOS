@@ -53,10 +53,25 @@ const fetchOk = async (url: URL): Promise<Response> => {
   return response;
 };
 
-const inflate = async (url: URL): Promise<Uint8Array> => {
+const inflate = async (
+  url: URL,
+  progress?: (done: number, total: number) => void,
+): Promise<Uint8Array> => {
   const response = await fetchOk(url);
   if (!response.body) throw new Error(`${url.pathname}: empty compressed response`);
-  const stream = response.body.pipeThrough(new DecompressionStream("gzip"));
+  const size = Number(response.headers.get("content-length"));
+  const measurable = Number.isSafeInteger(size) && size > 0;
+  let loaded = 0;
+  const compressed = measurable && progress
+    ? response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          loaded += chunk.byteLength;
+          progress(Math.min(loaded, size), size);
+          controller.enqueue(chunk);
+        },
+      }))
+    : response.body;
+  const stream = compressed.pipeThrough(new DecompressionStream("gzip"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 };
 
@@ -120,7 +135,7 @@ export class WebTree implements Tree {
   constructor(
     base: string | URL = new URL("./root/", document.baseURI),
     persistence = true,
-    private readonly onBootProgress?: (phase: number) => void,
+    private readonly onBootProgress?: (phase: number, done?: number, total?: number) => void,
   ) {
     const root = base instanceof URL ? base : new URL(base, document.baseURI);
     this.manifestUrl = new URL("manifest.json", root);
@@ -282,7 +297,8 @@ export class WebTree implements Tree {
     const manifest = await (await fetchOk(this.manifestUrl)).json() as WebRootManifest;
     if (manifest.format !== 1 || !Array.isArray(manifest.entries)) throw new Error("unsupported static web-root manifest");
     this.onBootProgress?.(2);
-    const core = await inflate(new URL(manifest.core.path, this.manifestUrl));
+    const core = await inflate(new URL(manifest.core.path, this.manifestUrl),
+      (done, total) => this.onBootProgress?.(2, done, total));
     if (core.length !== manifest.core.unpackedSize) throw new Error("static web-root core size mismatch");
     this.onBootProgress?.(3);
 
