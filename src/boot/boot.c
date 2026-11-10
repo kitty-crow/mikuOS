@@ -63,7 +63,7 @@ static void draw(void){
   int barline=line+2;move(x+2,barline);
   int n=width-4;
   int bp=(stage*100)/8;
-  if(stage==0 && total>0 && loaded>0)bp=(loaded*100)/(total*8);
+  if(total>0 && loaded>0)bp=(stage*100)/8+(loaded*100)/(total*8);
   if(bp>100)bp=100;
   fg(2);for(int j=0;j<n;j++)put(j*100<bp*n?"\342\226\210":"\342\226\221");reset();
   move(x+2,barline+1);fg(3);put(" ");num(bp);put("%  ");reset();
