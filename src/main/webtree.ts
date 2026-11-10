@@ -290,17 +290,39 @@ export class WebTree implements Tree {
 
   private async folder(root: FD, path: string, create: boolean): Promise<FD> {
     let dir = root;
-    for (const part of this.parts(path)) dir = await dir.getDirectoryHandle(part, { create });
+    for (const part of this.parts(path)) {
+      try {
+        dir = await dir.getDirectoryHandle(part, { create });
+      } catch (error) {
+        if (!create || !this.isTypeMismatch(error)) throw error;
+        // The current guest tree now needs a directory where an old overlay file remains.
+        await dir.removeEntry(part);
+        dir = await dir.getDirectoryHandle(part, { create: true });
+      }
+    }
     return dir;
+  }
+
+  private isTypeMismatch(error: unknown): boolean {
+    return typeof error === "object" && error !== null &&
+      "name" in error && error.name === "TypeMismatchError";
   }
 
   private async dataFile(root: FD, path: string, create: boolean): Promise<FF> {
     const parts = this.parts(path);
     const name = parts.pop();
     if (!name) throw new Error("root is not a regular overlay file");
-    const data = await root.getDirectoryHandle("data", { create });
+    const data = await this.folder(root, "/data", create);
     const dir = await this.folder(data, `/${parts.join("/")}`, create);
-    return dir.getFileHandle(name, { create });
+    try {
+      return await dir.getFileHandle(name, { create });
+    } catch (error) {
+      if (!create || !this.isTypeMismatch(error)) throw error;
+      // A directory used to occupy this file path. The new guest snapshot
+      // cannot contain its descendants, so its stale overlay can be discarded.
+      await dir.removeEntry(name, { recursive: true });
+      return dir.getFileHandle(name, { create: true });
+    }
   }
 
   private async readData(root: FD, path: string): Promise<Uint8Array> {

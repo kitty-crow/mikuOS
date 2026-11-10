@@ -23,6 +23,7 @@ import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { localSessionPlan, superviseLocalLogin } from "../main/session.js";
 import { WebSession } from "../main/websession.js";
+import { WebTree } from "../main/webtree.js";
 import { directMemory } from "../teto/memory.js";
 import {
   tetoHartGetX,
@@ -2700,6 +2701,144 @@ test("web account boots as the configured unprivileged user", async () => {
   const r = boot({ put: () => {}, config, account: config.accounts.web });
   await r.ready;
   eq(r.s.uid, 1000); eq(r.s.gid, 1000); eq(r.s.env("USER"), "guest"); eq(r.s.cwd, "/home/guest");
+});
+
+test("browser OPFS overlay recovers from stale entry types across reloads", async () => {
+  class MemoryFile {
+    readonly kind = "file" as const;
+    bytes: Uint8Array = new Uint8Array();
+    constructor(readonly name: string) {}
+    async getFile(): Promise<File> {
+      const bytes = Uint8Array.from(this.bytes);
+      return {
+        arrayBuffer: async () => bytes.buffer,
+        text: async () => dec(bytes),
+      } as File;
+    }
+    async createWritable(): Promise<{ write(value: Uint8Array | string): Promise<void>; close(): Promise<void> }> {
+      return {
+        write: async value => { this.bytes = typeof value === "string" ? enc(value) : Uint8Array.from(value); },
+        close: async () => {},
+      };
+    }
+  }
+
+  class MemoryDirectory {
+    readonly kind = "directory" as const;
+    readonly children = new Map<string, MemoryDirectory | MemoryFile>();
+    constructor(readonly name: string) {}
+    async *entries(): AsyncIterableIterator<[string, MemoryDirectory | MemoryFile]> {
+      yield* this.children;
+    }
+    async getDirectoryHandle(name: string, options: { create?: boolean } = {}): Promise<MemoryDirectory> {
+      const entry = this.children.get(name);
+      if (entry instanceof MemoryDirectory) return entry;
+      if (entry) throw new DOMException("Existing entry is a file", "TypeMismatchError");
+      if (!options.create) throw new DOMException("Missing directory", "NotFoundError");
+      const directory = new MemoryDirectory(name);
+      this.children.set(name, directory);
+      return directory;
+    }
+    async getFileHandle(name: string, options: { create?: boolean } = {}): Promise<MemoryFile> {
+      const entry = this.children.get(name);
+      if (entry instanceof MemoryFile) return entry;
+      if (entry) throw new DOMException("Existing entry is a directory", "TypeMismatchError");
+      if (!options.create) throw new DOMException("Missing file", "NotFoundError");
+      const file = new MemoryFile(name);
+      this.children.set(name, file);
+      return file;
+    }
+    async removeEntry(name: string, options: { recursive?: boolean } = {}): Promise<void> {
+      const entry = this.children.get(name);
+      if (!entry) throw new DOMException("Missing entry", "NotFoundError");
+      if (entry instanceof MemoryDirectory && entry.children.size && !options.recursive) {
+        throw new DOMException("Directory is not empty", "InvalidModificationError");
+      }
+      this.children.delete(name);
+    }
+  }
+
+  const storage = new MemoryDirectory("");
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const originalFetch = globalThis.fetch;
+  const attributes = { mode: 0o755, uid: 0, gid: 0, at: 0, mt: 0, ct: 0 };
+  const root: TreeEnt[] = [
+    { ...attributes, p: "/", k: "d", id: 1 },
+    { ...attributes, p: "/home", k: "d", id: 2 },
+    { ...attributes, p: "/home/guest", k: "d", id: 3 },
+  ];
+  const file = (path: string, value: string, id: number): TreeEnt => ({
+    ...attributes, p: path, k: "f", id, uid: 1000, gid: 1000, data: enc(value),
+  });
+  const folder = (path: string, id: number): TreeEnt => ({
+    ...attributes, p: path, k: "d", id, uid: 1000, gid: 1000,
+  });
+  const manifest = {
+    format: 1,
+    image: ROOT_IMAGE_VERSION,
+    generated: "2026-01-01T00:00:00.000Z",
+    core: { path: "core.gz", encoding: "gzip", packedSize: 20, unpackedSize: 0 },
+    entries: root,
+  };
+  const emptyGzip = Uint8Array.from([
+    31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  ]);
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { storage: { getDirectory: async () => storage } },
+  });
+  const mockFetch = async (input: RequestInfo | URL): Promise<Response> => {
+    const path = String(input);
+    if (path.endsWith("/root/manifest.json")) return new Response(JSON.stringify(manifest));
+    if (path.endsWith("/root/core.gz")) return new Response(emptyGzip.buffer);
+    throw new Error(`Unexpected static root request: ${path}`);
+  };
+  globalThis.fetch = Object.assign(mockFetch, { preconnect: () => {} });
+
+  try {
+    const path = "/home/guest/.thsh_history";
+    const original = new WebTree(new URL("https://example.test/root/"));
+    await original.pull();
+    await original.push([...root, file(path, "ls\n", 4)]);
+
+    const reopened = new WebTree(new URL("https://example.test/root/"));
+    const before = await reopened.pull();
+    eq(dec(before.find(entry => entry.p === path)?.data ?? new Uint8Array()), "ls\n");
+
+    // Emulate a stale OPFS directory left at a path now occupied by a guest file.
+    const overlay = await storage.getDirectoryHandle(".mikuos");
+    const data = await overlay.getDirectoryHandle("data");
+    const home = await data.getDirectoryHandle("home");
+    const guest = await home.getDirectoryHandle("guest");
+    await guest.removeEntry(".thsh_history");
+    const stale = await guest.getDirectoryHandle(".thsh_history", { create: true });
+    await stale.getFileHandle("old", { create: true });
+    await reopened.push([...root, file(path, "ls\npwd\n", 4)]);
+
+    const recovered = new WebTree(new URL("https://example.test/root/"));
+    const after = await recovered.pull();
+    eq(dec(after.find(entry => entry.p === path)?.data ?? new Uint8Array()), "ls\npwd\n");
+
+    // File -> directory and directory -> file must both work across saves.
+    const scratch = "/home/guest/scratch";
+    await recovered.push([...root, file(path, "ls\npwd\n", 4), file(scratch, "first\n", 5)]);
+    await recovered.push([
+      ...root, file(path, "ls\npwd\n", 4),
+      folder(scratch, 6), file(`${scratch}/nested`, "nested\n", 7),
+    ]);
+    const asDirectory = new WebTree(new URL("https://example.test/root/"));
+    eq(dec((await asDirectory.pull()).find(entry => entry.p === `${scratch}/nested`)?.data ?? new Uint8Array()), "nested\n");
+    await asDirectory.push([...root, file(path, "ls\npwd\n", 4), file(scratch, "second\n", 8)]);
+    const asFile = new WebTree(new URL("https://example.test/root/"));
+    const final = await asFile.pull();
+    eq(dec(final.find(entry => entry.p === scratch)?.data ?? new Uint8Array()), "second\n");
+    ok(!final.some(entry => entry.p === `${scratch}/nested`), "deleted directory child survived");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalNavigator) Object.defineProperty(globalThis, "navigator", originalNavigator);
+    else Reflect.deleteProperty(globalThis, "navigator");
+  }
 });
 
 test("browser session runs the full guest locally without a runtime server", async () => {
