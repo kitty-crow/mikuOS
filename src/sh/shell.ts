@@ -603,6 +603,27 @@ export class Shell {
     if (this.fg) { try { this.s.kill(-this.fg, 2); } catch { /* it may have won the race */ } }
   }
 
+  private pathCommands(prefix: string): string[] {
+    const configured = this.s.env("PATH");
+    const directories = (typeof configured === "string" ? configured : "/bin").split(":");
+    const names = new Set<string>();
+
+    for (const directory of directories) {
+      let entries: ReturnType<Sys["list"]>;
+      try { entries = this.s.list(directory || "."); }
+      catch { continue; }
+
+      for (const [name] of entries) {
+        if (!name.startsWith(prefix)) continue;
+        try {
+          this.s.which(name);
+          names.add(name);
+        } catch { /* Only suggest commands executable by this account. */ }
+      }
+    }
+    return [...names];
+  }
+
   complete(src: string): { line: string; list: string[] } {
     const m = /(^|\s)([^\s]*)$/.exec(src);
     if (!m) return { line: src, list: [] };
@@ -615,7 +636,8 @@ export class Shell {
       const b = x.slice(i + 1);
       try { list = this.s.list(d).map(([n, v]) => `${x.slice(0, i + 1)}${n}${v.kind === "dir" ? "/" : ""}`).filter(n => n.startsWith(x.slice(0, i + 1) + b)); }
       catch { list = []; }
-    } else list = [...new Set([...this.s.apps().map(a => a.name), ...built, ...this.aliases.keys()])].filter(n => n.startsWith(x)).sort();
+    } else list = [...new Set([...this.s.apps().map(a => a.name), ...built,
+      ...this.aliases.keys(), ...this.pathCommands(x)])].filter(n => n.startsWith(x)).sort();
     if (list.length === 1) return { line: pre + list[0] + (list[0]!.endsWith("/") ? "" : " "), list };
     if (list.length > 1) {
       let p = list[0]!;
