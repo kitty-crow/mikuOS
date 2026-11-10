@@ -226,12 +226,15 @@ export const launchThistle = async (options: LaunchOptions = {}): Promise<Launch
       }
 
       addon?.dispose?.();
-      term.dispose?.();
+      if (!provided) term.dispose?.();
     },
   };
 };
 
-if (typeof document !== "undefined") {
+// Embedded hosts supply an existing xterm instance and own the document.
+// The classic-script marker suppresses standalone auto-launch and page metadata.
+if (typeof document !== "undefined" &&
+    document.currentScript?.getAttribute("data-mikuos-embed") !== "true") {
   document.documentElement.lang = "en-GB";
   document.title = DEFAULT_CONFIG.os.prettyName;
   const autoLaunch = async (): Promise<void> => {
