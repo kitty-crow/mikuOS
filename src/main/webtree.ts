@@ -117,7 +117,11 @@ export class WebTree implements Tree {
   private name = "static web root";
   readonly persistent: boolean;
 
-  constructor(base: string | URL = new URL("./root/", document.baseURI), persistence = true) {
+  constructor(
+    base: string | URL = new URL("./root/", document.baseURI),
+    persistence = true,
+    private readonly onBootProgress?: (phase: number) => void,
+  ) {
     const root = base instanceof URL ? base : new URL(base, document.baseURI);
     this.manifestUrl = new URL("manifest.json", root);
     const storage = (navigator as unknown as Nav).storage;
@@ -277,8 +281,10 @@ export class WebTree implements Tree {
   private async loadBase(): Promise<TreeEnt[]> {
     const manifest = await (await fetchOk(this.manifestUrl)).json() as WebRootManifest;
     if (manifest.format !== 1 || !Array.isArray(manifest.entries)) throw new Error("unsupported static web-root manifest");
+    this.onBootProgress?.(2);
     const core = await inflate(new URL(manifest.core.path, this.manifestUrl));
     if (core.length !== manifest.core.unpackedSize) throw new Error("static web-root core size mismatch");
+    this.onBootProgress?.(3);
 
     const entries = manifest.entries.map(entry => this.baseEntry(entry, core));
     this.baseEntries = entries;
