@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { boot } from "../main/boot.js";
 import { ROOT_IMAGE_VERSION } from "../main/image.js";
 import { FnApp } from "../apps/base.js";
@@ -1746,6 +1747,60 @@ test("independent C/WASM boot display reports real milestones and cleans up xter
   ok(emitted.includes("100%"));
   ok(emitted.includes("\x1b[?1049h") && emitted.includes("\x1b[?1049l"),
     "Boot screen must restore the original terminal buffer");
+});
+
+test("early boot centres xterm grid and restores its layout on completion", async () => {
+  const fs = (globalThis as unknown as {
+    process: { getBuiltinModule(name: string): { promises: {
+      readFile(path: URL, encoding: "utf8"): Promise<string>;
+      readFile(path: URL): Promise<Uint8Array>;
+    } } }
+  }).process.getBuiltinModule("fs").promises;
+  const root = new URL("../../", import.meta.url);
+  const source = await fs.readFile(new URL("dist/web/bootloader.js", root), "utf8");
+  const wasm = await fs.readFile(new URL("dist/web/boot.wasm", root));
+  const pixels = { width: 800 };
+  const screen = {
+    style: { transform: "" },
+    getBoundingClientRect() { return { left: 100, width: 760 }; },
+  };
+  const host = {
+    querySelector(name: string) { return name === ".xterm-screen" ? screen : null; },
+    getBoundingClientRect() { return { left: 100, width: pixels.width }; },
+  };
+  let resized: ((size: { cols: number; rows: number }) => void) | undefined;
+  const term = {
+    cols: 80,
+    rows: 24,
+    element: host,
+    write(_data: string): void {},
+    onResize(handler: (size: { cols: number; rows: number }) => void) {
+      resized = handler;
+      return { dispose(): void {} };
+    },
+  };
+  const sandbox: {
+    MikuBoot?: { create(terminal: object, base: URL): Promise<{ finish(): void }> };
+    [name: string]: unknown;
+  } = {
+    TextDecoder,
+    URL,
+    WebAssembly,
+    fetch: async () => ({ ok: true, arrayBuffer: async () => Uint8Array.from(wasm).buffer }),
+    setInterval: () => 1,
+    clearInterval: () => {},
+  };
+  runInNewContext(source, sandbox);
+  const boot = await sandbox.MikuBoot!.create(term, new URL("https://example.test/mikuos/"));
+  eq(screen.style.transform, "translateX(20px)",
+    "The grid's unused right-side pixels must be split equally to centre the splash");
+  pixels.width = 840;
+  resized?.({ cols: 80, rows: 24 });
+  eq(screen.style.transform, "translateX(40px)",
+    "The loading screen must remain centred after a terminal resize");
+  boot.finish();
+  eq(screen.style.transform, "",
+    "The interactive terminal must regain its original screen placement");
 });
 
 test("classic thistle.js boots the static Teto guest without a runtime server", async () => {
