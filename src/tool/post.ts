@@ -25,10 +25,29 @@ const webRoot = new URL("root/", web);
 // browser bundle. This WASM does not depend on Teto or the guest filesystem.
 const bootC = new URL("src/boot/boot.c", root);
 const bootWasm = new URL("boot.wasm", web);
+const logoDir = new URL("boot/", dst);
+const logoCompiler = new URL("compile-logo", logoDir);
+const logoHeader = new URL("generated-logo.h", logoDir);
 await fs.mkdir(web, { recursive: true });
+await fs.mkdir(logoDir, { recursive: true });
+
+// The original Unicode Art Studio <#RRGGBB> markup is compiled by the
+// canonical colour.h parser into ANSI/UTF-8 C constants. This runs only at
+// build time, before the freestanding and preloaded boot WASM is compiled.
+execFileSync("cc", [
+  "-std=c11", "-O2", "-D_XOPEN_SOURCE=700",
+  "-o", decodeURIComponent(logoCompiler.pathname),
+  decodeURIComponent(new URL("src/boot/compile-logo.c", root).pathname),
+], { stdio: "inherit" });
+execFileSync(decodeURIComponent(logoCompiler.pathname), [
+  decodeURIComponent(new URL("src/boot/logo.txt", root).pathname),
+  decodeURIComponent(logoHeader.pathname),
+], { stdio: "inherit" });
+
 try {
   execFileSync("clang", [
     "--target=wasm32", "-Oz", "-fno-builtin", "-nostdlib",
+    "-I", decodeURIComponent(logoDir.pathname),
     "-Wl,--no-entry", "-Wl,--export-memory",
     "-Wl,--initial-memory=131072", "-Wl,--strip-all",
     "-o", decodeURIComponent(bootWasm.pathname), decodeURIComponent(bootC.pathname),
@@ -46,7 +65,7 @@ await build({
   minify: true,
   legalComments: "none",
 });
-console.log("Early mikuOS boot programme compiled from C into boot.wasm");
+console.log("Early mikuOS boot programme compiled with the original Unicode colour.h logo");
 
 await fs.mkdir(assets, { recursive: true });
 await fs.writeFile(new URL("hello.wasm", assets), demoWasm());
