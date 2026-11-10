@@ -2726,7 +2726,8 @@ test("shell restores commands when saved history has become a directory", async 
   const identifier = Math.max(...tree.ent!.map(entry => entry.id)) + 1;
   tree.ent = [
     ...tree.ent!.map(entry => entry.p === history
-      ? { ...entry, k: "d" as const, uid: 0, gid: 0, mode: 0o755, data: undefined }
+      ? { p: entry.p, k: "d" as const, id: entry.id, uid: 0, gid: 0, mode: 0o755,
+        at: entry.at, mt: entry.mt, ct: entry.ct }
       : entry),
     { ...original, p: `${history}/important.txt`, k: "f", id: identifier,
       data: enc("preserve this directory"), uid: 0, gid: 0, mode: 0o644 },
