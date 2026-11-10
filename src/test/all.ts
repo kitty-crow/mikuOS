@@ -1664,6 +1664,25 @@ test("canonical mikuOS release metadata stays aligned", async () => {
   ok(thistleEntry.includes('import "./src/main/cli.ts"'));
 });
 
+test("Unicode Art Studio logo source is trimmed without losing its visible edges", async () => {
+  const fs = (globalThis as unknown as {
+    process: { getBuiltinModule(name: string): { promises: {
+      readFile(path: URL, encoding: "utf8"): Promise<string>
+    } } }
+  }).process.getBuiltinModule("fs").promises;
+  const original = await fs.readFile(new URL("../../src/boot/logo.txt", import.meta.url), "utf8");
+  const rows = original.trimEnd().split(/\r?\n/).map(line =>
+    line.replace(/<@?#(?:[A-Fa-f0-9]{6}|default)>/g, ""));
+  eq(rows.length, 12, "The Unicode export must not contain blank top/bottom rows");
+  const ink = (glyph: string): boolean => glyph !== "⠀" && glyph !== " ";
+  for (const row of rows) eq([...row].length, 71,
+    "The Unicode export must not retain empty left/right columns");
+  ok([...rows[0]!].some(ink));
+  ok([...rows.at(-1)!].some(ink));
+  ok(rows.some(row => ink([...row][0]!)));
+  ok(rows.some(row => ink([...row].at(-1)!)));
+});
+
 test("independent C/WASM boot display reports real milestones and cleans up xterm", async () => {
   const fs = (globalThis as unknown as {
     process: { getBuiltinModule(name: string): { promises: {
