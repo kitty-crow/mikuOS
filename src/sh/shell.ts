@@ -613,8 +613,8 @@ export class Shell {
       try { entries = this.s.list(directory || "."); }
       catch { continue; }
 
-      for (const [name] of entries) {
-        if (!name.startsWith(prefix)) continue;
+      for (const [name, node] of entries) {
+        if (!name.startsWith(prefix) || (node.mode & 0o111) === 0) continue;
         try {
           this.s.which(name);
           names.add(name);
