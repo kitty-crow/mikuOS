@@ -263,6 +263,26 @@ test(".thx and .39 are byte-identical header-selected THX aliases", async () => 
   eq(completion.list.join("\n"), "/usr/bin/hello.39");
 });
 
+test("thsh completion includes executable PATH entries and excludes nonexecutables", () => {
+  const r = new Rig(), sys = r.os.s;
+  sys.mkfile("/tmp/kittyprompt-test", "#!/bin/thsh\n", 0o755);
+  sys.mkfile("/tmp/kittyprompt-private", "not executable", 0o644);
+  sys.setenv("PATH", "/tmp:/bin");
+  const hit = r.os.complete("kittyprompt-te");
+  eq(hit.line, "kittyprompt-test ");
+  eq(hit.list.join(","), "kittyprompt-test");
+  eq(r.os.complete("kittyprompt-private").list.length, 0,
+    "non-executable files must not appear in completion");
+
+  sys.setenv("PATH", "/bin");
+  eq(r.os.complete("kittyprompt-te").list.length, 0,
+    "commands outside PATH must not be suggested");
+
+  sys.setenv("PATH", "/tmp:/tmp:/bin");
+  eq(r.os.complete("kittyprompt-te").list.length, 1,
+    "repeated PATH directories must not duplicate suggestions");
+});
+
 test("generated Teto executes bounded RV64 batches with direct-source parity", async () => {
   interface HFs { readFile(path: URL): Promise<Uint8Array>; }
   const mod = (name: string): Promise<unknown> => import(name);
