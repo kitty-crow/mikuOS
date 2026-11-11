@@ -304,6 +304,10 @@ const MAP_NOT_OWNED: I64 = -4096n;
 const MAP_PAGE: U64 = 4096n;
 const MAP_GUARD: U64 = 1024n * 1024n;
 const MAP_SPACING: U64 = 16n * 1024n * 1024n;
+const MAP_FIXED: U32 = 0x10;
+const MAP_FIXED_NOREPLACE: U32 = 0x100000;
+// Advisory Linux hints do not change the simulated pages' access rights.
+const MAP_SUPPORTED_FLAGS: U32 = 0x12c033;
 const OPEN_DIRECTORY: U32 = 0x10000;
 const OPEN_CLOEXEC: U32 = 0x80000;
 
@@ -1071,12 +1075,16 @@ const copyMap = (memory: TetoMemory, to: Ptr, from: Ptr): void => {
   storeU32(memory, to + M_BACKING + 4, 0);
 };
 
-const mappingConflict = (memory: TetoMemory, proc: Ptr, address: U64, end: U64): boolean => {
+const mappingReserved = (memory: TetoMemory, proc: Ptr, address: U64, end: U64): boolean => {
   const top = atomicLoadU64(memory, proc + P_VIRTUAL_TOP);
   const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
   const heap = atomicLoadU64(memory, proc + P_BRK);
-  if (address < (heap + MAP_GUARD + MAP_PAGE - 1n & -MAP_PAGE) || end <= address || end > top ||
-      stack <= MAP_GUARD || end >= stack - MAP_GUARD) return true;
+  return address < (heap + MAP_GUARD + MAP_PAGE - 1n & -MAP_PAGE) || end <= address || end > top ||
+    stack <= MAP_GUARD || end >= stack - MAP_GUARD;
+};
+
+const mappingConflict = (memory: TetoMemory, proc: Ptr, address: U64, end: U64): boolean => {
+  if (mappingReserved(memory, proc, address, end)) return true;
   const count = loadU32(memory, proc + P_MAP_COUNT);
   let index: U32 = 0;
   while (index < count) {
@@ -1092,14 +1100,22 @@ const anonymousMap = (memory: TetoMemory, proc: Ptr, address: U64, length: U64, 
   if (length === 0n || length > top || protection > 7n || flagsWide > 0x7fffffffn) return -22n;
   const flags = wordToU32(flagsWide);
   const kind = flags & 3;
-  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x100033) !== 0) return -22n;
+  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~MAP_SUPPORTED_FLAGS) !== 0) return -22n;
   const size = length + MAP_PAGE - 1n & -MAP_PAGE;
   if (size === 0n || size > top) return -12n;
-  const fixed = (flags & 0x100010) !== 0;
+  const noReplace = (flags & MAP_FIXED_NOREPLACE) !== 0;
+  const fixed = (flags & MAP_FIXED) !== 0 || noReplace;
   let candidate = address;
   if (fixed) {
-    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate ||
-        mappingConflict(memory, proc, candidate, candidate + size)) return -12n;
+    if ((candidate & (MAP_PAGE - 1n)) !== 0n) return -22n;
+    if (candidate > top || size > top - candidate ||
+        mappingReserved(memory, proc, candidate, candidate + size)) return -12n;
+    if (mappingConflict(memory, proc, candidate, candidate + size)) {
+      if (noReplace) return -17n;
+      // MAP_FIXED replaces existing mappings, unlike MAP_FIXED_NOREPLACE.
+      const unmapped = anonymousUnmap(memory, proc, candidate, size);
+      if (unmapped !== 0n && unmapped !== MAP_NOT_OWNED) return unmapped;
+    }
   } else {
     if (candidate !== 0n) {
       if (candidate > top - MAP_PAGE + 1n) candidate = 0n;

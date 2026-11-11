@@ -12,7 +12,7 @@ import type { Io } from "../core/proc.js";
 import { directMemory, loadI32, loadU32, wasmMemory } from "../teto/memory.js";
 import type { TetoMemory } from "../teto/memory.js";
 import { TetoMem64 } from "../teto/mem64.js";
-import { loadTeto } from "../teto/loader.js";
+import { loadTeto, tetoRecommendedPages } from "../teto/loader.js";
 import type { TetoExports } from "../teto/loader.js";
 import {
   tetoHartInit,
@@ -282,7 +282,7 @@ export class Rv64 {
 
   /** Development parity path: the shared Thistle source core owns instruction execution. */
   private async runTetoSource(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
-    const physicalBytes = 64 * 1024 * 1024;
+    const physicalBytes = tetoRecommendedPages(image?.byteLength ?? 0) * 65536;
     const memory = directMemory(physicalBytes);
     const exports: TetoExports = {
       tetoKernelInit: (_memory, maxHarts, threaded) => tetoKernelInit(memory, maxHarts, threaded !== 0),
@@ -361,7 +361,10 @@ export class Rv64 {
     const provider = this.s.k.teto;
     if (!provider) return bad("ENOEXEC", "the experimental Teto WebAssembly core is unavailable from this host");
     const bytes = await provider.load("baseline");
-    const runtime = await loadTeto(bytes, { initialPages: 1024, maximumPages: 32768 });
+    const runtime = await loadTeto(bytes, {
+      initialPages: tetoRecommendedPages(image?.byteLength ?? 0),
+      maximumPages: 32768,
+    });
     const memory = wasmMemory(runtime.memory, false);
     return this.runTetoCore(exe, argv, image, { memory, exports: runtime.exports, label: "Teto WebAssembly core" }, memory.bytes.length);
   }
