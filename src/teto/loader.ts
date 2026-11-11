@@ -156,6 +156,28 @@ const required = [
   "tetoExitHart",
 ] as const;
 
+/**
+ * Budget physical WebAssembly memory for a guest image.
+ *
+ * Teto temporarily holds the THX payload in the same linear memory used for
+ * its sparse guest pages. Larger images therefore need more than the small
+ * default used by the standalone kernel tests.
+ *
+ * Eight image lengths provide headroom for the staging copy, resident guest
+ * pages and subsequent guest allocations; 64 MiB covers kernel tables and
+ * initial userland before the image-dependent allowance.
+ */
+export const tetoRecommendedPages = (imageBytes: number): number => {
+  if (!Number.isSafeInteger(imageBytes) || imageBytes < 0) {
+    throw new RangeError("invalid Teto image length");
+  }
+  const initialPages = Math.max(1024, Math.ceil((64 * 1024 * 1024 + 8 * imageBytes) / 65536));
+  if (initialPages > 32768) {
+    throw new RangeError("Teto image exceeds the WebAssembly memory budget");
+  }
+  return initialPages;
+};
+
 export const loadTeto = async (
   bytes: BufferSource,
   options: TetoLoadOptions = {},
