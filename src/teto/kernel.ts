@@ -304,10 +304,10 @@ const MAP_NOT_OWNED: I64 = -4096n;
 const MAP_PAGE: U64 = 4096n;
 const MAP_GUARD: U64 = 1024n * 1024n;
 const MAP_SPACING: U64 = 16n * 1024n * 1024n;
-const MAP_FIXED = 0x10;
-const MAP_FIXED_NOREPLACE = 0x100000;
+const MAP_FIXED: U32 = 0x10;
+const MAP_FIXED_NOREPLACE: U32 = 0x100000;
 // Advisory Linux hints do not change the simulated pages' access rights.
-const MAP_SUPPORTED_FLAGS = 0x12c033;
+const MAP_SUPPORTED_FLAGS: U32 = 0x12c033;
 const OPEN_DIRECTORY: U32 = 0x10000;
 const OPEN_CLOEXEC: U32 = 0x80000;
 
