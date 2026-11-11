@@ -120,7 +120,7 @@ import {
   W_BATCHES,
   W_INSTRUCTIONS,
 } from "../teto/abi.js";
-import { loadTeto } from "../teto/loader.js";
+import { loadTeto, tetoRecommendedPages } from "../teto/loader.js";
 import type { TetoImageProvider } from "../teto/loader.js";
 import type { TetoExports } from "../teto/loader.js";
 import type { KernelMode } from "../teto/provider.js";
@@ -708,6 +708,105 @@ test("Teto owns RV64 brk growth, bounds and shrink zeroing", async () => {
   eq(generatedResult, sourceResult);
 });
 
+test("Teto chooses image-aware WebAssembly memory without a guest-specific override", () => {
+  eq(tetoRecommendedPages(0), 1024);
+  eq(tetoRecommendedPages(53 * 1024 * 1024), 7808);
+  let rejected = false;
+  try {
+    tetoRecommendedPages(300 * 1024 * 1024);
+  } catch {
+    rejected = true;
+  }
+  ok(rejected, "Teto accepted an image exceeding its maximum physical memory");
+});
+
+test("Teto anonymous mmap honours Linux hints and fixed-address replacement in native and WASM cores", async () => {
+  type MapCore = Pick<TetoExports,
+    "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
+    "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
+    "tetoBuildInitialStack" | "tetoHartSetX" | "tetoHartGetX" | "tetoHartSetPc" |
+    "tetoGuestPage" | "tetoProcessMapCount" | "tetoRunRv64Batch">;
+  interface HFs { readFile(path: URL): Promise<Uint8Array>; }
+  const fs = await import("node:fs/promises") as HFs;
+  const pc = 0x10000n, top = 1n << 40n;
+  const code = new Uint8Array([0x73, 0, 0, 0]);
+  const startup = new Uint8Array(38);
+  const view = new DataView(startup.buffer);
+  view.setUint32(0, TETO_STARTUP_MAGIC, true);
+  view.setUint32(4, 1, true);
+  view.setUint32(32, 2, true);
+  startup.set(enc("/x"), 36);
+  const direct = directMemory(64 * 1024 * 1024);
+  const source: MapCore = {
+    tetoKernelInit: (_m, harts, threads) => tetoKernelInit(direct, harts, threads !== 0),
+    tetoHartInit: (_m, hart, virtualTop, entry) => tetoHartInit(direct, hart, virtualTop, entry),
+    tetoProcessInit: (_m, hart, pid, ppid, ruid, euid, suid, rgid, egid, sgid) =>
+      tetoProcessInit(direct, hart, pid, ppid, ruid, euid, suid, rgid, egid, sgid),
+    tetoImageReserve: (_m, size) => tetoImageReserve(direct, size),
+    tetoImageRelease: (_m, at, size) => tetoImageRelease(direct, at, size),
+    tetoImageBegin: (_m, hart, virtualTop, entry, phdr, phent, phnum) =>
+      tetoImageBegin(direct, hart, virtualTop, entry, phdr, phent, phnum),
+    tetoImageSegment: (_m, hart, hash, nameLength, address, size, flags, imageAt, length) =>
+      tetoImageSegment(direct, hart, hash, nameLength, address, size, flags, imageAt, length),
+    tetoImageFinish: (_m, hart, size) => tetoImageFinish(direct, hart, size),
+    tetoBuildInitialStack: (_m, hart, at, size, stackBytes) =>
+      tetoBuildInitialStack(direct, hart, at, size, stackBytes),
+    tetoHartSetX: (_m, hart, register, value) => tetoHartSetX(direct, hart, register, value),
+    tetoHartGetX: (_m, hart, register) => tetoHartGetX(direct, hart, register),
+    tetoHartSetPc: (_m, hart, address) => tetoHartSetPc(direct, hart, address),
+    tetoGuestPage: (_m, hart, address, create) => tetoGuestPage(direct, hart, address, create !== 0),
+    tetoProcessMapCount: (_m, hart) => tetoProcessMapCount(direct, hart),
+    tetoRunRv64Batch: (_m, hart, budget, micros, worker) =>
+      tetoRunRv64Batch(direct, hart, budget, micros, worker),
+  };
+  const wasm = await loadTeto(Uint8Array.from(await fs.readFile(new URL("../../dist/teto/teto.wasm", import.meta.url))));
+
+  const exercise = (core: MapCore, bytes: Uint8Array): string => {
+    eq(core.tetoKernelInit(0, 1, 0), 0);
+    eq(core.tetoHartInit(0, 0, top, pc), 0);
+    eq(core.tetoProcessInit(0, 0, 73, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
+    const programAt = core.tetoImageReserve(0, code.length) >>> 0;
+    bytes.set(code, programAt);
+    eq(core.tetoImageBegin(0, 0, top, pc, 0n, 0, 0), TETO_THX_OK);
+    eq(core.tetoImageSegment(0, 0, 0x1234, 4, pc, 4n,
+      TETO_SEGMENT_READ | TETO_SEGMENT_EXECUTE, programAt, code.length), TETO_THX_OK);
+    eq(core.tetoImageFinish(0, 0, code.length), TETO_THX_OK);
+    eq(core.tetoImageRelease(0, programAt, code.length), TETO_THX_OK);
+    const stackAt = core.tetoImageReserve(0, startup.length) >>> 0;
+    bytes.set(startup, stackAt);
+    eq(core.tetoBuildInitialStack(0, 0, stackAt, startup.length, 1024 * 1024), TETO_START_OK);
+    eq(core.tetoImageRelease(0, stackAt, startup.length), TETO_THX_OK);
+    const mmap = (address: bigint, length: bigint, flags: bigint): bigint => {
+      const args: Array<[number, bigint]> = [
+        [10, address], [11, length], [12, 3n], [13, flags],
+        [14, -1n], [15, 0n], [17, 222n],
+      ];
+      for (const [register, value] of args) eq(core.tetoHartSetX(0, 0, register, value), 0);
+      eq(core.tetoHartSetPc(0, 0, pc), 0);
+      eq(core.tetoRunRv64Batch(0, 0, 1, 123456n, 0), TETO_BATCH_BUDGET);
+      return core.tetoHartGetX(0, 0, 10);
+    };
+
+    const address = mmap(0n, 8192n, 0x2c022n);
+    ok(address > pc && (address & 4095n) === 0n, "advisory mmap request failed");
+    eq(core.tetoProcessMapCount(0, 0), 1);
+    const frame = core.tetoGuestPage(0, 0, address, 1) >>> 0;
+    ok(frame < 0xfffffffe, "failed to allocate mapped test page");
+    const byteAt = frame + Number(address & 0xffffn);
+    bytes[byteAt] = 39;
+    eq(mmap(address, 4096n, 0x100022n), -17n);
+    eq(bytes[byteAt], 39);
+    eq(core.tetoProcessMapCount(0, 0), 1);
+    eq(mmap(address, 8192n, 0x32n), address);
+    eq(bytes[byteAt], 0);
+    eq(core.tetoProcessMapCount(0, 0), 1);
+    return show([address, bytes[byteAt], core.tetoProcessMapCount(0, 0)]);
+  };
+  const fromSource = exercise(source, direct.bytes);
+  const fromWasm = exercise(wasm.exports, new Uint8Array(wasm.memory.buffer));
+  eq(fromWasm, fromSource);
+});
+
 test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
   type MapCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
@@ -782,7 +881,7 @@ test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
     eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
     eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
     const registers: Array<[number, bigint]> = [
-      [10, 0n], [11, 8192n], [12, 3n], [13, 0x22n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
+      [10, 0n], [11, 8192n], [12, 3n], [13, 0x2c022n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
     ];
     for (const [register, value] of registers) eq(core.tetoHartSetX(0, 0, register, value), 0);
     eq(core.tetoRunRv64Batch(0, 0, 128, 123456n, 0), TETO_BATCH_FAULT);
