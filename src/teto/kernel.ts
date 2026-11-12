@@ -1109,10 +1109,39 @@ const anonymousMap = (memory: TetoMemory, proc: Ptr, address: U64, length: U64, 
   const size = length + MAP_PAGE - 1n & -MAP_PAGE;
   if (size === 0n || size > top) return -12n;
   const fixed = (flags & 0x100010) !== 0;
+  const replace = (flags & 0x10) !== 0 && (flags & 0x100000) === 0;
   let candidate = address;
   if (fixed) {
-    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate ||
-        mappingConflict(memory, proc, candidate, candidate + size)) return -12n;
+    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate) return -12n;
+    const end = candidate + size;
+    if (replace) {
+      // MAP_FIXED replaces existing reservations. V8 first reserves a PROT_NONE
+      // range, then commits or remaps selected pages within that address range.
+      // Check capacity before changing any mappings, including split entries.
+      const heap = atomicLoadU64(memory, proc + P_BRK);
+      const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
+      if (candidate < (heap + MAP_GUARD + MAP_PAGE - 1n & -MAP_PAGE) ||
+          stack <= MAP_GUARD || end >= stack - MAP_GUARD) return -12n;
+      const count = loadU32(memory, proc + P_MAP_COUNT);
+      const capacity = loadU32(memory, proc + P_MAP_CAPACITY);
+      let finalCount = count + 1;
+      let index: U32 = 0;
+      while (index < count) {
+        const mapping = mapAt(memory, proc, index);
+        const start = loadU64(memory, mapping + M_ADDRESS);
+        const stop = loadU64(memory, mapping + M_END);
+        if (candidate < stop && end > start) {
+          if (candidate <= start && end >= stop) finalCount -= 1;
+          else if (candidate > start && end < stop) finalCount += 1;
+        }
+        index += 1;
+      }
+      if (finalCount > capacity) return -12n;
+      const removed = anonymousUnmap(memory, proc, candidate, size);
+      if (removed !== 0n && removed !== MAP_NOT_OWNED) return removed;
+    } else if (mappingConflict(memory, proc, candidate, end)) {
+      return (flags & 0x100000) !== 0 ? -17n : -12n;
+    }
   } else {
     if (candidate !== 0n) {
       if (candidate > top - MAP_PAGE + 1n) candidate = 0n;
