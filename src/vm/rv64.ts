@@ -8,6 +8,7 @@ import { treeFs } from "../fs/tree.js";
 import { Mem64 } from "./mem64.js";
 import type { RvMemory } from "./mem64.js";
 import { Fd } from "../core/proc.js";
+import { RvLinuxEvents } from "./linux-events.js";
 import type { Io } from "../core/proc.js";
 import { directMemory, loadI32, loadU32, wasmMemory } from "../teto/memory.js";
 import type { TetoMemory } from "../teto/memory.js";
@@ -232,6 +233,7 @@ export class Rv64 {
   private readonly maps: MapEnt[] = [];
   private readonly miss = new Set<number>();
   private readonly localSockets = new Set<number>();
+  private readonly events: RvLinuxEvents;
   private readonly rlim = new Map<number, [bigint, bigint]>();
   private done = false;
   private code = 0;
@@ -242,7 +244,9 @@ export class Rv64 {
   private eend = 0n;
   private vf: Vf | undefined;
 
-  constructor(private readonly s: Sys) {}
+  constructor(private readonly s: Sys) {
+    this.events = new RvLinuxEvents(s, () => this.m, (at, size, wr) => this.mem(at, size, wr));
+  }
 
   get x(): BigInt64Array<ArrayBufferLike> { return this.xState; }
   get f(): BigUint64Array<ArrayBufferLike> { return this.fState; }
@@ -1017,7 +1021,28 @@ export class Rv64 {
     const a = this.x;
     switch (n) {
       case 17: { const b = enc(this.s.cwd + "\0"); return BigInt(this.copy(b, this.addr(a[10]!), this.nat(a[11]!, "getcwd length", MAX_IO))); }
-      case 23: return BigInt(this.s.dup(this.fd(a[10]!)));
+      case 19: return BigInt(this.events.createEventfd(
+        this.nat(a[10]!, "eventfd initial value", 0xffffffff),
+        this.nat(a[11]!, "eventfd flags", 0xffffffff),
+      ));
+      case 20: return BigInt(this.events.createEpoll(
+        this.nat(a[10]!, "epoll flags", 0xffffffff),
+      ));
+      case 21: return BigInt(this.events.ctl(
+        this.fd(a[10]!), this.nat(a[11]!, "epoll operation", 3),
+        this.fd(a[12]!), this.addr(a[13]!),
+      ));
+      case 22: return BigInt(await this.events.wait(
+        this.fd(a[10]!), this.addr(a[11]!),
+        this.nat(a[12]!, "epoll maximum events", 4096),
+        Number(BigInt.asIntN(32, a[13]!)),
+      ));
+      case 23: {
+        const original = this.fd(a[10]!);
+        const duplicate = this.s.dup(original);
+        this.events.duplicate(original, duplicate);
+        return BigInt(duplicate);
+      }
       case 24: return BigInt(this.dup3(a[10]!, a[11]!, a[12]!));
       case 25: return BigInt(this.fcntl(this.fd(a[10]!), this.nat(a[11]!, "fcntl command", 0x7fffffff), a[12]!));
       case 29: return this.ioctl(this.fd(a[10]!), this.nat(a[11]!, "ioctl request", 0xffffffff), this.addr(a[12]!));
@@ -1071,6 +1096,7 @@ export class Rv64 {
       case 57: {
         const fd = this.fd(a[10]!);
         this.localSockets.delete(fd);
+        this.events.close(fd);
         this.s.close(fd);
         return 0n;
       }
@@ -1085,11 +1111,19 @@ export class Rv64 {
       case 62: return BigInt(this.s.seek(this.fd(a[10]!), this.num(a[11]!, "seek offset"), this.nat(a[12]!, "seek whence", 2)));
       case 63: {
         const fd = this.fd(a[10]!), at = this.addr(a[11]!), z = this.nat(a[12]!, "read length", MAX_IO);
-        this.mem(at, z, true); const b = await this.read(fd, z); this.m.write(at, b); return BigInt(b.length);
+        const result = await this.events.read(fd, at, z);
+        if (result !== undefined) return result;
+        this.mem(at, z, true);
+        const b = await this.read(fd, z);
+        this.m.write(at, b);
+        return BigInt(b.length);
       }
       case 64: {
         const fd = this.fd(a[10]!), at = this.addr(a[11]!), z = this.nat(a[12]!, "write length", MAX_IO);
-        this.mem(at, z); return BigInt(await this.write(fd, this.m.read(at, z)));
+        const result = await this.events.write(fd, at, z);
+        if (result !== undefined) return result;
+        this.mem(at, z);
+        return BigInt(await this.write(fd, this.m.read(at, z)));
       }
       case 65: return BigInt(await this.readv(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "iovec count", 1024)));
       case 66: return BigInt(await this.writev(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "iovec count", 1024)));
@@ -1394,6 +1428,7 @@ export class Rv64 {
     const n = this.s.dup(old, nu);
     this.s.p.fds.get(n)!.clo = !!(fl & O_CLOEXEC);
     if (this.localSockets.has(old)) this.localSockets.add(n);
+    this.events.duplicate(old, n);
     return n;
   }
 
@@ -1414,14 +1449,19 @@ export class Rv64 {
         const q = this.s.dup(fd, n);
         this.s.p.fds.get(q)!.clo = cmd === 1030;
         if (this.localSockets.has(fd)) this.localSockets.add(q);
+        this.events.duplicate(fd, q);
         return q;
       }
       return bad("EMFILE", "descriptor table full");
     }
     if (cmd === 1) return f.clo ? 1 : 0;
     if (cmd === 2) { f.clo = !!(this.nat(arg, "descriptor flags", 0x7fffffff) & 1); return 0; }
-    if (cmd === 3) return f.rd && f.wr ? O_RDWR : f.wr ? O_WRONLY : 0;
-    if (cmd === 4) { f.add = !!(this.nat(arg, "descriptor flags", 0x7fffffff) & O_APPEND); return 0; }
+    if (cmd === 3) return this.events.flags(fd) ?? (f.rd && f.wr ? O_RDWR : f.wr ? O_WRONLY : 0);
+    if (cmd === 4) {
+      const flags = this.nat(arg, "descriptor flags", 0x7fffffff);
+      if (!this.events.setStatusFlags(fd, flags)) f.add = !!(flags & O_APPEND);
+      return 0;
+    }
     return -22;
   }
 
@@ -1567,8 +1607,10 @@ export class Rv64 {
       let revents = 0;
       if (fd >= 0 && !this.s.p.fds.has(fd)) {
         revents = 0x20; // POLLNVAL
-        hit++;
+      } else if (fd >= 0) {
+        revents = this.events.readiness(fd, this.m.u16(p + 4n)) ?? 0;
       }
+      if (revents !== 0) hit++;
       this.m.set16(p + 6n, revents);
     }
     return hit;
@@ -1578,6 +1620,14 @@ export class Rv64 {
 
   private fstat(fd: number, at: bigint): bigint {
     const f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd));
+    if (this.events.has(fd)) {
+      this.putStat({
+        ino: fd + 1, kind: "char", mode: 0o600,
+        uid: this.s.uid, gid: this.s.gid, nlink: 1, size: 0,
+        at: Date.now(), mt: Date.now(), ct: Date.now(),
+      }, at);
+      return 0n;
+    }
     if (fd < 3) this.putStat({ ino: fd + 1, kind: "char", mode: 0o620, uid: this.s.uid, gid: this.s.gid, nlink: 1, size: 0, at: Date.now(), mt: Date.now(), ct: Date.now() }, at);
     else this.putStat(this.s.stat(f.path ?? bad("EBADF", String(fd))), at);
     return 0n;
