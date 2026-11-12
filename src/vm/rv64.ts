@@ -361,7 +361,13 @@ export class Rv64 {
     const provider = this.s.k.teto;
     if (!provider) return bad("ENOEXEC", "the experimental Teto WebAssembly core is unavailable from this host");
     const bytes = await provider.load("baseline");
-    const runtime = await loadTeto(bytes, { initialPages: 1024, maximumPages: 32768 });
+    // The guest image occupies staging memory while its loadable segments are
+    // materialised into separate sparse physical pages. Size the imported WASM
+    // memory for both copies, with a 512 MiB baseline for larger RV64 guests.
+    const imagePages = Math.ceil((image?.byteLength ?? 0) / 65536);
+    const initialPages = Math.max(8192, 1024 + imagePages * 2);
+    if (initialPages > 32768) bad("ENOMEM", "RV64 guest image exceeds Teto memory limits");
+    const runtime = await loadTeto(bytes, { initialPages, maximumPages: 32768 });
     const memory = wasmMemory(runtime.memory, false);
     return this.runTetoCore(exe, argv, image, { memory, exports: runtime.exports, label: "Teto WebAssembly core" }, memory.bytes.length);
   }
