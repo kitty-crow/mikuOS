@@ -731,7 +731,7 @@ test("Teto honours MAP_FIXED replacement inside MAP_NORESERVE reservations", asy
     // while preserving the second page within the original reservation.
     addi(10, 5, 0), addi(11, 20, 0), addi(12, 0, 3),
     addi(13, 0, 0x32), addi(17, 0, 222), 0x00000073,
-    addi(9, 10, 0), load(10, 5),
+    addi(9, 10, 0), load(23, 5),
     // Unmap the replaced page, then deliberately fault on its old address.
     addi(10, 5, 0), addi(11, 20, 0), addi(17, 0, 215),
     0x00000073, load(22, 21), load(10, 5),
@@ -801,6 +801,7 @@ test("Teto honours MAP_FIXED replacement inside MAP_NORESERVE reservations", asy
     eq(core.tetoHartGetX(0, 0, 7), 39n);
     eq(core.tetoHartGetX(0, 0, 8), 0n);
     eq(core.tetoHartGetX(0, 0, 9), mapped, "MAP_FIXED replacement must retain the address");
+    eq(core.tetoHartGetX(0, 0, 23), 0n, "MAP_FIXED replacement must clear previously written data");
     eq(core.tetoHartGetX(0, 0, 22), 0n, "unreplaced page must retain its contents");
     eq(core.tetoProcessMapCount(0, 0), 1);
     eq(core.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 3n);
