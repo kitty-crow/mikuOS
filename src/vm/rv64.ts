@@ -596,7 +596,7 @@ export class Rv64 {
             const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
             const fault = loadI32(memory, base + H_FAULT);
             const instruction = loadU32(memory, base + H_LAST_INSTRUCTION);
-            bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${exports.tetoHartPc(0, hart).toString(16)}`);
+            this.tetoReportFault(session, hart, fault, instruction);
           }
           if (status !== TETO_HART_RUNNABLE) continue;
           const before = exports.tetoHartMetric(0, hart, H_INSTRUCTIONS);
@@ -616,7 +616,7 @@ export class Rv64 {
             const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
             const fault = loadI32(memory, base + H_FAULT);
             const instruction = loadU32(memory, base + H_LAST_INSTRUCTION);
-            bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${exports.tetoHartPc(0, hart).toString(16)}`);
+            this.tetoReportFault(session, hart, fault, instruction);
           }
         }
         if (this.done) break;
@@ -635,6 +635,32 @@ export class Rv64 {
     } finally {
       this.tetoThreads = undefined;
     }
+  }
+
+  /** Include the guest mapping and execution registers when a hart faults. */
+  private tetoReportFault(session: TetoThreadRuntime, hart: number, fault: number, instruction: number): never {
+    const { memory, exports } = session.core;
+    const pc = exports.tetoHartPc(0, hart);
+    const count = exports.tetoProcessMapCount(0, hart);
+    let mapping = "unmapped";
+    let closest = "none";
+    let distance = 0x0000ffffffffffffn;
+
+    for (let index = 0; index < count; index++) {
+      const at = exports.tetoProcessMapAddress(0, hart, index);
+      const end = exports.tetoProcessMapEnd(0, hart, index);
+      const prot = exports.tetoProcessMapProtection(0, hart, index);
+      const region = `[0x${at.toString(16)},0x${end.toString(16)}) prot=${prot}`;
+      if (pc >= at && pc < end) mapping = region;
+      const delta = pc < at ? at - pc : pc >= end ? pc - end : 0n;
+      if (delta < distance) {
+        distance = delta;
+        closest = region;
+      }
+    }
+    const ra = ux(this.tetoRegister(memory, hart, H_X, 1));
+    const sp = ux(this.tetoRegister(memory, hart, H_X, 2));
+    bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} mapping=${mapping} nearest=${closest} mappings=${count}`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
