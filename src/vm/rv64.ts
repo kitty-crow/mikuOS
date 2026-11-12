@@ -566,6 +566,230 @@ export class Rv64 {
     return this.code & 0xff;
   }
 
+  /** Schedule RV64 harts cooperatively with shared guest memory and individual registers. */
+  private async runTetoCooperative(core: TetoCore): Promise<number> {
+    const { memory, exports } = core;
+    const session: TetoThreadRuntime = {
+      core,
+      active: new Set([0]),
+      pending: new Map(),
+      tids: new Map([[0, this.s.pid]]),
+      clearTid: new Map(),
+      nextTid: this.s.pid + 100000,
+    };
+    this.tetoThreads = session;
+    let fuel = this.s.k.lim.fuel;
+    try {
+      while (!this.done) {
+        this.s.chk();
+        if (session.failure) throw session.failure;
+        let progressed = false;
+        for (const hart of [...session.active]) {
+          if (session.pending.has(hart)) continue;
+          const status = exports.tetoHartStatus(0, hart);
+          if (status === TETO_HART_EXITED) {
+            if (hart === 0) this.exit(BigInt(exports.tetoHartExitCode(0, 0)));
+            else session.active.delete(hart);
+            continue;
+          }
+          if (status === TETO_HART_FAULTED) {
+            const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
+            const fault = loadI32(memory, base + H_FAULT);
+            const instruction = loadU32(memory, base + H_LAST_INSTRUCTION);
+            bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${exports.tetoHartPc(0, hart).toString(16)}`);
+          }
+          if (status !== TETO_HART_RUNNABLE) continue;
+          const before = exports.tetoHartMetric(0, hart, H_INSTRUCTIONS);
+          const result = exports.tetoRunRv64Batch(0, hart, 16384, BigInt(Date.now()) * 1000n, 0);
+          const executed = exports.tetoHartMetric(0, hart, H_INSTRUCTIONS) - before;
+          progressed = true;
+          if (fuel) {
+            fuel -= Number(executed);
+            if (fuel < 0) bad("ELOOP", "RV64 instruction limit reached");
+          }
+          if (result === TETO_BATCH_SYSCALL) this.tetoScheduleSyscall(session, hart);
+          else if (result === TETO_BATCH_HOST) this.tetoScheduleHost(session, hart);
+          else if (result === TETO_BATCH_EXITED) {
+            if (hart === 0) this.exit(BigInt(exports.tetoHartExitCode(0, 0)));
+            else this.tetoThreadExit(hart, exports.tetoHartExitCode(0, hart));
+          } else if (result === TETO_BATCH_FAULT) {
+            const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
+            const fault = loadI32(memory, base + H_FAULT);
+            const instruction = loadU32(memory, base + H_LAST_INSTRUCTION);
+            bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${exports.tetoHartPc(0, hart).toString(16)}`);
+          }
+        }
+        if (this.done) break;
+        if (session.failure) throw session.failure;
+        if (progressed) {
+          await this.s.yield();
+          continue;
+        }
+        if (session.pending.size) {
+          await Promise.race(session.pending.values());
+          continue;
+        }
+        bad("EPROTO", "Teto has no runnable harts or pending syscalls");
+      }
+      return this.code & 255;
+    } finally {
+      this.tetoThreads = undefined;
+    }
+  }
+
+  private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
+    const tracked = work.catch(error => { session.failure = error; })
+      .finally(() => { session.pending.delete(hart); });
+    session.pending.set(hart, tracked);
+  }
+
+  private tetoScheduleSyscall(session: TetoThreadRuntime, hart: number): void {
+    const { memory, exports } = session.core;
+    const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
+    this.xState = new BigInt64Array(memory.buffer, base + H_X, 32);
+    this.fState = new BigUint64Array(memory.buffer, base + H_F, 32);
+    this.tetoActiveHart = hart;
+    this.pc = exports.tetoHartPc(0, hart);
+    this.brk = exports.tetoHartBreak(0, hart);
+    this.syncTetoCredentials(memory);
+    this.syncTetoMemoryState(exports);
+    const registers = this.xState;
+    const pc = this.pc;
+    const work = this.sys().then(() => {
+      if (exports.tetoHartStatus(0, hart) !== TETO_HART_WAITING) return;
+      if (exports.tetoHartSetPc(0, hart, ux(pc)) !== 0 ||
+          exports.tetoResumeSyscall(0, hart, registers[10]!) !== 0) {
+        bad("EPROTO", `Teto hart ${hart} syscall resume failed`);
+      }
+    });
+    this.tetoTrack(session, hart, work);
+  }
+
+  private tetoScheduleHost(session: TetoThreadRuntime, hart: number): void {
+    const { exports } = session.core;
+    const work = (async () => {
+      const operation = exports.tetoHostOperation(0, hart);
+      if (operation !== TETO_HOST_WRITE) bad("ENOSYS", `unsupported Teto host operation ${operation}`);
+      const fd = this.s.p.fds.get(exports.tetoHostDescriptor(0, hart));
+      const address = exports.tetoHostAddress(0, hart);
+      const length = exports.tetoHostLength(0, hart);
+      let value: bigint;
+      try {
+        value = fd?.output ? BigInt(await fd.output.wr(this.m.read(address, length))) : -9n;
+      } catch (error) {
+        if (!(error instanceof KErr)) throw error;
+        value = -BigInt(eno[error.code] ?? 5);
+      }
+      if (exports.tetoResumeHost(0, hart, value) !== 0) {
+        bad("EPROTO", `Teto hart ${hart} host resume failed`);
+      }
+    })();
+    this.tetoTrack(session, hart, work);
+  }
+
+  private tetoCloneThread(flags: bigint, stack: bigint, parentTid: bigint, tls: bigint, childTid: bigint): bigint {
+    const session = this.tetoThreads ?? bad("EPROTO", "no Teto thread runtime");
+    const option = ux(flags);
+    if ((option & 0x10000n) === 0n) return this.clone(flags, stack, tls);
+    if ((option & 0x900n) !== 0x900n) return -22n;
+    let child = -1;
+    for (let hart = 1; hart < TETO_GUEST_THREADS; hart++) {
+      if (!session.active.has(hart)) { child = hart; break; }
+    }
+    if (child < 0) return -11n;
+    const { memory, exports } = session.core;
+    const parent = this.tetoActiveHart;
+    const source = TETO_HART_BASE + parent * TETO_HART_STRIDE;
+    const target = TETO_HART_BASE + child * TETO_HART_STRIDE;
+    const tid = session.nextTid++;
+    if ((option & 0x100000n) !== 0n) this.mem(ux(parentTid), 4, true);
+    if ((option & 0x1000000n) !== 0n || (option & 0x200000n) !== 0n) this.mem(ux(childTid), 4, true);
+    memory.bytes.copyWithin(target, source, source + TETO_HART_STRIDE);
+    const view = new DataView(memory.buffer);
+    view.setInt32(target + H_LOCK, 0, true);
+    view.setInt32(target + H_STATUS, TETO_HART_RUNNABLE, true);
+    view.setInt32(target + H_EVENT, TETO_EVENT_NONE, true);
+    view.setBigInt64(target + H_RESERVATION, -1n, true);
+    view.setInt32(target + H_LAST_WORKER, -1, true);
+    const registers = new BigInt64Array(memory.buffer, target + H_X, 32);
+    registers[10] = 0n;
+    if (stack !== 0n) {
+      registers[2] = sx(stack, 64);
+      view.setBigUint64(target + H_STACK_POINTER, ux(stack), true);
+    }
+    if ((option & 0x80000n) !== 0n) registers[4] = sx(tls, 64);
+    session.tids.set(child, tid);
+    session.active.add(child);
+    if ((option & 0x100000n) !== 0n) this.m.set32(ux(parentTid), tid);
+    if ((option & 0x1000000n) !== 0n) this.m.set32(ux(childTid), tid);
+    if ((option & 0x200000n) !== 0n) session.clearTid.set(child, ux(childTid));
+    if (exports.tetoHartStatus(0, child) !== TETO_HART_RUNNABLE) bad("EPROTO", "new Teto hart not runnable");
+    return BigInt(tid);
+  }
+
+  private tetoSetClearTid(at: bigint): bigint {
+    const state = this.tetoThreads ?? bad("EPROTO", "no Teto thread runtime");
+    const address = ux(at);
+    if (address) { this.mem(address, 4, true); state.clearTid.set(this.tetoActiveHart, address); }
+    return BigInt(state.tids.get(this.tetoActiveHart) ?? this.s.pid);
+  }
+
+  private tetoThreadExit(hart: number, code: number): void {
+    const state = this.tetoThreads ?? bad("EPROTO", "no Teto thread runtime");
+    const clear = state.clearTid.get(hart);
+    if (clear) {
+      this.mem(clear, 4, true);
+      this.m.set32(clear, 0);
+      this.tetoWakeFutex(clear, 0x7fffffff);
+      state.clearTid.delete(hart);
+    }
+    if (state.core.exports.tetoExitHart(0, hart, code) !== 0) bad("EPROTO", "Teto thread exit failed");
+    state.active.delete(hart);
+  }
+
+  private tetoWakeFutex(at: bigint, count: number): number {
+    const queue = this.tetoFutexWaiters.get(at);
+    if (!queue) return 0;
+    let woken = 0;
+    for (const wake of [...queue]) {
+      if (woken >= count) break;
+      wake(0n);
+      woken++;
+    }
+    return woken;
+  }
+
+  private async tetoFutex(at0: bigint, op0: bigint, value: bigint, timeoutAt: bigint): Promise<bigint> {
+    const address = ux(at0);
+    const operation = this.nat(op0, "futex operation", 0x7fffffff) & 0x7f;
+    this.mem(address, 4, operation !== 0 && operation !== 9);
+    if (operation === 1 || operation === 10) {
+      return BigInt(this.tetoWakeFutex(address, this.nat(value, "futex wake count", 0x7fffffff)));
+    }
+    if (operation !== 0 && operation !== 9) return -38n;
+    if (this.m.u32(address) !== Number(ux(value) & 0xffffffffn)) return -11n;
+    let millis: number | undefined;
+    if (timeoutAt) {
+      const timeout = this.readTs(ux(timeoutAt));
+      millis = operation === 9 ? Math.max(0, timeout - this.clockMs((op0 & 0x100n) ? 0 : 1)) : timeout;
+      if (millis <= 0) return -110n;
+    }
+    return new Promise<bigint>(resolve => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let queue = this.tetoFutexWaiters.get(address);
+      if (!queue) { queue = new Set(); this.tetoFutexWaiters.set(address, queue); }
+      const listeners = queue;
+      const wake: FutexWake = result => {
+        listeners.delete(wake);
+        if (listeners.size === 0) this.tetoFutexWaiters.delete(address);
+        if (timer !== undefined) clearTimeout(timer);
+        resolve(result);
+      };
+      listeners.add(wake);
+      if (millis !== undefined) timer = setTimeout(() => wake(-110n), millis);
+    });
+  }
+
   private syncTetoCredentials(memory: TetoMemory): void {
     const slot = loadU32(memory, TETO_HART_BASE + H_PROCESS_SLOT);
     if (slot === 0xffffffff) return;
