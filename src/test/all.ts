@@ -373,7 +373,11 @@ test("generated Teto executes bounded RV64 batches with direct-source parity", a
   eq(wasm.exports.tetoProcessSetGroup(0, 0, 2, 39), 0);
   eq(wasm.exports.tetoProcessCount(0), 1);
   installWasm(wasm, 0, pc, program);
-  eq(wasm.exports.tetoRunRv64Batch(0, 0, 4096, 123456n, 0), TETO_BATCH_EXITED);
+  const parityBatch = wasm.exports.tetoRunRv64Batch(0, 0, 4096, 123456n, 0);
+  if (parityBatch !== TETO_BATCH_EXITED) {
+    console.error(`TETO PARITY DEBUG: batch=${parityBatch} pc=0x${wasm.exports.tetoHartPc(0, 0).toString(16)} a7=${wasm.exports.tetoHartGetX(0, 0, 17)} a0=${wasm.exports.tetoHartGetX(0, 0, 10)} internal=${wasm.exports.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS)} fallback=${wasm.exports.tetoHartMetric(0, 0, H_FALLBACK_SYSCALLS)}`);
+  }
+  eq(parityBatch, TETO_BATCH_EXITED);
   for (let register = 0; register < 32; register++) {
     eq(wasm.exports.tetoHartGetX(0, 0, register), tetoHartGetX(direct, 0, register), `Teto x${register} diverged from direct source`);
   }
