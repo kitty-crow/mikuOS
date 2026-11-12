@@ -708,19 +708,27 @@ export class Rv64 {
       .map(region => `[0x${region.at.toString(16)},0x${region.end.toString(16)}) prot=${region.prot} path=${region.path}`)
       .join(";");
     const traceCount = traceView.getUint32(1000, true);
-    const history: string[] = [];
+    const cellWrites: string[] = [];
+    const otherSmiWrites: string[] = [];
+    const mappingEvents: string[] = [];
     const start = Math.max(0, traceCount - 48);
     for (let index = start; index < traceCount; index++) {
       const slot = 1024 + index % 48 * 40;
-      const syscall = traceView.getUint32(slot, true);
-      const flags = traceView.getUint32(slot + 4, true);
+      const operation = traceView.getUint32(slot, true);
+      const size = traceView.getUint32(slot + 4, true);
       const address = traceView.getBigUint64(slot + 8, true);
       const length = traceView.getBigUint64(slot + 16, true);
       const result = traceView.getBigInt64(slot + 24, true);
-      const detail = traceView.getBigUint64(slot + 32, true);
-      history.push(`${syscall}(0x${address.toString(16)},0x${length.toString(16)},flags=0x${flags.toString(16)},detail=0x${detail.toString(16)})=0x${ux(result).toString(16)}`);
+      const at = traceView.getBigUint64(slot + 32, true);
+      if (operation === 0x53544f52) {
+        const event = `pc=0x${at.toString(16)} addr=0x${address.toString(16)} size=${size} value=0x${ux(result).toString(16)}`;
+        if (address < a1 + 8n && address + length > a1) cellWrites.push(event);
+        else otherSmiWrites.push(event);
+      } else {
+        mappingEvents.push(`${operation}(0x${address.toString(16)},0x${length.toString(16)})=0x${ux(result).toString(16)}`);
+      }
     }
-    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access} source(a1)=0x${a1.toString(16)} sourceFrame=0x${sourceFrame.toString(16)} sourceCell=${sourceCell} registers=[${guestRegisters}] hostMappings=[${hostMappings}] mappingHistory(${traceCount})=[${history.join("; ")}]`);
+    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access} source(a1)=0x${a1.toString(16)} sourceFrame=0x${sourceFrame.toString(16)} sourceCell=${sourceCell} registers=[${guestRegisters}] hostMappings=[${hostMappings}] traceCount=${traceCount} sourceWrites=[${cellWrites.join("; ")}] recentSmiWrites=[${otherSmiWrites.slice(-12).join("; ")}] mappingEvents=[${mappingEvents.slice(-8).join("; ")}]`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
