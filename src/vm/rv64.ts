@@ -660,7 +660,7 @@ export class Rv64 {
     }
     const ra = ux(this.tetoRegister(memory, hart, H_X, 1));
     const sp = ux(this.tetoRegister(memory, hart, H_X, 2));
-    bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} mapping=${mapping} nearest=${closest} mappings=${count}`);
+    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} mapping=${mapping} nearest=${closest} mappings=${count}`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
