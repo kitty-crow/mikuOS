@@ -687,6 +687,26 @@ export class Rv64 {
       access = `C.LD x${destination},${offset}(x${source}) address=0x${address.toString(16)} frame=0x${frame.toString(16)} anon=${anonymous} segment=${region?.name ?? "none"}`;
     }
     const traceView = new DataView(memory.buffer);
+    // The faulting C.LD follows an earlier "ld a4, 0(a1)". Inspect the
+    // source cell and the host-side file mappings before blaming mmap.
+    const a1 = ux(this.tetoRegister(memory, hart, H_X, 11));
+    const sourceFrame = exports.tetoGuestPage(0, hart, a1, 0) >>> 0;
+    const sourceOffset = Number(a1 & 0xffffn);
+    const sourceCell = sourceFrame < 0xfffffffe && sourceOffset <= 65528 &&
+      sourceFrame + sourceOffset + 8 <= memory.byteLength
+      ? `0x${traceView.getBigUint64(sourceFrame + sourceOffset, true).toString(16)}`
+      : "unavailable";
+    const guestRegisters = [10, 11, 12, 13, 14, 15, 16, 17].map(reg =>
+      `x${reg}=0x${ux(this.tetoRegister(memory, hart, H_X, reg)).toString(16)}`
+    ).join(",");
+    const hostMappings = this.maps
+      .filter(region => region.path !== undefined && (
+        a1 >= region.at && a1 < region.end ||
+        ux(this.tetoRegister(memory, hart, H_X, 14)) >= region.at &&
+        ux(this.tetoRegister(memory, hart, H_X, 14)) < region.end
+      ))
+      .map(region => `[0x${region.at.toString(16)},0x${region.end.toString(16)}) prot=${region.prot} path=${region.path}`)
+      .join(";");
     const traceCount = traceView.getUint32(1000, true);
     const history: string[] = [];
     const start = Math.max(0, traceCount - 48);
@@ -700,7 +720,7 @@ export class Rv64 {
       const detail = traceView.getBigUint64(slot + 32, true);
       history.push(`${syscall}(0x${address.toString(16)},0x${length.toString(16)},flags=0x${flags.toString(16)},detail=0x${detail.toString(16)})=0x${ux(result).toString(16)}`);
     }
-    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access} mappingHistory(${traceCount})=[${history.join("; ")}]`);
+    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access} source(a1)=0x${a1.toString(16)} sourceFrame=0x${sourceFrame.toString(16)} sourceCell=${sourceCell} registers=[${guestRegisters}] hostMappings=[${hostMappings}] mappingHistory(${traceCount})=[${history.join("; ")}]`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
