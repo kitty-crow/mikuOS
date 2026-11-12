@@ -81,6 +81,12 @@ import {
 import {
   C_PROCESS_TABLE_BASE,
   H_FAULT,
+  H_LOCK,
+  H_STATUS,
+  H_EVENT,
+  H_RESERVATION,
+  H_LAST_WORKER,
+  H_STACK_POINTER,
   H_INSTRUCTIONS,
   H_LAST_INSTRUCTION,
   H_F,
@@ -104,6 +110,11 @@ import {
   TETO_BATCH_SYSCALL,
   TETO_FAULT_BREAKPOINT,
   TETO_HART_BASE,
+  TETO_HART_RUNNABLE,
+  TETO_HART_WAITING,
+  TETO_HART_EXITED,
+  TETO_HART_FAULTED,
+  TETO_EVENT_NONE,
   TETO_HART_STRIDE,
   TETO_HOST_WRITE,
   TETO_CONTROL_BASE,
@@ -199,6 +210,19 @@ interface TetoCore {
   label: string;
 }
 
+const TETO_GUEST_THREADS = 16;
+type FutexWake = (result: bigint) => void;
+
+interface TetoThreadRuntime {
+  core: TetoCore;
+  active: Set<number>;
+  pending: Map<number, Promise<void>>;
+  tids: Map<number, number>;
+  clearTid: Map<number, bigint>;
+  nextTid: number;
+  failure?: unknown;
+}
+
 const eno: Record<Errno, number> = {
   EPERM: 1, ENOENT: 2, ESRCH: 3, EINTR: 4, EIO: 5, ECHILD: 10, EAGAIN: 11,
   ENOMEM: 12, EACCES: 13, EFAULT: 14, EBUSY: 16, EEXIST: 17, ENOTDIR: 20, EISDIR: 21,
@@ -233,6 +257,9 @@ export class Rv64 {
   private readonly maps: MapEnt[] = [];
   private readonly miss = new Set<number>();
   private readonly localSockets = new Set<number>();
+  private tetoThreads?: TetoThreadRuntime;
+  private tetoActiveHart = 0;
+  private readonly tetoFutexWaiters = new Map<bigint, Set<FutexWake>>();
   private readonly events: RvLinuxEvents;
   private readonly rlim = new Map<number, [bigint, bigint]>();
   private done = false;
@@ -409,7 +436,8 @@ export class Rv64 {
     if (exe.machine !== "thistle64" || exe.isa !== "rv64gc") bad("ENOEXEC", "RV64 VM received another instruction profile");
     const raw = image ?? bad("ENOEXEC", `${core.label} needs the original THX image`);
     const { memory, exports } = core;
-    if (exports.tetoKernelInit(0, 1, 0) !== 0 || exports.tetoHartInit(0, 0, 0x0000ffffffffffffn, 0n) !== 0) {
+    const maxHarts = core.label === "Teto WebAssembly core" ? TETO_GUEST_THREADS : 1;
+    if (exports.tetoKernelInit(0, maxHarts, 0) !== 0 || exports.tetoHartInit(0, 0, 0x0000ffffffffffffn, 0n) !== 0) {
       bad("ENOMEM", `${core.label} memory initialisation failed`);
     }
     if (exports.tetoProcessInit(0, 0, this.s.pid, this.s.ppid, this.s.uid, this.s.euid, this.s.suid, this.s.gid, this.s.egid, this.s.sgid) !== 0) {
@@ -480,6 +508,7 @@ export class Rv64 {
     this.pc = exports.tetoHartPc(0, 0);
     this.stackAt = exports.tetoHartStackBottom(0, 0);
     this.trace = false;
+    if (maxHarts > 1) return this.runTetoCooperative(core);
     let fuel = this.s.k.lim.fuel;
     while (!this.done) {
       this.s.chk();
@@ -1013,8 +1042,13 @@ export class Rv64 {
   }
 
   private async sys(): Promise<void> {
-    try { this.set(10, await this.call(Number(ux(this.x[17]!)))); }
-    catch (e) { if (e instanceof KErr) this.set(10, -BigInt(eno[e.code] ?? 5)); else throw e; }
+    // Capture the originating hart: another hart may run while this syscall awaits.
+    const registers = this.x;
+    try { registers[10] = sx(await this.call(Number(ux(registers[17]!))), 64); }
+    catch (e) {
+      if (!(e instanceof KErr)) throw e;
+      registers[10] = sx(-BigInt(eno[e.code] ?? 5), 64);
+    }
   }
 
   private async call(n: number): Promise<bigint> {
@@ -1135,9 +1169,18 @@ export class Rv64 {
       case 80: return this.fstat(this.fd(a[10]!), this.addr(a[11]!));
       case 81: case 82: case 83: return 0n;
       case 88: return this.utimens(a[10]!, a[11]!, a[12]!, a[13]!);
-      case 93: case 94: return this.vf ? this.vfExit(a[10]!) : (this.exit(a[10]!), 0n);
-      case 96: return BigInt(this.s.pid);
-      case 98: return this.futex(a[10]!, a[11]!, a[12]!, a[13]!);
+      case 93:
+        if (this.tetoThreads && this.tetoActiveHart !== 0) {
+          this.tetoThreadExit(this.tetoActiveHart, Number(ux(a[10]!) & 255n));
+          return 0n;
+        }
+        return this.vf ? this.vfExit(a[10]!) : (this.exit(a[10]!), 0n);
+      case 94: return this.vf ? this.vfExit(a[10]!) : (this.exit(a[10]!), 0n);
+      case 96: return this.tetoThreads
+        ? this.tetoSetClearTid(a[10]!) : BigInt(this.s.pid);
+      case 98: return this.tetoThreads
+        ? this.tetoFutex(a[10]!, a[11]!, a[12]!, a[13]!)
+        : this.futex(a[10]!, a[11]!, a[12]!, a[13]!);
       case 99: return 0n;
       case 101: await this.sleepTs(this.addr(a[10]!)); return 0n;
       case 113: return this.clock(this.num(a[10]!, "clock id"), this.addr(a[11]!));
@@ -1174,7 +1217,7 @@ export class Rv64 {
       case 175: return BigInt(this.s.euid);
       case 176: return BigInt(this.s.gid);
       case 177: return BigInt(this.s.egid);
-      case 178: return BigInt(this.s.pid);
+      case 178: return BigInt(this.tetoThreads?.tids.get(this.tetoActiveHart) ?? this.s.pid);
       case 179: return this.sysinfo(this.addr(a[10]!));
       case 198: return BigInt(this.socket(
         this.nat(a[10]!, "socket domain", 0x7fffffff),
@@ -1189,7 +1232,9 @@ export class Rv64 {
       case 214: return this.doBrk(this.addr(a[10]!));
       case 215: this.unmap(this.addr(a[10]!), this.nat(a[11]!, "mapping length", Number.MAX_SAFE_INTEGER)); return 0n;
       case 216: return this.remap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!);
-      case 220: return this.clone(a[10]!, a[11]!, a[13]!);
+      case 220: return this.tetoThreads
+        ? this.tetoCloneThread(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!)
+        : this.clone(a[10]!, a[11]!, a[13]!);
       case 221: return this.execve(this.str(a[10]!), this.addr(a[11]!), this.addr(a[12]!));
       case 222: return this.mmap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!, a[15]!);
       case 227: this.flushShared(this.addr(a[10]!), this.nat(a[11]!, "sync length", Number.MAX_SAFE_INTEGER)); return 0n;
