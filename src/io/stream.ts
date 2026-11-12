@@ -72,6 +72,19 @@ export class Pipe implements In, Out {
   private shut = false;
   private refs = 0;
   private rrefs = 0;
+  private readonly subscribers = new Set<() => void>();
+
+  get readable(): boolean { return this.q.length > 0 || this.shut; }
+  get writable(): boolean { return !this.shut && this.rrefs > 0; }
+
+  onChange(callback: () => void): () => void {
+    this.subscribers.add(callback);
+    return () => this.subscribers.delete(callback);
+  }
+
+  private notify(): void {
+    for (const callback of this.subscribers) callback();
+  }
 
   hold(): void { this.refs++; }
   holdR(): void { this.rrefs++; }
@@ -83,12 +96,13 @@ export class Pipe implements In, Out {
     const fn = this.w.shift();
     if (fn) fn(x);
     else this.q.push(x);
+    this.notify();
     return x.length;
   }
 
   async rd(): Promise<Uint8Array> {
     const b = this.q.shift();
-    if (b) return b;
+    if (b) { this.notify(); return b; }
     if (this.shut) return new Uint8Array();
     return new Promise<Uint8Array>(ok => this.w.push(ok));
   }
@@ -108,6 +122,7 @@ export class Pipe implements In, Out {
   private end(): void {
     if (this.shut) return;
     this.shut = true;
+    this.notify();
     for (const ok of this.w.splice(0)) ok(new Uint8Array());
   }
 }
