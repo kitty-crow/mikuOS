@@ -1092,14 +1092,25 @@ const anonymousMap = (memory: TetoMemory, proc: Ptr, address: U64, length: U64, 
   if (length === 0n || length > top || protection > 7n || flagsWide > 0x7fffffffn) return -22n;
   const flags = wordToU32(flagsWide);
   const kind = flags & 3;
-  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x100033) !== 0) return -22n;
+  // Linux treats NORESERVE, POPULATE and STACK as advisory mapping flags.
+  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x12c033) !== 0) return -22n;
   const size = length + MAP_PAGE - 1n & -MAP_PAGE;
   if (size === 0n || size > top) return -12n;
   const fixed = (flags & 0x100010) !== 0;
   let candidate = address;
   if (fixed) {
-    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate ||
-        mappingConflict(memory, proc, candidate, candidate + size)) return -12n;
+    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate) return -12n;
+    // Neither MAP_FIXED nor MAP_FIXED_NOREPLACE can replace the image, heap or stack.
+    const minimum = atomicLoadU64(memory, proc + P_BRK) + MAP_GUARD + MAP_PAGE - 1n & -MAP_PAGE;
+    const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
+    if (candidate < minimum || stack <= MAP_GUARD || candidate + size >= stack - MAP_GUARD) return -12n;
+    // NOREPLACE must fail on an existing mapping. MAP_FIXED replaces it instead.
+    if ((flags & 0x100000) !== 0 && mappingConflict(memory, proc, candidate, candidate + size)) return -17n;
+    if ((flags & 0x10) !== 0 && (flags & 0x100000) === 0) {
+      const unmapped = anonymousUnmap(memory, proc, candidate, size);
+      if (unmapped < 0n && unmapped !== MAP_NOT_OWNED) return unmapped;
+    }
+    if (mappingConflict(memory, proc, candidate, candidate + size)) return -12n;
   } else {
     if (candidate !== 0n) {
       if (candidate > top - MAP_PAGE + 1n) candidate = 0n;
