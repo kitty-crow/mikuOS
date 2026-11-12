@@ -334,6 +334,25 @@ const traceMappingOperation = (
   storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
 };
 
+/** Record guest writes to the pointer cell involved in the Node startup fault.
+ * Temporary debug instrumentation for PR #16, not a general memory policy. */
+const traceNodePointerWrite = (
+  memory: TetoMemory, hart: U32, address: U64, value: U64, size: U32,
+): void => {
+  const watch: U64 = 0xfffffff188n;
+  if (address >= watch + 8n || address + ux(word(size)) <= watch) return;
+  if (loadU32(memory, TETO_CONTROL_BASE + C_WORKER_CAPACITY) > 32) return;
+  const count = loadU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER);
+  const slot = TETO_CONTROL_BASE + MMAP_TRACE_BASE + count % MMAP_TRACE_CAPACITY * MMAP_TRACE_STRIDE;
+  storeU32(memory, slot, 0x53544f52);
+  storeU32(memory, slot + 4, size);
+  storeU64(memory, slot + 8, address);
+  storeU64(memory, slot + 16, ux(word(size)));
+  storeI64(memory, slot + 24, sx(value, 64));
+  storeU64(memory, slot + 32, loadU64(memory, hartAt(hart) + H_PC));
+  storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
+};
+
 const OPEN_DIRECTORY: U32 = 0x10000;
 const OPEN_CLOEXEC: U32 = 0x80000;
 
@@ -1532,6 +1551,7 @@ const guestLoadU64 = (memory: TetoMemory, hart: U32, address: U64, size: U32): U
 
 const guestStoreU64 = (memory: TetoMemory, hart: U32, address: U64, value: U64, size: U32): boolean => {
   if (!guestRange(memory, hart, address, size)) return false;
+  traceNodePointerWrite(memory, hart, address, value, size);
   let index: U32 = 0;
   while (index < size) {
     const pointer = guestPointer(memory, hart, address + ux(word(index)), 1, true);
