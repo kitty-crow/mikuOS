@@ -334,14 +334,20 @@ const traceMappingOperation = (
   storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
 };
 
-/** Record guest writes to the pointer cell involved in the Node startup fault.
- * Temporary debug instrumentation for PR #16, not a general memory policy. */
+/** Diagnose V8 Smi-like values stored in the top 64 KiB of the guest stack.
+ * The stack address varies between runs, so no absolute cell is hardcoded.
+ * Record only compact integer-tagged writes to avoid burying the relevant PC. */
 const traceNodePointerWrite = (
   memory: TetoMemory, hart: U32, address: U64, value: U64, size: U32,
 ): void => {
-  const watch: U64 = 0xfffffff188n;
-  if (address >= watch + 8n || address + ux(word(size)) <= watch) return;
   if (loadU32(memory, TETO_CONTROL_BASE + C_WORKER_CAPACITY) > 32) return;
+  const top = loadU64(memory, hartAt(hart) + H_VIRTUAL_TOP);
+  if (top < 0x10000n || address < top - 0x10000n || address >= top) return;
+  const low = value & 0xffffffffn;
+  const high = value >> 32n;
+  const fullSmi = size === 8 && low === 0n && high > 0n && high <= 16n;
+  const upperSmi = size === 4 && (address & 7n) === 4n && low > 0n && low <= 16n;
+  if (!fullSmi && !upperSmi) return;
   const count = loadU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER);
   const slot = TETO_CONTROL_BASE + MMAP_TRACE_BASE + count % MMAP_TRACE_CAPACITY * MMAP_TRACE_STRIDE;
   storeU32(memory, slot, 0x53544f52);
