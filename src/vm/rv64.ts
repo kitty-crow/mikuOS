@@ -686,7 +686,21 @@ export class Rv64 {
       const frame = exports.tetoGuestPage(0, hart, address, 0) >>> 0;
       access = `C.LD x${destination},${offset}(x${source}) address=0x${address.toString(16)} frame=0x${frame.toString(16)} anon=${anonymous} segment=${region?.name ?? "none"}`;
     }
-    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access}`);
+    const traceView = new DataView(memory.buffer);
+    const traceCount = traceView.getUint32(1000, true);
+    const history: string[] = [];
+    const start = Math.max(0, traceCount - 48);
+    for (let index = start; index < traceCount; index++) {
+      const slot = 1024 + index % 48 * 40;
+      const syscall = traceView.getUint32(slot, true);
+      const flags = traceView.getUint32(slot + 4, true);
+      const address = traceView.getBigUint64(slot + 8, true);
+      const length = traceView.getBigUint64(slot + 16, true);
+      const result = traceView.getBigInt64(slot + 24, true);
+      const detail = traceView.getBigUint64(slot + 32, true);
+      history.push(`${syscall}(0x${address.toString(16)},0x${length.toString(16)},flags=0x${flags.toString(16)},detail=0x${detail.toString(16)})=0x${ux(result).toString(16)}`);
+    }
+    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access} mappingHistory(${traceCount})=[${history.join("; ")}]`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
