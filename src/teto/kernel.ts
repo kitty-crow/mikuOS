@@ -1869,14 +1869,25 @@ const floatingToInteger = (
     setFloatingFlags(memory, hart, 16);
     return unsigned ? bits === 32 ? sx(0xffffffffn, 64) : -1n : bits === 32 ? 0x7fffffffn : 0x7fffffffffffffffn;
   }
-  const minimum: F64 = unsigned ? 0 : bits === 32 ? -2147483648 : -9223372036854775808;
-  const maximum: F64 = unsigned ? bits === 32 ? 4294967295 : 18446744073709551615 : bits === 32 ? 2147483647 : 9223372036854775807;
-  if (rounded <= minimum) {
-    if (rounded < minimum) setFloatingFlags(memory, hart, 16);
+  // Floating-point limits use exclusive upper bounds: f64 cannot represent
+  // INT64_MAX exactly, and integer literals must not undergo native coercion.
+  let minimum: F64 = 0.0;
+  let exclusiveMaximum: F64 = 4.294967296e9;
+  if (unsigned) {
+    if (bits === 64) exclusiveMaximum = 1.8446744073709552e19;
+  } else if (bits === 32) {
+    minimum = -2.147483648e9;
+    exclusiveMaximum = 2.147483648e9;
+  } else {
+    minimum = -9.223372036854776e18;
+    exclusiveMaximum = 9.223372036854776e18;
+  }
+  if (rounded < minimum) {
+    setFloatingFlags(memory, hart, 16);
     return unsigned ? 0n : bits === 32 ? -2147483648n : -0x8000000000000000n;
   }
-  if (rounded >= maximum) {
-    if (rounded > maximum) setFloatingFlags(memory, hart, 16);
+  if (rounded >= exclusiveMaximum) {
+    setFloatingFlags(memory, hart, 16);
     return unsigned ? bits === 32 ? sx(0xffffffffn, 64) : -1n : bits === 32 ? 0x7fffffffn : 0x7fffffffffffffffn;
   }
   return unsigned ? sx(floatToU64(rounded), 64) : floatToI64(rounded);
