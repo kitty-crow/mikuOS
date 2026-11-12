@@ -708,7 +708,7 @@ test("Teto owns RV64 brk growth, bounds and shrink zeroing", async () => {
   eq(generatedResult, sourceResult);
 });
 
-test("Teto accepts MAP_NORESERVE anonymous mappings and partial unmap", async () => {
+test("Teto honours MAP_FIXED replacement inside MAP_NORESERVE reservations", async () => {
   type MapCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
     "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
@@ -724,10 +724,17 @@ test("Teto accepts MAP_NORESERVE anonymous mappings and partial unmap", async ()
   const load = (rd: number, base: number): number => (base << 15 | 3 << 12 | rd << 7 | 0x03) >>> 0;
   const store = (source: number, base: number): number => (source << 20 | base << 15 | 3 << 12 | 0x23) >>> 0;
   const instructions = [
+    // Reserve two pages using MAP_NORESERVE, then exercise their backing.
     0x00000073, addi(5, 10, 0), add(21, 5, 20), load(8, 21),
     addi(6, 0, 39), store(6, 5), load(7, 5),
-    addi(10, 5, 0), addi(11, 20, 0), addi(17, 0, 215), 0x00000073,
-    load(9, 21), load(10, 5),
+    // MAP_FIXED must replace the first page, zeroing its previous contents
+    // while preserving the second page within the original reservation.
+    addi(10, 5, 0), addi(11, 20, 0), addi(12, 0, 3),
+    addi(13, 0, 0x32), addi(17, 0, 222), 0x00000073,
+    addi(9, 10, 0), load(10, 5),
+    // Unmap the replaced page, then deliberately fault on its old address.
+    addi(10, 5, 0), addi(11, 20, 0), addi(17, 0, 215),
+    0x00000073, load(22, 21), load(10, 5),
   ];
   const code = new Uint8Array(instructions.length * 4);
   const codeView = new DataView(code.buffer);
@@ -793,9 +800,10 @@ test("Teto accepts MAP_NORESERVE anonymous mappings and partial unmap", async ()
     ok(mapped > pc && (mapped & 4095n) === 0n, "anonymous mmap returned an invalid address");
     eq(core.tetoHartGetX(0, 0, 7), 39n);
     eq(core.tetoHartGetX(0, 0, 8), 0n);
-    eq(core.tetoHartGetX(0, 0, 9), 0n);
+    eq(core.tetoHartGetX(0, 0, 9), mapped, "MAP_FIXED replacement must retain the address");
+    eq(core.tetoHartGetX(0, 0, 22), 0n, "unreplaced page must retain its contents");
     eq(core.tetoProcessMapCount(0, 0), 1);
-    eq(core.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 2n);
+    eq(core.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 3n);
     eq(core.tetoHartMetric(0, 0, H_FALLBACK_SYSCALLS), 0n);
     return show([mapped, core.tetoHartGetX(0, 0, 7), core.tetoHartGetX(0, 0, 8),
       core.tetoHartGetX(0, 0, 9), core.tetoProcessMapCount(0, 0), fault]);
