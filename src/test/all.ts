@@ -513,6 +513,7 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
   type ProtectionCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
     "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
+    "tetoBuildInitialStack" |
     "tetoHartSetX" | "tetoHartGetX" | "tetoHartSetPc" | "tetoHartStatus" | "tetoGuestPage" |
     "tetoRunRv64Batch">;
   interface HFs { readFile(path: URL): Promise<Uint8Array>; }
@@ -566,6 +567,7 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
     tetoImageSegment: (_memory, hart, nameHash, nameLength, address, size, flags, imageAt, length) =>
       tetoImageSegment(sourceMemory, hart, nameHash, nameLength, address, size, flags, imageAt, length),
     tetoImageFinish: (_memory, hart, size) => tetoImageFinish(sourceMemory, hart, size),
+    tetoBuildInitialStack: (_memory, hart, at, size, stackBytes) => tetoBuildInitialStack(sourceMemory, hart, at, size, stackBytes),
     tetoHartSetX: (_memory, hart, register, value) => tetoHartSetX(sourceMemory, hart, register, value),
     tetoHartGetX: (_memory, hart, register) => tetoHartGetX(sourceMemory, hart, register),
     tetoHartSetPc: (_memory, hart, value) => tetoHartSetPc(sourceMemory, hart, value),
@@ -609,6 +611,59 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
       eq(core.tetoHartGetX(0, 0, 3), item.value, `${item.name}: unexpected loaded value`);
       results.push([item.name, result, status, fault, core.tetoHartGetX(0, 0, 3)]);
     }
+
+    // Exercise executable anonymous pages end-to-end: V8's dynamically
+    // generated code cannot reside in a THX image segment.
+    const allocate = words([
+      addi(10, 0, 0),
+      (1 << 12 | 11 << 7 | 0x37) >>> 0,
+      addi(12, 0, 7),
+      addi(13, 0, 0x22),
+      addi(14, 0, -1),
+      addi(15, 0, 0),
+      addi(17, 0, 222),
+      0x00000073,
+      addi(6, 10, 0),
+    ]);
+    const jitExit = words([addi(10, 0, 42), addi(17, 0, 93), 0x00000073]);
+    const startup = new Uint8Array(38);
+    const startupView = new DataView(startup.buffer);
+    startupView.setUint32(0, TETO_STARTUP_MAGIC, true);
+    startupView.setUint32(4, 1, true);
+    startupView.setUint32(32, 2, true);
+    startup.set(enc("/x"), 36);
+
+    for (const protect of [7, 3]) {
+      eq(core.tetoKernelInit(0, 1, 0), 0);
+      eq(core.tetoHartInit(0, 0, virtualTop, pc), 0);
+      eq(core.tetoProcessInit(0, 0, 70, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
+      const imageAt = core.tetoImageReserve(0, allocate.length) >>> 0;
+      memory.set(allocate, imageAt);
+      eq(core.tetoImageBegin(0, 0, virtualTop, pc, 0n, 0, 0), TETO_THX_OK);
+      eq(core.tetoImageSegment(0, 0, 0x1111, 4, pc, BigInt(allocate.length),
+        TETO_SEGMENT_READ | TETO_SEGMENT_EXECUTE, imageAt, allocate.length), TETO_THX_OK);
+      eq(core.tetoImageFinish(0, 0, allocate.length), TETO_THX_OK);
+      eq(core.tetoImageRelease(0, imageAt, allocate.length), TETO_THX_OK);
+      const startupAt = core.tetoImageReserve(0, startup.length) >>> 0;
+      memory.set(startup, startupAt);
+      eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
+      eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
+      eq(core.tetoHartSetX(0, 0, 12, BigInt(protect)), 0);
+      eq(core.tetoRunRv64Batch(0, 0, 9, 123456n, 0), TETO_BATCH_BUDGET);
+      const executableAt = core.tetoHartGetX(0, 0, 6);
+      ok(executableAt > pc && (executableAt & 4095n) === 0n, "invalid mmap code reservation");
+      const frame = core.tetoGuestPage(0, 0, executableAt, 1) >>> 0;
+      ok(frame < 0xfffffffe && frame + jitExit.length <= memory.length, "unable to back executable page");
+      memory.set(jitExit, frame);
+      eq(core.tetoHartSetPc(0, 0, executableAt), 0);
+      const expected = protect === 7 ? TETO_BATCH_EXITED : TETO_BATCH_FAULT;
+      eq(core.tetoRunRv64Batch(0, 0, 32, 123456n, 0), expected);
+      eq(core.tetoHartStatus(0, 0), protect === 7 ? TETO_HART_EXITED : TETO_HART_FAULTED);
+      if (protect === 7) eq(core.tetoHartGetX(0, 0, 10), 42n);
+      else eq(new DataView(memory.buffer).getInt32(TETO_HART_BASE + H_FAULT, true), TETO_FAULT_MEMORY);
+      results.push(["anonymous-execute", protect, expected, executableAt]);
+    }
+
     return show(results);
   };
 
