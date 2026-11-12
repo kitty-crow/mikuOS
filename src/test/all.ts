@@ -45,6 +45,7 @@ import {
   tetoImageBegin,
   tetoImageSegment,
   tetoImageFinish,
+  tetoStackPrepare,
   tetoKernelInit,
   tetoProcessInit,
   tetoProcessCount,
@@ -261,6 +262,49 @@ test(".thx and .39 are byte-identical header-selected THX aliases", async () => 
   const completion = r.os.complete("/usr/bin/hello.3");
   eq(completion.line, "/usr/bin/hello.39 ");
   eq(completion.list.join("\n"), "/usr/bin/hello.39");
+});
+
+
+test("Teto honours Linux anonymous mmap hints and MAP_FIXED replacement", () => {
+  const memory = directMemory(64 * 1024 * 1024);
+  const top = 1n << 40n, pc = 0x10000n;
+  eq(tetoKernelInit(memory, 1, false), 0);
+  eq(tetoHartInit(memory, 0, top, pc), 0);
+  eq(tetoProcessInit(memory, 0, 42, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
+
+  const instruction = new Uint8Array([0x73, 0, 0, 0]);
+  const stage = tetoImageReserve(memory, instruction.length);
+  ok(stage < 0xfffffffe, "Teto mmap test image reservation failed");
+  memory.bytes.set(instruction, stage);
+  eq(tetoImageBegin(memory, 0, top, pc, 0n, 0, 0), TETO_THX_OK);
+  eq(tetoImageSegment(memory, 0, 0x7e70001, 4, pc, BigInt(instruction.length),
+    TETO_SEGMENT_READ | TETO_SEGMENT_EXECUTE, stage, instruction.length), TETO_THX_OK);
+  eq(tetoImageFinish(memory, 0, instruction.length), TETO_THX_OK);
+  eq(tetoImageRelease(memory, stage, instruction.length), TETO_THX_OK);
+  eq(tetoStackPrepare(memory, 0, top - 0x200000n, top - 0x1000n), TETO_START_OK);
+
+  const map = (address: bigint, flags: bigint): bigint => {
+    eq(tetoHartSetPc(memory, 0, pc), 0);
+    eq(tetoHartSetX(memory, 0, 10, address), 0);
+    eq(tetoHartSetX(memory, 0, 11, 8192n), 0);
+    eq(tetoHartSetX(memory, 0, 12, 3n), 0);
+    eq(tetoHartSetX(memory, 0, 13, flags), 0);
+    eq(tetoHartSetX(memory, 0, 14, -1n), 0);
+    eq(tetoHartSetX(memory, 0, 15, 0n), 0);
+    eq(tetoHartSetX(memory, 0, 17, 222n), 0);
+    eq(tetoRunRv64Batch(memory, 0, 1, 0n, 0), TETO_BATCH_BUDGET);
+    return tetoHartGetX(memory, 0, 10);
+  };
+
+  const first = 0x4000000000n;
+  eq(map(0n, 0x22n), first);
+  eq(tetoProcessMapCount(memory, 0), 1);
+  eq(map(first, 0x100022n), -17n, "MAP_FIXED_NOREPLACE must report EEXIST");
+  eq(tetoProcessMapCount(memory, 0), 1);
+  eq(map(first, 0x32n), first, "MAP_FIXED must replace an anonymous mapping");
+  eq(tetoProcessMapCount(memory, 0), 1);
+  eq(map(0n, 0x2c022n), first + 8192n, "advisory mmap flags should be accepted");
+  eq(tetoProcessMapCount(memory, 0), 2);
 });
 
 test("generated Teto executes bounded RV64 batches with direct-source parity", async () => {
