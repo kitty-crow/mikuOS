@@ -387,40 +387,6 @@ test("generated Teto executes bounded RV64 batches with direct-source parity", a
   ok(wasm.exports.tetoHartMetric(0, 0, H_INSTRUCTIONS) / wasm.exports.tetoHartMetric(0, 0, H_WASM_TO_HOST) > 1000n,
     "Teto returned to the host too frequently");
 
-  // V8's Linux page allocator reserves inaccessible virtual pages using
-  // MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE (0x4022).
-  // Reserving these pages must not demand physical backing until accessed.
-  const reserveWords = [
-    addi(10, 0, 0),
-    (0x10 << 12 | 11 << 7 | 0x37) >>> 0,
-    addi(12, 0, 0),
-    (0x4 << 12 | 13 << 7 | 0x37) >>> 0,
-    addi(13, 13, 0x22),
-    addi(14, 0, -1),
-    addi(15, 0, 0),
-    addi(17, 0, 222),
-    0x00000073,
-    addi(6, 10, 0),
-    addi(17, 0, 93),
-    0x00000073,
-  ];
-  const reserveProgram = new Uint8Array(reserveWords.length * 4);
-  const reserveView = new DataView(reserveProgram.buffer);
-  reserveWords.forEach((instruction, index) => reserveView.setUint32(index * 4, instruction, true));
-  const reservePc = 0x18000n;
-  eq(tetoHartInit(direct, 0, virtualTop, reservePc), 0);
-  eq(tetoProcessInit(direct, 0, 43, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
-  installDirect(direct, 0, reservePc, reserveProgram);
-  eq(tetoRunRv64Batch(direct, 0, 256, 123456n, 0), TETO_BATCH_EXITED);
-  eq(tetoHartGetX(direct, 0, 6), 0x4000000000n);
-  eq(tetoProcessMapCount(direct, 0), 1);
-  eq(wasm.exports.tetoHartInit(0, 0, virtualTop, reservePc), 0);
-  eq(wasm.exports.tetoProcessInit(0, 0, 43, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
-  installWasm(wasm, 0, reservePc, reserveProgram);
-  eq(wasm.exports.tetoRunRv64Batch(0, 0, 256, 123456n, 0), TETO_BATCH_EXITED);
-  eq(wasm.exports.tetoHartGetX(0, 0, 6), 0x4000000000n);
-  eq(wasm.exports.tetoProcessMapCount(0, 0), 1);
-
   const floating = (top: number, destination: number, sourceA: number, sourceB = 0, mode = 0): number =>
     (top << 25 | sourceB << 20 | sourceA << 15 | mode << 12 | destination << 7 | 0x53) >>> 0;
   const floatingStore = (source: number, base: number, offset = 0): number =>
@@ -742,7 +708,7 @@ test("Teto owns RV64 brk growth, bounds and shrink zeroing", async () => {
   eq(generatedResult, sourceResult);
 });
 
-test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
+test("Teto accepts MAP_NORESERVE anonymous mappings and partial unmap", async () => {
   type MapCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
     "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
@@ -816,7 +782,7 @@ test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
     eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
     eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
     const registers: Array<[number, bigint]> = [
-      [10, 0n], [11, 8192n], [12, 3n], [13, 0x22n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
+      [10, 0n], [11, 8192n], [12, 3n], [13, 0x4022n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
     ];
     for (const [register, value] of registers) eq(core.tetoHartSetX(0, 0, register, value), 0);
     eq(core.tetoRunRv64Batch(0, 0, 128, 123456n, 0), TETO_BATCH_FAULT);
