@@ -617,7 +617,6 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
     const allocate = words([
       addi(10, 0, 0),
       (1 << 12 | 11 << 7 | 0x37) >>> 0,
-      addi(12, 0, 7),
       addi(13, 0, 0x22),
       addi(14, 0, -1),
       addi(15, 0, 0),
@@ -649,7 +648,7 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
       eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
       eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
       eq(core.tetoHartSetX(0, 0, 12, BigInt(protect)), 0);
-      eq(core.tetoRunRv64Batch(0, 0, 9, 123456n, 0), TETO_BATCH_BUDGET);
+      eq(core.tetoRunRv64Batch(0, 0, 8, 123456n, 0), TETO_BATCH_BUDGET);
       const executableAt = core.tetoHartGetX(0, 0, 6);
       ok(executableAt > pc && (executableAt & 4095n) === 0n, "invalid mmap code reservation");
       const frame = core.tetoGuestPage(0, 0, executableAt, 1) >>> 0;
