@@ -379,7 +379,6 @@ test("generated Teto executes bounded RV64 batches with direct-source parity", a
   }
   eq(wasm.exports.tetoHartPc(0, 0), pc + 0x34n);
   eq(wasm.exports.tetoHartMetric(0, 0, H_INSTRUCTIONS), 2011n);
-  console.error(`TETO PARITY COUNTERS: direct internal=${tetoHartMetric(direct, 0, H_INTERNAL_SYSCALLS)} fallback=${tetoHartMetric(direct, 0, H_FALLBACK_SYSCALLS)}, wasm internal=${wasm.exports.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS)} fallback=${wasm.exports.tetoHartMetric(0, 0, H_FALLBACK_SYSCALLS)}, pc=0x${wasm.exports.tetoHartPc(0, 0).toString(16)} a7=${wasm.exports.tetoHartGetX(0, 0, 17)}`);
   eq(wasm.exports.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 3n);
   eq(wasm.exports.tetoHartMetric(0, 0, H_HOST_REQUESTS), 0n);
   eq(wasm.exports.tetoHartMetric(0, 0, H_FALLBACK_SYSCALLS), 0n);
