@@ -304,6 +304,36 @@ const MAP_NOT_OWNED: I64 = -4096n;
 const MAP_PAGE: U64 = 4096n;
 const MAP_GUARD: U64 = 1024n * 1024n;
 const MAP_SPACING: U64 = 16n * 1024n * 1024n;
+
+/** Diagnostic ring in the unused portion of the control page for <=32 harts. */
+const MMAP_TRACE_COUNTER: Ptr = 1000;
+const MMAP_TRACE_BASE: Ptr = 1024;
+const MMAP_TRACE_STRIDE: U32 = 40;
+const MMAP_TRACE_CAPACITY: U32 = 48;
+const MMAP_TRACE_START: U64 = 0x400000000n;
+const MMAP_TRACE_END: U64 = 0x500000000n;
+
+const traceMappingOperation = (
+  memory: TetoMemory, operation: U32, address: U64, length: U64,
+  options: U32, detail: U64, result: I64,
+): void => {
+  // The debug area follows worker metrics and must not overlap them.
+  if (loadU32(memory, TETO_CONTROL_BASE + C_WORKER_CAPACITY) > 32) return;
+  const mapped = operation === 222 && result >= 0n ? ux(result) : address;
+  const requested = address < MMAP_TRACE_END && address + length > MMAP_TRACE_START;
+  const affected = mapped < MMAP_TRACE_END && mapped + length > MMAP_TRACE_START;
+  if (!requested && !affected) return;
+  const count = loadU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER);
+  const slot = TETO_CONTROL_BASE + MMAP_TRACE_BASE + count % MMAP_TRACE_CAPACITY * MMAP_TRACE_STRIDE;
+  storeU32(memory, slot, operation);
+  storeU32(memory, slot + 4, options);
+  storeU64(memory, slot + 8, address);
+  storeU64(memory, slot + 16, length);
+  storeI64(memory, slot + 24, result);
+  storeU64(memory, slot + 32, detail);
+  storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
+};
+
 const OPEN_DIRECTORY: U32 = 0x10000;
 const OPEN_CLOEXEC: U32 = 0x80000;
 
@@ -2568,6 +2598,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     }
     const result = anonymousMap(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
       ux(x(memory, hart, 12)), ux(x(memory, hart, 13)));
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      wordToU32(ux(x(memory, hart, 13))), ux(x(memory, hart, 12)), result);
     release(memory, lock);
     return internalSyscall(memory, hart, result);
   }
@@ -2579,6 +2611,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
       return TETO_BATCH_CONTENDED;
     }
     const result = anonymousUnmap(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)));
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      0, 0n, result);
     release(memory, lock);
     if (result === MAP_NOT_OWNED) return fallbackSyscall(memory, hart);
     return internalSyscall(memory, hart, result);
@@ -2599,6 +2633,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     } else {
       result = syncAnonymous(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)), ux(x(memory, hart, 12)));
     }
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      wordToU32(ux(x(memory, hart, 12))), ux(x(memory, hart, 13)), result);
     release(memory, lock);
     if (result === MAP_NOT_OWNED) return fallbackSyscall(memory, hart);
     return internalSyscall(memory, hart, result);
