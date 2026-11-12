@@ -971,11 +971,14 @@ const guestAllowed = (
     }
     index += 1;
   }
-  if ((permission & TETO_SEGMENT_EXECUTE) !== 0) return false;
+  // Loaded segments retain their own access flags. The ordinary heap and
+  // stack are non-executable, but anonymous mmap regions may be executable
+  // when explicitly created or protected with PROT_EXEC.
+  const executable = (permission & TETO_SEGMENT_EXECUTE) !== 0;
   const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
-  if (stack !== 0n && address >= stack && end <= atomicLoadU64(memory, proc + P_VIRTUAL_TOP)) return true;
+  if (stack !== 0n && address >= stack && end <= atomicLoadU64(memory, proc + P_VIRTUAL_TOP)) return !executable;
   const heap = atomicLoadU64(memory, proc + P_BRK_BASE);
-  if (heap !== 0n && address >= heap && end <= atomicLoadU64(memory, proc + P_BRK)) return true;
+  if (heap !== 0n && address >= heap && end <= atomicLoadU64(memory, proc + P_BRK)) return !executable;
   const mapCount = loadU32(memory, proc + P_MAP_COUNT);
   const mapTable = loadU32(memory, proc + P_MAP_TABLE);
   index = 0;
