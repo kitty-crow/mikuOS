@@ -693,7 +693,7 @@ export class Rv64 {
     const sourceFrame = exports.tetoGuestPage(0, hart, a1, 0) >>> 0;
     const sourceOffset = Number(a1 & 0xffffn);
     const sourceCell = sourceFrame < 0xfffffffe && sourceOffset <= 65528 &&
-      sourceFrame + sourceOffset + 8 <= memory.byteLength
+      sourceFrame + sourceOffset + 8 <= memory.bytes.byteLength
       ? `0x${traceView.getBigUint64(sourceFrame + sourceOffset, true).toString(16)}`
       : "unavailable";
     const guestRegisters = [10, 11, 12, 13, 14, 15, 16, 17].map(reg =>
