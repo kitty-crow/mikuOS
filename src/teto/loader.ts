@@ -167,7 +167,7 @@ export const loadTeto = async (
     throw new Error("Teto module has an unsupported host import surface");
   }
   const memory = options.memory ?? new WebAssembly.Memory({
-    initial: options.initialPages ?? 1024,
+    initial: options.initialPages ?? 8192,
     maximum: options.maximumPages ?? 32768,
     shared: threaded,
   });
