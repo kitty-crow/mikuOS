@@ -361,7 +361,7 @@ export class Rv64 {
     const provider = this.s.k.teto;
     if (!provider) return bad("ENOEXEC", "the experimental Teto WebAssembly core is unavailable from this host");
     const bytes = await provider.load("baseline");
-    const runtime = await loadTeto(bytes, { initialPages: 1024, maximumPages: 32768 });
+    const runtime = await loadTeto(bytes, { initialPages: 8192, maximumPages: 32768 });
     const memory = wasmMemory(runtime.memory, false);
     return this.runTetoCore(exe, argv, image, { memory, exports: runtime.exports, label: "Teto WebAssembly core" }, memory.bytes.length);
   }
