@@ -660,7 +660,33 @@ export class Rv64 {
     }
     const ra = ux(this.tetoRegister(memory, hart, H_X, 1));
     const sp = ux(this.tetoRegister(memory, hart, H_X, 2));
-    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} mapping=${mapping} nearest=${closest} mappings=${count}`);
+    const imageSegment = this.seg.find(segment => pc >= segment.at && pc < segment.end);
+    const image = imageSegment
+      ? `${imageSegment.name} flags=${imageSegment.flg}`
+      : "none";
+
+    // A fault on C.LD is a data read, not an instruction-fetch failure.
+    // The hart PC has already advanced by two bytes when the fault is raised.
+    let access = "unknown";
+    if (instruction <= 0xffff && (instruction & 0xe003) === 0x6000) {
+      const source = 8 + (instruction >>> 7 & 7);
+      const destination = 8 + (instruction >>> 2 & 7);
+      const offset = (instruction << 1 & 0xc0) | (instruction >>> 7 & 0x38);
+      const address = ux(this.tetoRegister(memory, hart, H_X, source) + BigInt(offset));
+      const region = this.seg.find(segment => address >= segment.at && address + 8n <= segment.end);
+      let anonymous = "unmapped";
+      for (let index = 0; index < count; index++) {
+        const at = exports.tetoProcessMapAddress(0, hart, index);
+        const end = exports.tetoProcessMapEnd(0, hart, index);
+        if (address >= at && address + 8n <= end) {
+          anonymous = `[0x${at.toString(16)},0x${end.toString(16)}) prot=${exports.tetoProcessMapProtection(0, hart, index)}`;
+          break;
+        }
+      }
+      const frame = exports.tetoGuestPage(0, hart, address, 0) >>> 0;
+      access = `C.LD x${destination},${offset}(x${source}) address=0x${address.toString(16)} frame=0x${frame.toString(16)} anon=${anonymous} segment=${region?.name ?? "none"}`;
+    }
+    return bad("ENOEXEC", `Teto hart ${hart} fault ${fault} instruction 0x${instruction.toString(16)} pc=0x${pc.toString(16)} ra=0x${ra.toString(16)} sp=0x${sp.toString(16)} image=${image} mapping=${mapping} nearest=${closest} mappings=${count} access=${access}`);
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
