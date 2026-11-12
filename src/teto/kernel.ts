@@ -2476,6 +2476,7 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
   const proc = processForHart(memory, hart);
   const number = wordToU32(ux(x(memory, hart, 17)));
   bump(memory, at + H_KERNEL_SYSCALLS);
+  if (number === 93 && hart !== 0) return fallbackSyscall(memory, hart);
   if (number === 93 || number === 94) {
     const code = wordToI32(x(memory, hart, 10));
     storeI32(memory, at + H_EXIT_CODE, code);
@@ -2568,6 +2569,7 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     release(memory, lock);
     return internalSyscall(memory, hart, result);
   }
+  if (number === 178 && hart !== 0) return fallbackSyscall(memory, hart);
   if (number >= 172 && number <= 178) {
     if (proc === INVALID_POINTER) return internalSyscall(memory, hart, -3n);
     if (number === 172 || number === 178) return internalSyscall(memory, hart, word(atomicLoadI32(memory, proc + P_PID)));
@@ -2928,7 +2930,7 @@ export const tetoExitHart = (memory: TetoMemory, hart: U32, code: I32): I32 => {
   if (!acquire(memory, at + H_LOCK)) return TETO_BATCH_BUSY;
   setX(memory, hart, 10, word(code));
   const proc = processForHart(memory, hart);
-  if (proc !== INVALID_POINTER) {
+  if (proc !== INVALID_POINTER && hart === 0) {
     atomicStoreI32(memory, proc + P_EXIT_CODE, code);
     atomicStoreI32(memory, proc + P_STATE, TETO_PROCESS_ZOMBIE);
   }
