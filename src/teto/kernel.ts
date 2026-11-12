@@ -1101,7 +1101,11 @@ const anonymousMap = (memory: TetoMemory, proc: Ptr, address: U64, length: U64, 
   if (length === 0n || length > top || protection > 7n || flagsWide > 0x7fffffffn) return -22n;
   const flags = wordToU32(flagsWide);
   const kind = flags & 3;
-  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x100033) !== 0) return -22n;
+  // Linux MAP_NORESERVE (0x4000) is advisory for anonymous mappings.
+  // V8 uses it for PROT_NONE virtual reservations, including Oilpan GCInfoTable.
+  // Teto allocates backing frames lazily, so accepting this flag preserves
+  // reservation semantics without committing the whole virtual range.
+  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x104033) !== 0) return -22n;
   const size = length + MAP_PAGE - 1n & -MAP_PAGE;
   if (size === 0n || size > top) return -12n;
   const fixed = (flags & 0x100010) !== 0;
