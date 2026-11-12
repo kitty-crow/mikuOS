@@ -257,7 +257,7 @@ export class Rv64 {
   private readonly maps: MapEnt[] = [];
   private readonly miss = new Set<number>();
   private readonly localSockets = new Set<number>();
-  private tetoThreads?: TetoThreadRuntime;
+  private tetoThreads: TetoThreadRuntime | undefined;
   private tetoActiveHart = 0;
   private readonly tetoFutexWaiters = new Map<bigint, Set<FutexWake>>();
   private readonly events: RvLinuxEvents;
