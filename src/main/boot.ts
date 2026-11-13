@@ -25,6 +25,8 @@ export interface Host {
   setId?: boolean;
   teto?: TetoImageProvider;
   kernelMode?: KernelMode;
+  /** Opt-in native-source parity probe. The default Thistle executor remains unchanged. */
+  portableCoreProbe?: boolean;
   /** Real browser startup milestones; no simulated elapsed-time progress. */
   onBootProgress?: (phase: number) => void;
 }
@@ -164,9 +166,10 @@ export class Os {
       this.activeKernelMode = "thistle";
       this.k.name = "Thistle";
       this.p.env.set("MIKUOS_KERNEL_MODE", "thistle");
-      this.p.env.delete("THISTLE_RV_CORE");
+      if (this.host.portableCoreProbe) this.p.env.set("THISTLE_RV_CORE", "teto-source");
+      else this.p.env.delete("THISTLE_RV_CORE");
       this.p.env.delete("THISTLE_TETO_STRICT");
-      this.k.executionCore = "Thistle TypeScript";
+      this.k.executionCore = this.host.portableCoreProbe ? "Thistle portable source (migration probe)" : "Thistle TypeScript";
       return;
     }
     if (!this.host.teto) {
