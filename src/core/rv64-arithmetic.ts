@@ -43,7 +43,7 @@ export const rv64DivideSigned = (left: I64, right: I64, bits: I32): I64 => {
   const a = sx(left, bits);
   const b = sx(right, bits);
   if (b === 0n) return -1n;
-  const minimum = bits === 32 ? -2147483648n : -0x8000000000000000n;
+  const minimum: I64 = bits === 32 ? -2147483648n : -0x8000000000000000n;
   if (a === minimum && b === -1n) return a;
   return sx(a / b, bits);
 };
@@ -59,7 +59,7 @@ export const rv64RemainderSigned = (left: I64, right: I64, bits: I32): I64 => {
   const a = sx(left, bits);
   const b = sx(right, bits);
   if (b === 0n) return a;
-  const minimum = bits === 32 ? -2147483648n : -0x8000000000000000n;
+  const minimum: I64 = bits === 32 ? -2147483648n : -0x8000000000000000n;
   if (a === minimum && b === -1n) return 0n;
   return sx(a % b, bits);
 };
