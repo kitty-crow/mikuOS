@@ -166,8 +166,13 @@ export class Os {
       this.activeKernelMode = "thistle";
       this.k.name = "Thistle";
       this.p.env.set("MIKUOS_KERNEL_MODE", "thistle");
-      if (this.host.portableCoreProbe) this.p.env.set("THISTLE_RV_CORE", "teto-source");
-      else this.p.env.delete("THISTLE_RV_CORE");
+      if (this.host.portableCoreProbe) {
+        this.p.env.set("THISTLE_RV_CORE", "teto-source");
+        this.p.env.set("THISTLE_PORTABLE_PROBE", "1");
+      } else {
+        this.p.env.delete("THISTLE_RV_CORE");
+        this.p.env.delete("THISTLE_PORTABLE_PROBE");
+      }
       this.p.env.delete("THISTLE_TETO_STRICT");
       this.k.executionCore = this.host.portableCoreProbe ? "Thistle portable source (migration probe)" : "Thistle TypeScript";
       return;
