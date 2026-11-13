@@ -23,6 +23,7 @@ import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64DivideSigned,
   rv64DivideUnsigned,
@@ -202,6 +203,22 @@ test("Thistle preserves its working interpreter without substituting Teto source
   eq(original.p.env.has("THISTLE_RV_CORE"), false);
   eq(original.p.env.has("THISTLE_PORTABLE_PROBE"), false);
   eq(original.k.executionCore, "Thistle TypeScript");
+});
+
+test("canonical RV64 FCLASS distinguishes every IEEE-754 category", () => {
+  const values: Array<[bigint, number, bigint]> = [
+    [0xff800000n, 32, 1n], [0xbf800000n, 32, 2n],
+    [0x80000001n, 32, 4n], [0x80000000n, 32, 8n],
+    [0n, 32, 16n], [1n, 32, 32n],
+    [0x3f800000n, 32, 64n], [0x7f800000n, 32, 128n],
+    [0x7f800001n, 32, 256n], [0x7fc00000n, 32, 512n],
+    [0xfff0000000000000n, 64, 1n], [0xbff0000000000000n, 64, 2n],
+    [0x8000000000000001n, 64, 4n], [0x8000000000000000n, 64, 8n],
+    [0n, 64, 16n], [1n, 64, 32n],
+    [0x3ff0000000000000n, 64, 64n], [0x7ff0000000000000n, 64, 128n],
+    [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
+  ];
+  for (const [raw, bits, category] of values) eq(rv64FloatClass(raw, bits), category);
 });
 
 test("canonical Thistle RV64 multiplication and M-extension division preserve edge cases", () => {

@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64CompressedJump,
   rv64ImmediateB,
@@ -1931,24 +1932,8 @@ const setFloatingFlags = (memory: TetoMemory, hart: U32, flags: U32): void => {
   storeU32(memory, at, loadU32(memory, at) | flags & 31);
 };
 
-const floatingClass = (memory: TetoMemory, hart: U32, register: U32, single: boolean): I64 => {
-  const raw = floatingRaw(memory, hart, register, single);
-  const exponentBits = single ? 8n : 11n;
-  const fractionBits = single ? 23n : 52n;
-  const sign = raw >> (exponentBits + fractionBits) & 1n;
-  const exponent = raw >> fractionBits & ((1n << exponentBits) - 1n);
-  const fraction = raw & ((1n << fractionBits) - 1n);
-  const all = (1n << exponentBits) - 1n;
-  if (exponent === all) {
-    if (fraction === 0n) return 1n << (sign !== 0n ? 0n : 7n);
-    return 1n << ((fraction & (1n << (fractionBits - 1n))) !== 0n ? 9n : 8n);
-  }
-  if (exponent === 0n) {
-    if (fraction === 0n) return 1n << (sign !== 0n ? 3n : 4n);
-    return 1n << (sign !== 0n ? 2n : 5n);
-  }
-  return 1n << (sign !== 0n ? 1n : 6n);
-};
+const floatingClass = (memory: TetoMemory, hart: U32, register: U32, single: boolean): I64 =>
+  rv64FloatClass(floatingRaw(memory, hart, register, single), single ? 32 : 64);
 
 const floatingToInteger = (
   memory: TetoMemory,

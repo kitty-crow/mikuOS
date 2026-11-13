@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64DivideSigned,
   rv64DivideUnsigned,
@@ -1253,17 +1254,7 @@ export class Rv64 {
   private fbits(d: number, n: bigint, single: boolean): void { this.f[d] = single ? 0xffffffff00000000n | BigInt.asUintN(32, n) : ux(n); }
 
   private fclass(n: number, single: boolean): bigint {
-    const q = this.fraw(n, single), eb = single ? 8n : 11n, fb = single ? 23n : 52n;
-    const sign = q >> (eb + fb) & 1n, exp = q >> fb & ((1n << eb) - 1n), frac = q & ((1n << fb) - 1n), all = (1n << eb) - 1n;
-    if (exp === all) {
-      if (!frac) return 1n << (sign ? 0n : 7n);
-      return 1n << (frac & (1n << (fb - 1n)) ? 9n : 8n);
-    }
-    if (!exp) {
-      if (!frac) return 1n << (sign ? 3n : 4n);
-      return 1n << (sign ? 2n : 5n);
-    }
-    return 1n << (sign ? 1n : 6n);
+    return rv64FloatClass(this.fraw(n, single), single ? 32 : 64);
   }
 
   private rm(n: number): number {

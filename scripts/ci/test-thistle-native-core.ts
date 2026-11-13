@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { rv64Branch } from "../../src/core/rv64-branch.ts";
+import { rv64FloatClass } from "../../src/core/rv64-fclass.ts";
 import {
   rv64DivideSigned,
   rv64DivideUnsigned,
@@ -21,6 +22,7 @@ import {
 
 interface NativeCore {
   rv64Branch(funct3: number, left: bigint, right: bigint): number;
+  rv64FloatClass(raw: bigint, bits: number): bigint;
   rv64DivideSigned(left: bigint, right: bigint, bits: number): bigint;
   rv64DivideUnsigned(left: bigint, right: bigint, bits: number): bigint;
   rv64RemainderSigned(left: bigint, right: bigint, bits: number): bigint;
@@ -69,6 +71,22 @@ for (const left of samples) for (const right of samples) {
       `rv64Branch disagrees: funct3=${funct3} left=${left} right=${right}`);
   }
 }
+const floatCategories: Array<[bigint, number, bigint]> = [
+  [0xff800000n, 32, 1n], [0xbf800000n, 32, 2n], [0x80000001n, 32, 4n],
+  [0x80000000n, 32, 8n], [0n, 32, 16n], [1n, 32, 32n],
+  [0x3f800000n, 32, 64n], [0x7f800000n, 32, 128n],
+  [0x7f800001n, 32, 256n], [0x7fc00000n, 32, 512n],
+  [0xfff0000000000000n, 64, 1n], [0xbff0000000000000n, 64, 2n],
+  [0x8000000000000001n, 64, 4n], [0x8000000000000000n, 64, 8n],
+  [0n, 64, 16n], [1n, 64, 32n],
+  [0x3ff0000000000000n, 64, 64n], [0x7ff0000000000000n, 64, 128n],
+  [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
+];
+for (const [raw, bits, category] of floatCategories) {
+  assert.equal(rv64FloatClass(raw, bits), category, "canonical TypeScript FCLASS oracle");
+  assert.equal(native.rv64FloatClass(raw, bits), category, "Baguette native FCLASS category");
+}
+
 const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
 const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
 const boundaries = [
@@ -100,4 +118,4 @@ for (const left of boundaries) for (const right of boundaries) {
   }
 }
 
-console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, branches and all M-extension edge cases");
+console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, M-extension edge cases and IEEE-754 FCLASS categories");
