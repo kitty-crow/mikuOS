@@ -5,7 +5,9 @@
  *
  * A negative result denotes an instruction with an invalid funct3 field.
  */
-export const rv64Branch = (funct3: number, left: bigint, right: bigint): number => {
+import type { I32, I64, U32 } from "./native-types.js";
+
+export const rv64Branch = (funct3: U32, left: I64, right: I64): I32 => {
   if (funct3 === 0) return left === right ? 1 : 0;
   if (funct3 === 1) return left !== right ? 1 : 0;
   if (funct3 === 4) return left < right ? 1 : 0;
