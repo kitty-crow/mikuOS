@@ -15,7 +15,8 @@
   "intrinsicModules": [
     "src/teto/types.ts",
     "src/teto/memory.ts",
-    "src/teto/word.ts"
+    "src/teto/word.ts",
+    "src/core/rv64-numbers.ts"
   ],
   "abi": {
     "exports": "all-exported-functions",

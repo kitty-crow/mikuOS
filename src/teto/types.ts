@@ -1,8 +1,2 @@
-/** Numeric aliases used by the transpilable Thistle kernel subset. */
-export type I32 = number;
-export type U32 = number;
-export type I64 = bigint;
-export type U64 = bigint;
-export type Ptr = number;
-export type F32 = number;
-export type F64 = number;
+/** Native numeric aliases are owned by Thistle and shared with its WASM build. */
+export type { I32, U32, I64, U64, Ptr, F32, F64 } from "../core/native-types.js";

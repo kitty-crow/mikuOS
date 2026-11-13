@@ -59,5 +59,21 @@ jobs:
           path: /tmp/mikuos-build.log
           if-no-files-found: ignore
 
+      - name: Validate Node.js parity acceptance script
+        run: bash -n scripts/ci/test-node39-parity.sh
+
+      - name: Compile and cross-check canonical Thistle instruction helpers
+        shell: bash
+        run: |
+          bun baguette/src/compiler.ts --config baguette.thistle-core.config.json --skip-determinism-check
+          bun scripts/ci/test-thistle-native-core.ts
+
+      - name: Diagnose canonical Thistle source lowering (non-blocking, migration work)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          bun baguette/src/compiler.ts --config baguette.thistle-probe.config.json --validate-only 2>&1 | tee /tmp/thistle-source-probe.log
+
       - name: Test
         run: npm test

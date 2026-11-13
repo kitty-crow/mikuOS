@@ -1,3 +1,16 @@
+import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
+import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
+import { rv64FloatClass } from "../core/rv64-fclass.js";
+import {
+  rv64CompressedJump,
+  rv64ImmediateB,
+  rv64ImmediateI,
+  rv64ImmediateJ,
+  rv64ImmediateS,
+  rv64ImmediateU,
+} from "../vm/rv64-immediate.js";
 import {
   C_ABI,
   C_ACTIVE_WORKERS,
@@ -256,10 +269,17 @@ import {
 import type { TetoMemory } from "./memory.js";
 import type { F64, I32, I64, Ptr, U32, U64 } from "./types.js";
 import {
+  rv64DivideSigned as divSigned,
+  rv64DivideUnsigned as divUnsigned,
+  rv64MulHighSigned as mulHighSigned,
+  rv64MulHighSignedUnsigned as mulHighSignedUnsigned,
+  rv64MulHighUnsigned as mulHighUnsigned,
+  rv64RemainderSigned as remSigned,
+  rv64RemainderUnsigned as remUnsigned,
+} from "../core/rv64-arithmetic.js";
+import {
   bitsToF32,
   bitsToF64,
-  divSigned,
-  divUnsigned,
   f32ToBits,
   f64ToBits,
   floatCeil,
@@ -271,11 +291,6 @@ import {
   floatToI64,
   floatToU64,
   floatTrunc,
-  mulHighSigned,
-  mulHighSignedUnsigned,
-  mulHighUnsigned,
-  remSigned,
-  remUnsigned,
   roundF32,
   sx,
   u32word,
@@ -304,6 +319,61 @@ const MAP_NOT_OWNED: I64 = -4096n;
 const MAP_PAGE: U64 = 4096n;
 const MAP_GUARD: U64 = 1024n * 1024n;
 const MAP_SPACING: U64 = 16n * 1024n * 1024n;
+
+/** Diagnostic ring in the unused portion of the control page for <=32 harts. */
+const MMAP_TRACE_COUNTER: Ptr = 1000;
+const MMAP_TRACE_BASE: Ptr = 1024;
+const MMAP_TRACE_STRIDE: U32 = 40;
+const MMAP_TRACE_CAPACITY: U32 = 48;
+const MMAP_TRACE_START: U64 = 0x400000000n;
+const MMAP_TRACE_END: U64 = 0x500000000n;
+
+const traceMappingOperation = (
+  memory: TetoMemory, operation: U32, address: U64, length: U64,
+  options: U32, detail: U64, result: I64,
+): void => {
+  // The debug area follows worker metrics and must not overlap them.
+  if (loadU32(memory, TETO_CONTROL_BASE + C_WORKER_CAPACITY) > 32) return;
+  const mapped = operation === 222 && result >= 0n ? ux(result) : address;
+  const requested = address < MMAP_TRACE_END && address + length > MMAP_TRACE_START;
+  const affected = mapped < MMAP_TRACE_END && mapped + length > MMAP_TRACE_START;
+  if (!requested && !affected) return;
+  const count = loadU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER);
+  const slot = TETO_CONTROL_BASE + MMAP_TRACE_BASE + count % MMAP_TRACE_CAPACITY * MMAP_TRACE_STRIDE;
+  storeU32(memory, slot, operation);
+  storeU32(memory, slot + 4, options);
+  storeU64(memory, slot + 8, address);
+  storeU64(memory, slot + 16, length);
+  storeI64(memory, slot + 24, result);
+  storeU64(memory, slot + 32, detail);
+  storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
+};
+
+/** Diagnose V8 Smi-like values stored in the top 64 KiB of the guest stack.
+ * The stack address varies between runs, so no absolute cell is hardcoded.
+ * Record only compact integer-tagged writes to avoid burying the relevant PC. */
+const traceNodePointerWrite = (
+  memory: TetoMemory, hart: U32, address: U64, value: U64, size: U32,
+): void => {
+  if (loadU32(memory, TETO_CONTROL_BASE + C_WORKER_CAPACITY) > 32) return;
+  const top = loadU64(memory, hartAt(hart) + H_VIRTUAL_TOP);
+  if (top < 0x10000n || address < top - 0x10000n || address >= top) return;
+  const low = value & 0xffffffffn;
+  const high = value >> 32n;
+  const fullSmi = size === 8 && low === 0n && high > 0n && high <= 16n;
+  const upperSmi = size === 4 && (address & 7n) === 4n && low > 0n && low <= 16n;
+  if (!fullSmi && !upperSmi) return;
+  const count = loadU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER);
+  const slot = TETO_CONTROL_BASE + MMAP_TRACE_BASE + count % MMAP_TRACE_CAPACITY * MMAP_TRACE_STRIDE;
+  storeU32(memory, slot, 0x53544f52);
+  storeU32(memory, slot + 4, size);
+  storeU64(memory, slot + 8, address);
+  storeU64(memory, slot + 16, ux(word(size)));
+  storeI64(memory, slot + 24, sx(value, 64));
+  storeU64(memory, slot + 32, loadU64(memory, hartAt(hart) + H_PC));
+  storeU32(memory, TETO_CONTROL_BASE + MMAP_TRACE_COUNTER, count + 1);
+};
+
 const OPEN_DIRECTORY: U32 = 0x10000;
 const OPEN_CLOEXEC: U32 = 0x80000;
 
@@ -317,6 +387,15 @@ const processForHart = (memory: TetoMemory, hart: U32): Ptr => {
   const slot = loadU32(memory, hartAt(hart) + H_PROCESS_SLOT);
   return slot < loadU32(memory, TETO_CONTROL_BASE + C_PROCESS_CAPACITY) ? processAt(memory, slot) : INVALID_POINTER;
 };
+/** A cloned thread shares the same process slot as hart zero; other harts may
+ * represent entirely independent processes. */
+const sharedProcessThread = (memory: TetoMemory, hart: U32): boolean => {
+  if (hart === 0) return false;
+  const slot = loadU32(memory, hartAt(hart) + H_PROCESS_SLOT);
+  return slot !== INVALID_PROCESS &&
+    slot === loadU32(memory, hartAt(0) + H_PROCESS_SLOT);
+};
+
 const descriptorAt = (memory: TetoMemory, proc: Ptr, descriptor: U32): Ptr =>
   loadU32(memory, proc + P_DESCRIPTOR_TABLE) + descriptor * TETO_DESCRIPTOR_STRIDE;
 const workerAt = (worker: U32): Ptr => C_WORKER_BASE + worker * TETO_WORKER_STRIDE;
@@ -962,11 +1041,14 @@ const guestAllowed = (
     }
     index += 1;
   }
-  if ((permission & TETO_SEGMENT_EXECUTE) !== 0) return false;
+  // Loaded segments retain their own access flags. The ordinary heap and
+  // stack are non-executable, but anonymous mmap regions may be executable
+  // when explicitly created or protected with PROT_EXEC.
+  const executable = (permission & TETO_SEGMENT_EXECUTE) !== 0;
   const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
-  if (stack !== 0n && address >= stack && end <= atomicLoadU64(memory, proc + P_VIRTUAL_TOP)) return true;
+  if (stack !== 0n && address >= stack && end <= atomicLoadU64(memory, proc + P_VIRTUAL_TOP)) return !executable;
   const heap = atomicLoadU64(memory, proc + P_BRK_BASE);
-  if (heap !== 0n && address >= heap && end <= atomicLoadU64(memory, proc + P_BRK)) return true;
+  if (heap !== 0n && address >= heap && end <= atomicLoadU64(memory, proc + P_BRK)) return !executable;
   const mapCount = loadU32(memory, proc + P_MAP_COUNT);
   const mapTable = loadU32(memory, proc + P_MAP_TABLE);
   index = 0;
@@ -1092,14 +1174,47 @@ const anonymousMap = (memory: TetoMemory, proc: Ptr, address: U64, length: U64, 
   if (length === 0n || length > top || protection > 7n || flagsWide > 0x7fffffffn) return -22n;
   const flags = wordToU32(flagsWide);
   const kind = flags & 3;
-  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x100033) !== 0) return -22n;
+  // Linux MAP_NORESERVE (0x4000) is advisory for anonymous mappings.
+  // V8 uses it for PROT_NONE virtual reservations, including Oilpan GCInfoTable.
+  // Teto allocates backing frames lazily, so accepting this flag preserves
+  // reservation semantics without committing the whole virtual range.
+  if ((flags & 0x20) === 0 || (kind !== 1 && kind !== 2) || (flags & ~0x104033) !== 0) return -22n;
   const size = length + MAP_PAGE - 1n & -MAP_PAGE;
   if (size === 0n || size > top) return -12n;
   const fixed = (flags & 0x100010) !== 0;
+  const replace = (flags & 0x10) !== 0 && (flags & 0x100000) === 0;
   let candidate = address;
   if (fixed) {
-    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate ||
-        mappingConflict(memory, proc, candidate, candidate + size)) return -12n;
+    if ((candidate & (MAP_PAGE - 1n)) !== 0n || candidate > top || size > top - candidate) return -12n;
+    const end = candidate + size;
+    if (replace) {
+      // MAP_FIXED replaces existing reservations. V8 first reserves a PROT_NONE
+      // range, then commits or remaps selected pages within that address range.
+      // Check capacity before changing any mappings, including split entries.
+      const heap = atomicLoadU64(memory, proc + P_BRK);
+      const stack = atomicLoadU64(memory, proc + P_STACK_BOTTOM);
+      if (candidate < (heap + MAP_GUARD + MAP_PAGE - 1n & -MAP_PAGE) ||
+          stack <= MAP_GUARD || end >= stack - MAP_GUARD) return -12n;
+      const count = loadU32(memory, proc + P_MAP_COUNT);
+      const capacity = loadU32(memory, proc + P_MAP_CAPACITY);
+      let finalCount = count + 1;
+      let index: U32 = 0;
+      while (index < count) {
+        const mapping = mapAt(memory, proc, index);
+        const start = loadU64(memory, mapping + M_ADDRESS);
+        const stop = loadU64(memory, mapping + M_END);
+        if (candidate < stop && end > start) {
+          if (candidate <= start && end >= stop) finalCount -= 1;
+          else if (candidate > start && end < stop) finalCount += 1;
+        }
+        index += 1;
+      }
+      if (finalCount > capacity) return -12n;
+      const removed = anonymousUnmap(memory, proc, candidate, size);
+      if (removed !== 0n && removed !== MAP_NOT_OWNED) return removed;
+    } else if (mappingConflict(memory, proc, candidate, end)) {
+      return (flags & 0x100000) !== 0 ? -17n : -12n;
+    }
   } else {
     if (candidate !== 0n) {
       if (candidate > top - MAP_PAGE + 1n) candidate = 0n;
@@ -1457,6 +1572,7 @@ const guestLoadU64 = (memory: TetoMemory, hart: U32, address: U64, size: U32): U
 
 const guestStoreU64 = (memory: TetoMemory, hart: U32, address: U64, value: U64, size: U32): boolean => {
   if (!guestRange(memory, hart, address, size)) return false;
+  traceNodePointerWrite(memory, hart, address, value, size);
   let index: U32 = 0;
   while (index < size) {
     const pointer = guestPointer(memory, hart, address + ux(word(index)), 1, true);
@@ -1726,22 +1842,12 @@ const fault = (memory: TetoMemory, hart: U32, code: I32, instruction: U32): I32 
   return TETO_BATCH_FAULT;
 };
 
-const immediateI = (instruction: U32): I64 => sx(word(instruction >>> 20), 12);
-const immediateS = (instruction: U32): I64 =>
-  sx(word((instruction >>> 25) << 5 | instruction >>> 7 & 31), 12);
-const immediateB = (instruction: U32): I64 =>
-  sx(word((instruction >>> 31) << 12 | (instruction >>> 7 & 1) << 11 | (instruction >>> 25 & 63) << 5 | (instruction >>> 8 & 15) << 1), 13);
-const immediateU = (instruction: U32): I64 => sx(word(instruction & 0xfffff000), 32);
-const immediateJ = (instruction: U32): I64 =>
-  sx(word((instruction >>> 31) << 20 | (instruction >>> 12 & 255) << 12 | (instruction >>> 20 & 1) << 11 | (instruction >>> 21 & 1023) << 1), 21);
-
-const compressedJump = (instruction: U32): I64 => {
-  const value = instruction >>> 1 & 0x800 | instruction << 2 & 0x400 |
-    instruction >>> 1 & 0x300 | instruction << 1 & 0x80 |
-    instruction >>> 1 & 0x40 | instruction << 3 & 0x20 |
-    instruction >>> 7 & 0x10 | instruction >>> 2 & 0xe;
-  return sx(word(value), 12);
-};
+const immediateI = (instruction: U32): I64 => word(rv64ImmediateI(instruction));
+const immediateS = (instruction: U32): I64 => word(rv64ImmediateS(instruction));
+const immediateB = (instruction: U32): I64 => word(rv64ImmediateB(instruction));
+const immediateU = (instruction: U32): I64 => word(rv64ImmediateU(instruction));
+const immediateJ = (instruction: U32): I64 => word(rv64ImmediateJ(instruction));
+const compressedJump = (instruction: U32): I64 => word(rv64CompressedJump(instruction));
 
 const loadInteger = (
   memory: TetoMemory,
@@ -1829,24 +1935,8 @@ const setFloatingFlags = (memory: TetoMemory, hart: U32, flags: U32): void => {
   storeU32(memory, at, loadU32(memory, at) | flags & 31);
 };
 
-const floatingClass = (memory: TetoMemory, hart: U32, register: U32, single: boolean): I64 => {
-  const raw = floatingRaw(memory, hart, register, single);
-  const exponentBits = single ? 8n : 11n;
-  const fractionBits = single ? 23n : 52n;
-  const sign = raw >> (exponentBits + fractionBits) & 1n;
-  const exponent = raw >> fractionBits & ((1n << exponentBits) - 1n);
-  const fraction = raw & ((1n << fractionBits) - 1n);
-  const all = (1n << exponentBits) - 1n;
-  if (exponent === all) {
-    if (fraction === 0n) return 1n << (sign !== 0n ? 0n : 7n);
-    return 1n << ((fraction & (1n << (fractionBits - 1n))) !== 0n ? 9n : 8n);
-  }
-  if (exponent === 0n) {
-    if (fraction === 0n) return 1n << (sign !== 0n ? 3n : 4n);
-    return 1n << (sign !== 0n ? 2n : 5n);
-  }
-  return 1n << (sign !== 0n ? 1n : 6n);
-};
+const floatingClass = (memory: TetoMemory, hart: U32, register: U32, single: boolean): I64 =>
+  rv64FloatClass(floatingRaw(memory, hart, register, single), single ? 32 : 64);
 
 const floatingToInteger = (
   memory: TetoMemory,
@@ -1869,14 +1959,25 @@ const floatingToInteger = (
     setFloatingFlags(memory, hart, 16);
     return unsigned ? bits === 32 ? sx(0xffffffffn, 64) : -1n : bits === 32 ? 0x7fffffffn : 0x7fffffffffffffffn;
   }
-  const minimum: F64 = unsigned ? 0 : bits === 32 ? -2147483648 : -9223372036854775808;
-  const maximum: F64 = unsigned ? bits === 32 ? 4294967295 : 18446744073709551615 : bits === 32 ? 2147483647 : 9223372036854775807;
-  if (rounded <= minimum) {
-    if (rounded < minimum) setFloatingFlags(memory, hart, 16);
+  // Floating-point limits use exclusive upper bounds: f64 cannot represent
+  // INT64_MAX exactly, and integer literals must not undergo native coercion.
+  let minimum: F64 = 0.0;
+  let exclusiveMaximum: F64 = 4.294967296e9;
+  if (unsigned) {
+    if (bits === 64) exclusiveMaximum = 1.8446744073709552e19;
+  } else if (bits === 32) {
+    minimum = -2.147483648e9;
+    exclusiveMaximum = 2.147483648e9;
+  } else {
+    minimum = -9.223372036854776e18;
+    exclusiveMaximum = 9.223372036854776e18;
+  }
+  if (rounded < minimum) {
+    setFloatingFlags(memory, hart, 16);
     return unsigned ? 0n : bits === 32 ? -2147483648n : -0x8000000000000000n;
   }
-  if (rounded >= maximum) {
-    if (rounded > maximum) setFloatingFlags(memory, hart, 16);
+  if (rounded >= exclusiveMaximum) {
+    setFloatingFlags(memory, hart, 16);
     return unsigned ? bits === 32 ? sx(0xffffffffn, 64) : -1n : bits === 32 ? 0x7fffffffn : 0x7fffffffffffffffn;
   }
   return unsigned ? sx(floatToU64(rounded), 64) : floatToI64(rounded);
@@ -2011,15 +2112,8 @@ const floatingOperation = (
   return false;
 };
 
-const branch = (funct3: U32, left: I64, right: I64): I32 => {
-  if (funct3 === 0) return left === right ? 1 : 0;
-  if (funct3 === 1) return left !== right ? 1 : 0;
-  if (funct3 === 4) return left < right ? 1 : 0;
-  if (funct3 === 5) return left >= right ? 1 : 0;
-  if (funct3 === 6) return ux(left) < ux(right) ? 1 : 0;
-  if (funct3 === 7) return ux(left) >= ux(right) ? 1 : 0;
-  return -1;
-};
+const branch = (funct3: U32, left: I64, right: I64): I32 =>
+  rv64Branch(funct3, left, right);
 
 const opImmediate = (
   memory: TetoMemory,
@@ -2029,18 +2123,8 @@ const opImmediate = (
   instruction: U32,
   left: I64,
 ): boolean => {
-  const immediate = immediateI(instruction);
-  const shift = instruction >>> 20 & 63;
-  if (funct3 === 0) setX(memory, hart, register, left + immediate);
-  else if (funct3 === 1 && instruction >>> 26 === 0) setX(memory, hart, register, ux(left) << word(shift));
-  else if (funct3 === 2) setX(memory, hart, register, left < immediate ? 1n : 0n);
-  else if (funct3 === 3) setX(memory, hart, register, ux(left) < ux(immediate) ? 1n : 0n);
-  else if (funct3 === 4) setX(memory, hart, register, left ^ immediate);
-  else if (funct3 === 5 && instruction >>> 26 === 0) setX(memory, hart, register, ux(left) >> word(shift));
-  else if (funct3 === 5 && instruction >>> 26 === 0x10) setX(memory, hart, register, left >> word(shift));
-  else if (funct3 === 6) setX(memory, hart, register, left | immediate);
-  else if (funct3 === 7) setX(memory, hart, register, left & immediate);
-  else return false;
+  if (rv64ImmediateOpValid(funct3, instruction) === 0) return false;
+  setX(memory, hart, register, rv64ImmediateOpValue(funct3, instruction, left));
   return true;
 };
 
@@ -2052,12 +2136,8 @@ const opImmediateWord = (
   instruction: U32,
   left: I64,
 ): boolean => {
-  const shift = instruction >>> 20 & 31;
-  if (funct3 === 0) setX(memory, hart, register, sx(left + immediateI(instruction), 32));
-  else if (funct3 === 1 && instruction >>> 25 === 0) setX(memory, hart, register, sx(sx(left, 32) << word(shift), 32));
-  else if (funct3 === 5 && instruction >>> 25 === 0) setX(memory, hart, register, sx(u32word(left) >> word(shift), 32));
-  else if (funct3 === 5 && instruction >>> 25 === 0x20) setX(memory, hart, register, sx(sx(left, 32) >> word(shift), 32));
-  else return false;
+  if (rv64ImmediateWordValid(funct3, instruction) === 0) return false;
+  setX(memory, hart, register, rv64ImmediateWordValue(funct3, instruction, left));
   return true;
 };
 
@@ -2070,30 +2150,8 @@ const opRegister = (
   left: I64,
   right: I64,
 ): boolean => {
-  const shift = wordToU32(ux(right) & 63n);
-  if (top === 1) {
-    if (funct3 === 0) setX(memory, hart, register, left * right);
-    else if (funct3 === 1) setX(memory, hart, register, mulHighSigned(left, right));
-    else if (funct3 === 2) setX(memory, hart, register, mulHighSignedUnsigned(left, ux(right)));
-    else if (funct3 === 3) setX(memory, hart, register, mulHighUnsigned(ux(left), ux(right)));
-    else if (funct3 === 4) setX(memory, hart, register, divSigned(left, right, 64));
-    else if (funct3 === 5) setX(memory, hart, register, divUnsigned(ux(left), ux(right), 64));
-    else if (funct3 === 6) setX(memory, hart, register, remSigned(left, right, 64));
-    else if (funct3 === 7) setX(memory, hart, register, remUnsigned(ux(left), ux(right), 64));
-    else return false;
-    return true;
-  }
-  if (funct3 === 0 && top === 0) setX(memory, hart, register, left + right);
-  else if (funct3 === 0 && top === 0x20) setX(memory, hart, register, left - right);
-  else if (funct3 === 1 && top === 0) setX(memory, hart, register, ux(left) << word(shift));
-  else if (funct3 === 2 && top === 0) setX(memory, hart, register, left < right ? 1n : 0n);
-  else if (funct3 === 3 && top === 0) setX(memory, hart, register, ux(left) < ux(right) ? 1n : 0n);
-  else if (funct3 === 4 && top === 0) setX(memory, hart, register, left ^ right);
-  else if (funct3 === 5 && top === 0) setX(memory, hart, register, ux(left) >> word(shift));
-  else if (funct3 === 5 && top === 0x20) setX(memory, hart, register, left >> word(shift));
-  else if (funct3 === 6 && top === 0) setX(memory, hart, register, left | right);
-  else if (funct3 === 7 && top === 0) setX(memory, hart, register, left & right);
-  else return false;
+  if (rv64RegisterValid(funct3, top) === 0) return false;
+  setX(memory, hart, register, rv64RegisterValue(funct3, top, left, right));
   return true;
 };
 
@@ -2106,22 +2164,8 @@ const opRegisterWord = (
   left: I64,
   right: I64,
 ): boolean => {
-  const shift = wordToU32(ux(right) & 31n);
-  if (top === 1) {
-    if (funct3 === 0) setX(memory, hart, register, sx(sx(left, 32) * sx(right, 32), 32));
-    else if (funct3 === 4) setX(memory, hart, register, sx(divSigned(left, right, 32), 32));
-    else if (funct3 === 5) setX(memory, hart, register, sx(divUnsigned(u32word(left), u32word(right), 32), 32));
-    else if (funct3 === 6) setX(memory, hart, register, sx(remSigned(left, right, 32), 32));
-    else if (funct3 === 7) setX(memory, hart, register, sx(remUnsigned(u32word(left), u32word(right), 32), 32));
-    else return false;
-    return true;
-  }
-  if (funct3 === 0 && top === 0) setX(memory, hart, register, sx(left + right, 32));
-  else if (funct3 === 0 && top === 0x20) setX(memory, hart, register, sx(left - right, 32));
-  else if (funct3 === 1 && top === 0) setX(memory, hart, register, sx(sx(left, 32) << word(shift), 32));
-  else if (funct3 === 5 && top === 0) setX(memory, hart, register, sx(u32word(left) >> word(shift), 32));
-  else if (funct3 === 5 && top === 0x20) setX(memory, hart, register, sx(sx(left, 32) >> word(shift), 32));
-  else return false;
+  if (rv64RegisterWordValid(funct3, top) === 0) return false;
+  setX(memory, hart, register, rv64RegisterWordValue(funct3, top, left, right));
   return true;
 };
 
@@ -2465,6 +2509,7 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
   const proc = processForHart(memory, hart);
   const number = wordToU32(ux(x(memory, hart, 17)));
   bump(memory, at + H_KERNEL_SYSCALLS);
+  if (sharedProcessThread(memory, hart) && number === 93) return fallbackSyscall(memory, hart);
   if (number === 93 || number === 94) {
     const code = wordToI32(x(memory, hart, 10));
     storeI32(memory, at + H_EXIT_CODE, code);
@@ -2511,6 +2556,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     }
     const result = anonymousMap(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
       ux(x(memory, hart, 12)), ux(x(memory, hart, 13)));
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      wordToU32(ux(x(memory, hart, 13))), ux(x(memory, hart, 12)), result);
     release(memory, lock);
     return internalSyscall(memory, hart, result);
   }
@@ -2522,6 +2569,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
       return TETO_BATCH_CONTENDED;
     }
     const result = anonymousUnmap(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)));
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      0, 0n, result);
     release(memory, lock);
     if (result === MAP_NOT_OWNED) return fallbackSyscall(memory, hart);
     return internalSyscall(memory, hart, result);
@@ -2542,6 +2591,8 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     } else {
       result = syncAnonymous(memory, proc, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)), ux(x(memory, hart, 12)));
     }
+    traceMappingOperation(memory, number, ux(x(memory, hart, 10)), ux(x(memory, hart, 11)),
+      wordToU32(ux(x(memory, hart, 12))), ux(x(memory, hart, 13)), result);
     release(memory, lock);
     if (result === MAP_NOT_OWNED) return fallbackSyscall(memory, hart);
     return internalSyscall(memory, hart, result);
@@ -2557,6 +2608,7 @@ const kernelSyscall = (memory: TetoMemory, hart: U32): I32 => {
     release(memory, lock);
     return internalSyscall(memory, hart, result);
   }
+  if (sharedProcessThread(memory, hart) && number === 178) return fallbackSyscall(memory, hart);
   if (number >= 172 && number <= 178) {
     if (proc === INVALID_POINTER) return internalSyscall(memory, hart, -3n);
     if (number === 172 || number === 178) return internalSyscall(memory, hart, word(atomicLoadI32(memory, proc + P_PID)));
@@ -2917,7 +2969,7 @@ export const tetoExitHart = (memory: TetoMemory, hart: U32, code: I32): I32 => {
   if (!acquire(memory, at + H_LOCK)) return TETO_BATCH_BUSY;
   setX(memory, hart, 10, word(code));
   const proc = processForHart(memory, hart);
-  if (proc !== INVALID_POINTER) {
+  if (proc !== INVALID_POINTER && !sharedProcessThread(memory, hart)) {
     atomicStoreI32(memory, proc + P_EXIT_CODE, code);
     atomicStoreI32(memory, proc + P_STATE, TETO_PROCESS_ZOMBIE);
   }

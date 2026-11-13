@@ -22,6 +22,28 @@ import { IDENTITY } from "../core/identity.js";
 import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
+import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
+import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
+import { rv64FloatClass } from "../core/rv64-fclass.js";
+import {
+  rv64DivideSigned,
+  rv64DivideUnsigned,
+  rv64MulHighSigned,
+  rv64MulHighSignedUnsigned,
+  rv64MulHighUnsigned,
+  rv64RemainderSigned,
+  rv64RemainderUnsigned,
+} from "../core/rv64-arithmetic.js";
+import {
+  rv64CompressedJump,
+  rv64ImmediateB,
+  rv64ImmediateI,
+  rv64ImmediateJ,
+  rv64ImmediateS,
+  rv64ImmediateU,
+} from "../vm/rv64-immediate.js";
 import { localSessionPlan, superviseLocalLogin } from "../main/session.js";
 import { WebSession } from "../main/websession.js";
 import { WebTree } from "../main/webtree.js";
@@ -177,6 +199,185 @@ const test = (name: string, fn: () => void | Promise<void>): void => { tests.pus
 const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") => { if (!v) throw new Error(m); };
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
+
+test("Thistle preserves its working interpreter without substituting Teto source", async () => {
+  const original = boot({ put: () => {}, kernelMode: "thistle" });
+  await original.ready;
+  eq(original.p.env.has("THISTLE_RV_CORE"), false);
+  eq(original.p.env.has("THISTLE_PORTABLE_PROBE"), false);
+  eq(original.k.executionCore, "Thistle TypeScript");
+});
+
+test("canonical RV64 FCLASS distinguishes every IEEE-754 category", () => {
+  const values: Array<[bigint, number, bigint]> = [
+    [0xff800000n, 32, 1n], [0xbf800000n, 32, 2n],
+    [0x80000001n, 32, 4n], [0x80000000n, 32, 8n],
+    [0n, 32, 16n], [1n, 32, 32n],
+    [0x3f800000n, 32, 64n], [0x7f800000n, 32, 128n],
+    [0x7f800001n, 32, 256n], [0x7fc00000n, 32, 512n],
+    [0xfff0000000000000n, 64, 1n], [0xbff0000000000000n, 64, 2n],
+    [0x8000000000000001n, 64, 4n], [0x8000000000000000n, 64, 8n],
+    [0n, 64, 16n], [1n, 64, 32n],
+    [0x3ff0000000000000n, 64, 64n], [0x7ff0000000000000n, 64, 128n],
+    [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
+  ];
+  for (const [raw, bits, category] of values) eq(rv64FloatClass(raw, bits), category);
+});
+
+test("canonical RV64 word operations preserve 32-bit sign extension and legality", () => {
+  const signed32 = (n: bigint): bigint => BigInt.asIntN(32, n);
+  const unsigned32 = (n: bigint): bigint => BigInt.asUintN(32, n);
+  const values = [-(1n << 63n), -2147483648n, -1n, 0n, 1n, 2147483647n, (1n << 63n) - 1n];
+  for (const top of [0, 1, 0x20, 7]) for (let funct3 = 0; funct3 < 8; funct3++) {
+    const valid = top === 1 ? [0, 4, 5, 6, 7].includes(funct3) :
+      (funct3 === 0 || funct3 === 5) ? top === 0 || top === 0x20 : funct3 === 1 && top === 0;
+    eq(rv64RegisterWordValid(funct3, top), valid ? 1 : 0);
+    if (!valid) continue;
+    for (const left of values) for (const right of values) {
+      const actual = rv64RegisterWordValue(funct3, top, left, right);
+      eq(actual, signed32(actual), "register word result is not sign-extended");
+      const shift = unsigned32(right) & 31n;
+      if (top === 1 && funct3 === 0) eq(actual, signed32(signed32(left) * signed32(right)));
+      else if (top !== 1 && funct3 === 0) eq(actual, signed32(top === 0 ? left + right : left - right));
+      else if (top !== 1 && funct3 === 1) eq(actual, signed32(signed32(left) << shift));
+      else if (top !== 1 && funct3 === 5) eq(actual, signed32(top === 0 ? unsigned32(left) >> shift : signed32(left) >> shift));
+    }
+  }
+  for (const instruction of [0, -1, 0x40005013, 0x00001013, 0x00105013, 0x80000013]) {
+    for (let funct3 = 0; funct3 < 8; funct3++) {
+      const top = instruction >>> 25;
+      const valid = funct3 === 0 || funct3 === 1 && top === 0 || funct3 === 5 && (top === 0 || top === 0x20);
+      eq(rv64ImmediateWordValid(funct3, instruction), valid ? 1 : 0);
+      if (!valid) continue;
+      for (const left of values) eq(rv64ImmediateWordValue(funct3, instruction, left),
+        signed32(rv64ImmediateWordValue(funct3, instruction, left)));
+    }
+  }
+});
+
+test("canonical RV64 immediate instructions preserve signed and unsigned values", () => {
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  const values = [-(1n << 63n), -1n, 0n, 1n, (1n << 63n) - 1n];
+  for (const instruction of [0, 0xffffffff, 0x40005013, 0x00001013, 0x00105013, 0x80000013, 0x40000013]) {
+    for (let funct3 = 0; funct3 < 8; funct3++) {
+      const top = instruction >>> 26;
+      const valid = funct3 === 1 ? top === 0 : funct3 === 5 ? top === 0 || top === 0x10 : true;
+      eq(rv64ImmediateOpValid(funct3, instruction), valid ? 1 : 0);
+      if (!valid) continue;
+      const immediate = BigInt.asIntN(12, BigInt(instruction >>> 20));
+      const shift = BigInt(instruction >>> 20 & 63);
+      for (const left of values) {
+        const actual = rv64ImmediateOpValue(funct3, instruction, left);
+        eq(actual, signed(actual), "immediate result not truncated to 64 bits");
+        if (funct3 === 0) eq(actual, signed(left + immediate));
+        else if (funct3 === 1) eq(actual, signed(unsigned(left) << shift));
+        else if (funct3 === 2) eq(actual, left < immediate ? 1n : 0n);
+        else if (funct3 === 3) eq(actual, unsigned(left) < unsigned(immediate) ? 1n : 0n);
+        else if (funct3 === 4) eq(actual, left ^ immediate);
+        else if (funct3 === 5) eq(actual, signed(top === 0 ? unsigned(left) >> shift : left >> shift));
+        else if (funct3 === 6) eq(actual, left | immediate);
+        else if (funct3 === 7) eq(actual, left & immediate);
+      }
+    }
+  }
+});
+
+test("canonical RV64 register operations preserve validity and 64-bit results", () => {
+  const values = [-(1n << 63n), -(1n << 31n), -1n, 0n, 1n, 2n, (1n << 31n), (1n << 63n) - 1n];
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  for (const top of [0, 1, 0x20, 2, 0xff]) for (let funct3 = 0; funct3 < 8; funct3++) {
+    const valid = top === 0 || top === 1 || top === 0x20 && (funct3 === 0 || funct3 === 5);
+    eq(rv64RegisterValid(funct3, top), valid ? 1 : 0);
+    if (!valid) continue;
+    for (const left of values) for (const right of values) {
+      const actual = rv64RegisterValue(funct3, top, left, right);
+      eq(actual, signed(actual), "register operation did not truncate to 64 bits");
+      if (top !== 0 && top !== 0x20) continue;
+      const shift = unsigned(right) & 63n;
+      if (funct3 === 0) eq(actual, signed(top === 0 ? left + right : left - right));
+      if (funct3 === 1) eq(actual, signed(unsigned(left) << shift));
+      if (funct3 === 2) eq(actual, left < right ? 1n : 0n);
+      if (funct3 === 3) eq(actual, unsigned(left) < unsigned(right) ? 1n : 0n);
+      if (funct3 === 4) eq(actual, left ^ right);
+      if (funct3 === 5) eq(actual, signed(top === 0 ? unsigned(left) >> shift : left >> shift));
+      if (funct3 === 6) eq(actual, left | right);
+      if (funct3 === 7) eq(actual, left & right);
+    }
+  }
+});
+
+test("canonical Thistle RV64 multiplication and M-extension division preserve edge cases", () => {
+  const low = -(1n << 63n);
+  const high = (1n << 63n) - 1n;
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const values = [low, low + 1n, -65537n, -2n, -1n, 0n, 1n, 2n, 65537n, high - 1n, high];
+  for (const left of values) for (const right of values) {
+    eq(rv64MulHighUnsigned(unsigned(left), unsigned(right)),
+      unsigned(unsigned(left) * unsigned(right) >> 64n));
+    eq(rv64MulHighSigned(left, right), signed(left * right >> 64n));
+    eq(rv64MulHighSignedUnsigned(left, unsigned(right)), signed(left * unsigned(right) >> 64n));
+    for (const bits of [32, 64]) {
+      const a = BigInt.asIntN(bits, left);
+      const b = BigInt.asIntN(bits, right);
+      const ua = BigInt.asUintN(bits, left);
+      const ub = BigInt.asUintN(bits, right);
+      const min = -(1n << BigInt(bits - 1));
+      const divide = b === 0n ? -1n : a === min && b === -1n ? min : a / b;
+      const remainder = b === 0n ? a : a === min && b === -1n ? 0n : a % b;
+      eq(rv64DivideSigned(left, right, bits), BigInt.asIntN(bits, divide));
+      eq(rv64RemainderSigned(left, right, bits), BigInt.asIntN(bits, remainder));
+      eq(rv64DivideUnsigned(unsigned(left), unsigned(right), bits),
+        ub === 0n ? (1n << BigInt(bits)) - 1n : ua / ub);
+      eq(rv64RemainderUnsigned(unsigned(left), unsigned(right), bits),
+        ub === 0n ? ua : ua % ub);
+    }
+  }
+});
+
+test("canonical RV64 immediate decoders retain Thistle's signed arithmetic", () => {
+  const original = (value: number, width: number): number =>
+    Number(BigInt.asIntN(width, BigInt(value)));
+  let word = 0x12345678;
+  const instructions = [0, -1, 0x80000000, 0x7fffffff, 0x000fffff, 0xfff00000, 0x00000800];
+  for (let index = 0; index < 10000; index++) {
+    word = Math.imul(word, 1664525) + 1013904223 | 0;
+    instructions.push(word);
+  }
+  for (const instruction of instructions) {
+    eq(rv64ImmediateI(instruction), original(instruction >>> 20, 12));
+    eq(rv64ImmediateS(instruction), original((instruction >>> 25) << 5 | instruction >>> 7 & 31, 12));
+    eq(rv64ImmediateB(instruction), original((instruction >>> 31) << 12 | (instruction >>> 7 & 1) << 11 |
+      (instruction >>> 25 & 63) << 5 | (instruction >>> 8 & 15) << 1, 13));
+    eq(rv64ImmediateU(instruction), original(instruction & 0xfffff000, 32));
+    eq(rv64ImmediateJ(instruction), original((instruction >>> 31) << 20 | (instruction >>> 12 & 255) << 12 |
+      (instruction >>> 20 & 1) << 11 | (instruction >>> 21 & 1023) << 1, 21));
+    eq(rv64CompressedJump(instruction), original((instruction >>> 1 & 0x800) | (instruction << 2 & 0x400) |
+      (instruction >>> 1 & 0x300) | (instruction << 1 & 0x80) | (instruction >>> 1 & 0x40) |
+      (instruction << 3 & 0x20) | (instruction >>> 7 & 0x10) | (instruction >>> 2 & 0xe), 12));
+  }
+});
+
+test("Thistle's shared RV64 branches preserve 64-bit signed and unsigned conditions", () => {
+  const values = [
+    -(1n << 63n), -2n, -1n, 0n, 1n, 2n, (1n << 63n) - 1n,
+  ];
+  for (const left of values) {
+    for (const right of values) {
+      const signedLess = left < right;
+      const unsignedLess = BigInt.asUintN(64, left) < BigInt.asUintN(64, right);
+      eq(rv64Branch(0, left, right), Number(left === right));
+      eq(rv64Branch(1, left, right), Number(left !== right));
+      eq(rv64Branch(4, left, right), Number(signedLess));
+      eq(rv64Branch(5, left, right), Number(!signedLess));
+      eq(rv64Branch(6, left, right), Number(unsignedLess));
+      eq(rv64Branch(7, left, right), Number(!unsignedLess));
+    }
+  }
+  for (const funct3 of [2, 3]) eq(rv64Branch(funct3, 0n, 0n), -1);
+});
 
 test("thistle64 byte stores keep low bits above JS integer precision", () => {
   const m = new Mem64(1024n * 1024n, 65536);
@@ -513,6 +714,7 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
   type ProtectionCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
     "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
+    "tetoBuildInitialStack" |
     "tetoHartSetX" | "tetoHartGetX" | "tetoHartSetPc" | "tetoHartStatus" | "tetoGuestPage" |
     "tetoRunRv64Batch">;
   interface HFs { readFile(path: URL): Promise<Uint8Array>; }
@@ -566,6 +768,7 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
     tetoImageSegment: (_memory, hart, nameHash, nameLength, address, size, flags, imageAt, length) =>
       tetoImageSegment(sourceMemory, hart, nameHash, nameLength, address, size, flags, imageAt, length),
     tetoImageFinish: (_memory, hart, size) => tetoImageFinish(sourceMemory, hart, size),
+    tetoBuildInitialStack: (_memory, hart, at, size, stackBytes) => tetoBuildInitialStack(sourceMemory, hart, at, size, stackBytes),
     tetoHartSetX: (_memory, hart, register, value) => tetoHartSetX(sourceMemory, hart, register, value),
     tetoHartGetX: (_memory, hart, register) => tetoHartGetX(sourceMemory, hart, register),
     tetoHartSetPc: (_memory, hart, value) => tetoHartSetPc(sourceMemory, hart, value),
@@ -609,6 +812,58 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
       eq(core.tetoHartGetX(0, 0, 3), item.value, `${item.name}: unexpected loaded value`);
       results.push([item.name, result, status, fault, core.tetoHartGetX(0, 0, 3)]);
     }
+
+    // Exercise executable anonymous pages end-to-end: V8's dynamically
+    // generated code cannot reside in a THX image segment.
+    const allocate = words([
+      addi(10, 0, 0),
+      (1 << 12 | 11 << 7 | 0x37) >>> 0,
+      addi(13, 0, 0x22),
+      addi(14, 0, -1),
+      addi(15, 0, 0),
+      addi(17, 0, 222),
+      0x00000073,
+      addi(6, 10, 0),
+    ]);
+    const jitExit = words([addi(10, 0, 42), addi(17, 0, 93), 0x00000073]);
+    const startup = new Uint8Array(38);
+    const startupView = new DataView(startup.buffer);
+    startupView.setUint32(0, TETO_STARTUP_MAGIC, true);
+    startupView.setUint32(4, 1, true);
+    startupView.setUint32(32, 2, true);
+    startup.set(enc("/x"), 36);
+
+    for (const protect of [7, 3]) {
+      eq(core.tetoKernelInit(0, 1, 0), 0);
+      eq(core.tetoHartInit(0, 0, virtualTop, pc), 0);
+      eq(core.tetoProcessInit(0, 0, 70, 1, 1000, 1000, 1000, 1000, 1000, 1000), 0);
+      const imageAt = core.tetoImageReserve(0, allocate.length) >>> 0;
+      memory.set(allocate, imageAt);
+      eq(core.tetoImageBegin(0, 0, virtualTop, pc, 0n, 0, 0), TETO_THX_OK);
+      eq(core.tetoImageSegment(0, 0, 0x1111, 4, pc, BigInt(allocate.length),
+        TETO_SEGMENT_READ | TETO_SEGMENT_EXECUTE, imageAt, allocate.length), TETO_THX_OK);
+      eq(core.tetoImageFinish(0, 0, allocate.length), TETO_THX_OK);
+      eq(core.tetoImageRelease(0, imageAt, allocate.length), TETO_THX_OK);
+      const startupAt = core.tetoImageReserve(0, startup.length) >>> 0;
+      memory.set(startup, startupAt);
+      eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
+      eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
+      eq(core.tetoHartSetX(0, 0, 12, BigInt(protect)), 0);
+      eq(core.tetoRunRv64Batch(0, 0, 8, 123456n, 0), TETO_BATCH_BUDGET);
+      const executableAt = core.tetoHartGetX(0, 0, 6);
+      ok(executableAt > pc && (executableAt & 4095n) === 0n, "invalid mmap code reservation");
+      const frame = core.tetoGuestPage(0, 0, executableAt, 1) >>> 0;
+      ok(frame < 0xfffffffe && frame + jitExit.length <= memory.length, "unable to back executable page");
+      memory.set(jitExit, frame);
+      eq(core.tetoHartSetPc(0, 0, executableAt), 0);
+      const expected = protect === 7 ? TETO_BATCH_EXITED : TETO_BATCH_FAULT;
+      eq(core.tetoRunRv64Batch(0, 0, 32, 123456n, 0), expected);
+      eq(core.tetoHartStatus(0, 0), protect === 7 ? TETO_HART_EXITED : TETO_HART_FAULTED);
+      if (protect === 7) eq(core.tetoHartGetX(0, 0, 10), 42n);
+      else eq(new DataView(memory.buffer).getInt32(TETO_HART_BASE + H_FAULT, true), TETO_FAULT_MEMORY);
+      results.push(["anonymous-execute", protect, expected, executableAt]);
+    }
+
     return show(results);
   };
 
@@ -708,7 +963,7 @@ test("Teto owns RV64 brk growth, bounds and shrink zeroing", async () => {
   eq(generatedResult, sourceResult);
 });
 
-test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
+test("Teto honours MAP_FIXED replacement inside MAP_NORESERVE reservations", async () => {
   type MapCore = Pick<TetoExports,
     "tetoKernelInit" | "tetoHartInit" | "tetoProcessInit" | "tetoImageReserve" |
     "tetoImageRelease" | "tetoImageBegin" | "tetoImageSegment" | "tetoImageFinish" |
@@ -724,10 +979,17 @@ test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
   const load = (rd: number, base: number): number => (base << 15 | 3 << 12 | rd << 7 | 0x03) >>> 0;
   const store = (source: number, base: number): number => (source << 20 | base << 15 | 3 << 12 | 0x23) >>> 0;
   const instructions = [
+    // Reserve two pages using MAP_NORESERVE, then exercise their backing.
     0x00000073, addi(5, 10, 0), add(21, 5, 20), load(8, 21),
     addi(6, 0, 39), store(6, 5), load(7, 5),
-    addi(10, 5, 0), addi(11, 20, 0), addi(17, 0, 215), 0x00000073,
-    load(9, 21), load(10, 5),
+    // MAP_FIXED must replace the first page, zeroing its previous contents
+    // while preserving the second page within the original reservation.
+    addi(10, 5, 0), addi(11, 20, 0), addi(12, 0, 3),
+    addi(13, 0, 0x32), addi(17, 0, 222), 0x00000073,
+    addi(9, 10, 0), load(23, 5),
+    // Unmap the replaced page, then deliberately fault on its old address.
+    addi(10, 5, 0), addi(11, 20, 0), addi(17, 0, 215),
+    0x00000073, load(22, 21), load(10, 5),
   ];
   const code = new Uint8Array(instructions.length * 4);
   const codeView = new DataView(code.buffer);
@@ -782,7 +1044,7 @@ test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
     eq(core.tetoBuildInitialStack(0, 0, startupAt, startup.length, 1024 * 1024), TETO_START_OK);
     eq(core.tetoImageRelease(0, startupAt, startup.length), TETO_THX_OK);
     const registers: Array<[number, bigint]> = [
-      [10, 0n], [11, 8192n], [12, 3n], [13, 0x22n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
+      [10, 0n], [11, 8192n], [12, 3n], [13, 0x4022n], [14, -1n], [15, 0n], [17, 222n], [20, 4096n],
     ];
     for (const [register, value] of registers) eq(core.tetoHartSetX(0, 0, register, value), 0);
     eq(core.tetoRunRv64Batch(0, 0, 128, 123456n, 0), TETO_BATCH_FAULT);
@@ -793,9 +1055,11 @@ test("Teto owns anonymous RV64 mappings and partial unmap", async () => {
     ok(mapped > pc && (mapped & 4095n) === 0n, "anonymous mmap returned an invalid address");
     eq(core.tetoHartGetX(0, 0, 7), 39n);
     eq(core.tetoHartGetX(0, 0, 8), 0n);
-    eq(core.tetoHartGetX(0, 0, 9), 0n);
+    eq(core.tetoHartGetX(0, 0, 9), mapped, "MAP_FIXED replacement must retain the address");
+    eq(core.tetoHartGetX(0, 0, 23), 0n, "MAP_FIXED replacement must clear previously written data");
+    eq(core.tetoHartGetX(0, 0, 22), 0n, "unreplaced page must retain its contents");
     eq(core.tetoProcessMapCount(0, 0), 1);
-    eq(core.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 2n);
+    eq(core.tetoHartMetric(0, 0, H_INTERNAL_SYSCALLS), 3n);
     eq(core.tetoHartMetric(0, 0, H_FALLBACK_SYSCALLS), 0n);
     return show([mapped, core.tetoHartGetX(0, 0, 7), core.tetoHartGetX(0, 0, 8),
       core.tetoHartGetX(0, 0, 9), core.tetoProcessMapCount(0, 0), fault]);
@@ -3443,6 +3707,22 @@ test("globs, find and metadata", async () => {
   x = await r.run("find /tmp/g -name '*.txt' -type f | sort");
   eq(x.out, "/tmp/g/a.txt\n/tmp/g/b.txt\n");
   eq(r.os.s.stat("/tmp/g/a.txt").mode, 0o640);
+});
+
+test("Baguette uses canonical Thistle sources rather than an independently maintained Teto kernel", async () => {
+  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
+  const dynamic = (name: string): Promise<unknown> => import(name);
+  const fs = await dynamic("node:fs/promises") as TextFs;
+  const rawConfig = await fs.readFile(new URL("../../baguette.config.json", import.meta.url), "utf8");
+  const config = JSON.parse(rawConfig) as { entries?: string[] };
+  ok(config.entries?.includes("src/vm/rv64.ts"),
+    "Baguette must compile Thistle's canonical RV64 executor as an entry point");
+  ok(!config.entries?.includes("src/teto/kernel.ts"),
+    "A separate Teto kernel implementation must never be a Baguette entry point");
+  const rawManifest = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
+  const manifest = JSON.parse(rawManifest) as { generatedFrom?: Array<{ path: string }> };
+  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/vm/rv64.ts")),
+    "The generated WASM manifest must identify the canonical Thistle executor");
 });
 
 let pass = 0;

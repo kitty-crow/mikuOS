@@ -165,6 +165,7 @@ export class Os {
       this.k.name = "Thistle";
       this.p.env.set("MIKUOS_KERNEL_MODE", "thistle");
       this.p.env.delete("THISTLE_RV_CORE");
+      this.p.env.delete("THISTLE_PORTABLE_PROBE");
       this.p.env.delete("THISTLE_TETO_STRICT");
       this.k.executionCore = "Thistle TypeScript";
       return;
