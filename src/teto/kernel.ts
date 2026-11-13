@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
 import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
@@ -2135,12 +2136,8 @@ const opImmediateWord = (
   instruction: U32,
   left: I64,
 ): boolean => {
-  const shift = instruction >>> 20 & 31;
-  if (funct3 === 0) setX(memory, hart, register, sx(left + immediateI(instruction), 32));
-  else if (funct3 === 1 && instruction >>> 25 === 0) setX(memory, hart, register, sx(sx(left, 32) << word(shift), 32));
-  else if (funct3 === 5 && instruction >>> 25 === 0) setX(memory, hart, register, sx(u32word(left) >> word(shift), 32));
-  else if (funct3 === 5 && instruction >>> 25 === 0x20) setX(memory, hart, register, sx(sx(left, 32) >> word(shift), 32));
-  else return false;
+  if (rv64ImmediateWordValid(funct3, instruction) === 0) return false;
+  setX(memory, hart, register, rv64ImmediateWordValue(funct3, instruction, left));
   return true;
 };
 
@@ -2167,22 +2164,8 @@ const opRegisterWord = (
   left: I64,
   right: I64,
 ): boolean => {
-  const shift = wordToU32(ux(right) & 31n);
-  if (top === 1) {
-    if (funct3 === 0) setX(memory, hart, register, sx(sx(left, 32) * sx(right, 32), 32));
-    else if (funct3 === 4) setX(memory, hart, register, sx(divSigned(left, right, 32), 32));
-    else if (funct3 === 5) setX(memory, hart, register, sx(divUnsigned(u32word(left), u32word(right), 32), 32));
-    else if (funct3 === 6) setX(memory, hart, register, sx(remSigned(left, right, 32), 32));
-    else if (funct3 === 7) setX(memory, hart, register, sx(remUnsigned(u32word(left), u32word(right), 32), 32));
-    else return false;
-    return true;
-  }
-  if (funct3 === 0 && top === 0) setX(memory, hart, register, sx(left + right, 32));
-  else if (funct3 === 0 && top === 0x20) setX(memory, hart, register, sx(left - right, 32));
-  else if (funct3 === 1 && top === 0) setX(memory, hart, register, sx(sx(left, 32) << word(shift), 32));
-  else if (funct3 === 5 && top === 0) setX(memory, hart, register, sx(u32word(left) >> word(shift), 32));
-  else if (funct3 === 5 && top === 0x20) setX(memory, hart, register, sx(sx(left, 32) >> word(shift), 32));
-  else return false;
+  if (rv64RegisterWordValid(funct3, top) === 0) return false;
+  setX(memory, hart, register, rv64RegisterWordValue(funct3, top, left, right));
   return true;
 };
 

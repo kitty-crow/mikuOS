@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
 import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
@@ -1106,12 +1107,8 @@ export class Rv64 {
   }
 
   private opIW(d: number, f: number, i: number, a: bigint): void {
-    const sh = BigInt(i >>> 20 & 31);
-    if (f === 0) this.set(d, sx(a + this.immI(i), 32));
-    else if (f === 1 && i >>> 25 === 0) this.set(d, sx(sx(a, 32) << sh, 32));
-    else if (f === 5 && i >>> 25 === 0) this.set(d, sx(BigInt.asUintN(32, a) >> sh, 32));
-    else if (f === 5 && i >>> 25 === 0x20) this.set(d, sx(sx(a, 32) >> sh, 32));
-    else this.bad(i);
+    if (rv64ImmediateWordValid(f, i) === 0) this.bad(i);
+    this.set(d, rv64ImmediateWordValue(f, i, a));
   }
 
   private opR(d: number, f: number, top: number, a: bigint, b: bigint): void {
@@ -1120,23 +1117,8 @@ export class Rv64 {
   }
 
   private opRW(d: number, f: number, top: number, a: bigint, b: bigint): void {
-    const sh = ux(b) & 31n;
-    if (top === 1) {
-      const x = sx(a, 32), y = sx(b, 32), xu = BigInt.asUintN(32, a), yu = BigInt.asUintN(32, b);
-      if (f === 0) this.set(d, sx(x * y, 32));
-      else if (f === 4) this.set(d, sx(rv64DivideSigned(x, y, 32), 32));
-      else if (f === 5) this.set(d, sx(rv64DivideUnsigned(xu, yu, 32), 32));
-      else if (f === 6) this.set(d, sx(rv64RemainderSigned(x, y, 32), 32));
-      else if (f === 7) this.set(d, sx(rv64RemainderUnsigned(xu, yu, 32), 32));
-      else this.badR(top, f);
-      return;
-    }
-    if (f === 0 && top === 0) this.set(d, sx(a + b, 32));
-    else if (f === 0 && top === 0x20) this.set(d, sx(a - b, 32));
-    else if (f === 1 && top === 0) this.set(d, sx(sx(a, 32) << sh, 32));
-    else if (f === 5 && top === 0) this.set(d, sx(BigInt.asUintN(32, a) >> sh, 32));
-    else if (f === 5 && top === 0x20) this.set(d, sx(sx(a, 32) >> sh, 32));
-    else this.badR(top, f);
+    if (rv64RegisterWordValid(f, top) === 0) this.badR(top, f);
+    this.set(d, rv64RegisterWordValue(f, top, a, b));
   }
 
   private fma(op: number, d: number, i: number, a: number, b: number): void {

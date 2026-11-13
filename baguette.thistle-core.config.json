@@ -8,7 +8,8 @@
     "src/core/rv64-arithmetic.ts",
     "src/core/rv64-fclass.ts",
     "src/core/rv64-register.ts",
-    "src/core/rv64-immediate-op.ts"
+    "src/core/rv64-immediate-op.ts",
+    "src/core/rv64-word.ts"
   ],
   "generatedDir": "build/thistle-core-native",
   "outDir": "dist/thistle-core-probe",

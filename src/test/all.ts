@@ -23,6 +23,7 @@ import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
 import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
@@ -221,6 +222,37 @@ test("canonical RV64 FCLASS distinguishes every IEEE-754 category", () => {
     [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
   ];
   for (const [raw, bits, category] of values) eq(rv64FloatClass(raw, bits), category);
+});
+
+test("canonical RV64 word operations preserve 32-bit sign extension and legality", () => {
+  const signed32 = (n: bigint): bigint => BigInt.asIntN(32, n);
+  const unsigned32 = (n: bigint): bigint => BigInt.asUintN(32, n);
+  const values = [-(1n << 63n), -2147483648n, -1n, 0n, 1n, 2147483647n, (1n << 63n) - 1n];
+  for (const top of [0, 1, 0x20, 7]) for (let funct3 = 0; funct3 < 8; funct3++) {
+    const valid = top === 1 ? [0, 4, 5, 6, 7].includes(funct3) :
+      (funct3 === 0 || funct3 === 5) ? top === 0 || top === 0x20 : funct3 === 1 && top === 0;
+    eq(rv64RegisterWordValid(funct3, top), valid ? 1 : 0);
+    if (!valid) continue;
+    for (const left of values) for (const right of values) {
+      const actual = rv64RegisterWordValue(funct3, top, left, right);
+      eq(actual, signed32(actual), "register word result is not sign-extended");
+      const shift = unsigned32(right) & 31n;
+      if (top === 1 && funct3 === 0) eq(actual, signed32(signed32(left) * signed32(right)));
+      else if (top !== 1 && funct3 === 0) eq(actual, signed32(top === 0 ? left + right : left - right));
+      else if (top !== 1 && funct3 === 1) eq(actual, signed32(signed32(left) << shift));
+      else if (top !== 1 && funct3 === 5) eq(actual, signed32(top === 0 ? unsigned32(left) >> shift : signed32(left) >> shift));
+    }
+  }
+  for (const instruction of [0, -1, 0x40005013, 0x00001013, 0x00105013, 0x80000013]) {
+    for (let funct3 = 0; funct3 < 8; funct3++) {
+      const top = instruction >>> 25;
+      const valid = funct3 === 0 || funct3 === 1 && top === 0 || funct3 === 5 && (top === 0 || top === 0x20);
+      eq(rv64ImmediateWordValid(funct3, instruction), valid ? 1 : 0);
+      if (!valid) continue;
+      for (const left of values) eq(rv64ImmediateWordValue(funct3, instruction, left),
+        signed32(rv64ImmediateWordValue(funct3, instruction, left)));
+    }
+  }
 });
 
 test("canonical RV64 immediate instructions preserve signed and unsigned values", () => {
