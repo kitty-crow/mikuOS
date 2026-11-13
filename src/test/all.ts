@@ -22,6 +22,7 @@ import { IDENTITY } from "../core/identity.js";
 import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
+import { rv64Branch } from "../core/rv64-branch.js";
 import { localSessionPlan, superviseLocalLogin } from "../main/session.js";
 import { WebSession } from "../main/websession.js";
 import { WebTree } from "../main/webtree.js";
@@ -177,6 +178,25 @@ const test = (name: string, fn: () => void | Promise<void>): void => { tests.pus
 const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") => { if (!v) throw new Error(m); };
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
+
+test("Thistle's shared RV64 branches preserve 64-bit signed and unsigned conditions", () => {
+  const values = [
+    -(1n << 63n), -2n, -1n, 0n, 1n, 2n, (1n << 63n) - 1n,
+  ];
+  for (const left of values) {
+    for (const right of values) {
+      const signedLess = left < right;
+      const unsignedLess = BigInt.asUintN(64, left) < BigInt.asUintN(64, right);
+      eq(rv64Branch(0, left, right), Number(left === right));
+      eq(rv64Branch(1, left, right), Number(left !== right));
+      eq(rv64Branch(4, left, right), Number(signedLess));
+      eq(rv64Branch(5, left, right), Number(!signedLess));
+      eq(rv64Branch(6, left, right), Number(unsignedLess));
+      eq(rv64Branch(7, left, right), Number(!unsignedLess));
+    }
+  }
+  for (const funct3 of [2, 3]) eq(rv64Branch(funct3, 0n, 0n), -1);
+});
 
 test("thistle64 byte stores keep low bits above JS integer precision", () => {
   const m = new Mem64(1024n * 1024n, 65536);
