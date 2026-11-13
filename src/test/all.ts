@@ -179,6 +179,16 @@ const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") =>
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
 
+test("Baguette's source manifest includes the shared Thistle RV64 module", async () => {
+  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
+  const dynamic = (name: string): Promise<unknown> => import(name);
+  const fs = await dynamic("node:fs/promises") as TextFs;
+  const raw = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
+  const manifest = JSON.parse(raw) as { sourceFiles?: string[] };
+  ok(manifest.sourceFiles?.some(path => path.endsWith("/core/rv64-branch.ts")),
+    "Baguette must compile the canonical Thistle RV64 source, not an independently maintained branch implementation");
+});
+
 test("Thistle preserves its working interpreter unless native-source probing is explicit", async () => {
   const original = boot({ put: () => {}, kernelMode: "thistle" });
   await original.ready;
