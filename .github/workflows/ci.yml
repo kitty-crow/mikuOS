@@ -59,5 +59,12 @@ jobs:
           path: /tmp/mikuos-build.log
           if-no-files-found: ignore
 
+      - name: Diagnose canonical Thistle source lowering (non-blocking, migration work)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          bun baguette/src/compiler.ts --config baguette.thistle-probe.config.json --validate-only 2>&1 | tee /tmp/thistle-source-probe.log
+
       - name: Test
         run: npm test
