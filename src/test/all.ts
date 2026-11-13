@@ -24,6 +24,15 @@ import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
 import {
+  rv64DivideSigned,
+  rv64DivideUnsigned,
+  rv64MulHighSigned,
+  rv64MulHighSignedUnsigned,
+  rv64MulHighUnsigned,
+  rv64RemainderSigned,
+  rv64RemainderUnsigned,
+} from "../core/rv64-arithmetic.js";
+import {
   rv64CompressedJump,
   rv64ImmediateB,
   rv64ImmediateI,
@@ -193,6 +202,35 @@ test("Thistle preserves its working interpreter without substituting Teto source
   eq(original.p.env.has("THISTLE_RV_CORE"), false);
   eq(original.p.env.has("THISTLE_PORTABLE_PROBE"), false);
   eq(original.k.executionCore, "Thistle TypeScript");
+});
+
+test("canonical Thistle RV64 multiplication and M-extension division preserve edge cases", () => {
+  const low = -(1n << 63n);
+  const high = (1n << 63n) - 1n;
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const values = [low, low + 1n, -65537n, -2n, -1n, 0n, 1n, 2n, 65537n, high - 1n, high];
+  for (const left of values) for (const right of values) {
+    eq(rv64MulHighUnsigned(unsigned(left), unsigned(right)),
+      unsigned(unsigned(left) * unsigned(right) >> 64n));
+    eq(rv64MulHighSigned(left, right), signed(left * right >> 64n));
+    eq(rv64MulHighSignedUnsigned(left, unsigned(right)), signed(left * unsigned(right) >> 64n));
+    for (const bits of [32, 64]) {
+      const a = BigInt.asIntN(bits, left);
+      const b = BigInt.asIntN(bits, right);
+      const ua = BigInt.asUintN(bits, left);
+      const ub = BigInt.asUintN(bits, right);
+      const min = -(1n << BigInt(bits - 1));
+      const divide = b === 0n ? -1n : a === min && b === -1n ? min : a / b;
+      const remainder = b === 0n ? a : a === min && b === -1n ? 0n : a % b;
+      eq(rv64DivideSigned(left, right, bits), BigInt.asIntN(bits, divide));
+      eq(rv64RemainderSigned(left, right, bits), BigInt.asIntN(bits, remainder));
+      eq(rv64DivideUnsigned(unsigned(left), unsigned(right), bits),
+        ub === 0n ? (1n << BigInt(bits)) - 1n : ua / ub);
+      eq(rv64RemainderUnsigned(unsigned(left), unsigned(right), bits),
+        ub === 0n ? ua : ua % ub);
+    }
+  }
 });
 
 test("canonical RV64 immediate decoders retain Thistle's signed arithmetic", () => {

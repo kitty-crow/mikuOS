@@ -1,5 +1,14 @@
 import { rv64Branch } from "../core/rv64-branch.js";
 import {
+  rv64DivideSigned,
+  rv64DivideUnsigned,
+  rv64MulHighSigned,
+  rv64MulHighSignedUnsigned,
+  rv64MulHighUnsigned,
+  rv64RemainderSigned,
+  rv64RemainderUnsigned,
+} from "../core/rv64-arithmetic.js";
+import {
   rv64CompressedJump,
   rv64ImmediateB,
   rv64ImmediateI,
@@ -1122,13 +1131,13 @@ export class Rv64 {
     if (top === 1) {
       switch (f) {
         case 0: this.set(d, a * b); break;
-        case 1: this.set(d, a * b >> 64n); break;
-        case 2: this.set(d, a * ux(b) >> 64n); break;
-        case 3: this.set(d, ux(a) * ux(b) >> 64n); break;
-        case 4: this.set(d, this.div(a, b, false)); break;
-        case 5: this.set(d, this.div(ux(a), ux(b), true)); break;
-        case 6: this.set(d, this.rem(a, b, false)); break;
-        case 7: this.set(d, this.rem(ux(a), ux(b), true)); break;
+        case 1: this.set(d, rv64MulHighSigned(a, b)); break;
+        case 2: this.set(d, rv64MulHighSignedUnsigned(a, ux(b))); break;
+        case 3: this.set(d, rv64MulHighUnsigned(ux(a), ux(b))); break;
+        case 4: this.set(d, rv64DivideSigned(a, b, 64)); break;
+        case 5: this.set(d, rv64DivideUnsigned(ux(a), ux(b), 64)); break;
+        case 6: this.set(d, rv64RemainderSigned(a, b, 64)); break;
+        case 7: this.set(d, rv64RemainderUnsigned(ux(a), ux(b), 64)); break;
       }
       return;
     }
@@ -1149,10 +1158,10 @@ export class Rv64 {
     if (top === 1) {
       const x = sx(a, 32), y = sx(b, 32), xu = BigInt.asUintN(32, a), yu = BigInt.asUintN(32, b);
       if (f === 0) this.set(d, sx(x * y, 32));
-      else if (f === 4) this.set(d, sx(this.div(x, y, false), 32));
-      else if (f === 5) this.set(d, sx(this.div(xu, yu, true, 32), 32));
-      else if (f === 6) this.set(d, sx(this.rem(x, y, false), 32));
-      else if (f === 7) this.set(d, sx(this.rem(xu, yu, true), 32));
+      else if (f === 4) this.set(d, sx(rv64DivideSigned(x, y, 32), 32));
+      else if (f === 5) this.set(d, sx(rv64DivideUnsigned(xu, yu, 32), 32));
+      else if (f === 6) this.set(d, sx(rv64RemainderSigned(x, y, 32), 32));
+      else if (f === 7) this.set(d, sx(rv64RemainderUnsigned(xu, yu, 32), 32));
       else this.badR(top, f);
       return;
     }
@@ -2401,19 +2410,6 @@ export class Rv64 {
     if (!mapped) bad("ERANGE", `unmapped RV64 memory at 0x${at.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
     if (wr && q && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
     if (wr && !q && this.maps.some(m => at >= m.at && end <= m.end && !(m.prot & 2))) bad("EACCES", "write to read-only RV64 mapping");
-  }
-
-  private div(a: bigint, b: bigint, uns: boolean, bits = 64): bigint {
-    if (!b) return uns ? (1n << BigInt(bits)) - 1n : -1n;
-    const lo = -(1n << BigInt(bits - 1));
-    if (!uns && a === lo && b === -1n) return lo;
-    return a / b;
-  }
-
-  private rem(a: bigint, b: bigint, uns: boolean): bigint {
-    if (!b) return a;
-    if (!uns && a === MIN && b === -1n) return 0n;
-    return a % b;
   }
 
   private immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }

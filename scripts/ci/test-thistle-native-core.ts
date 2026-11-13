@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { rv64Branch } from "../../src/core/rv64-branch.ts";
 import {
+  rv64DivideSigned,
+  rv64DivideUnsigned,
+  rv64MulHighSigned,
+  rv64MulHighSignedUnsigned,
+  rv64MulHighUnsigned,
+  rv64RemainderSigned,
+  rv64RemainderUnsigned,
+} from "../../src/core/rv64-arithmetic.ts";
+import {
   rv64CompressedJump,
   rv64ImmediateB,
   rv64ImmediateI,
@@ -12,6 +21,13 @@ import {
 
 interface NativeCore {
   rv64Branch(funct3: number, left: bigint, right: bigint): number;
+  rv64DivideSigned(left: bigint, right: bigint, bits: number): bigint;
+  rv64DivideUnsigned(left: bigint, right: bigint, bits: number): bigint;
+  rv64RemainderSigned(left: bigint, right: bigint, bits: number): bigint;
+  rv64RemainderUnsigned(left: bigint, right: bigint, bits: number): bigint;
+  rv64MulHighSigned(left: bigint, right: bigint): bigint;
+  rv64MulHighSignedUnsigned(left: bigint, right: bigint): bigint;
+  rv64MulHighUnsigned(left: bigint, right: bigint): bigint;
   rv64ImmediateI(instruction: number): number;
   rv64ImmediateS(instruction: number): number;
   rv64ImmediateB(instruction: number): number;
@@ -53,4 +69,35 @@ for (const left of samples) for (const right of samples) {
       `rv64Branch disagrees: funct3=${funct3} left=${left} right=${right}`);
   }
 }
-console.log("PASS: canonical Thistle RV64 source matches Bake/Baguette WebAssembly on 120,000 immediate decodings and signed/unsigned branches");
+const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+const boundaries = [
+  -(1n << 63n), -(1n << 63n) + 1n, -(1n << 31n), -65537n,
+  -2n, -1n, 0n, 1n, 2n, 65537n, (1n << 31n) - 1n, (1n << 63n) - 1n,
+];
+for (const left of boundaries) for (const right of boundaries) {
+  const bothUnsigned = [unsigned(left), unsigned(right)] as const;
+  assert.equal(native.rv64MulHighSigned(left, right), rv64MulHighSigned(left, right), "signed high multiply");
+  assert.equal(native.rv64MulHighSigned(left, right), signed(left * right >> 64n), "signed high multiply oracle");
+  assert.equal(native.rv64MulHighSignedUnsigned(left, bothUnsigned[1]), rv64MulHighSignedUnsigned(left, bothUnsigned[1]), "signed/unsigned high multiply");
+  assert.equal(native.rv64MulHighSignedUnsigned(left, bothUnsigned[1]), signed(left * bothUnsigned[1] >> 64n), "signed/unsigned high multiply oracle");
+  assert.equal(unsigned(native.rv64MulHighUnsigned(...bothUnsigned)), rv64MulHighUnsigned(...bothUnsigned), "unsigned high multiply");
+  assert.equal(unsigned(native.rv64MulHighUnsigned(...bothUnsigned)), unsigned(bothUnsigned[0] * bothUnsigned[1] >> 64n), "unsigned high multiply oracle");
+  for (const bits of [32, 64]) {
+    const a = BigInt.asIntN(bits, left), b = BigInt.asIntN(bits, right);
+    const ua = BigInt.asUintN(bits, left), ub = BigInt.asUintN(bits, right);
+    const min = -(1n << BigInt(bits - 1));
+    const signedQuotient = b === 0n ? -1n : a === min && b === -1n ? min : a / b;
+    const signedRemainder = b === 0n ? a : a === min && b === -1n ? 0n : a % b;
+    assert.equal(native.rv64DivideSigned(left, right, bits), rv64DivideSigned(left, right, bits), "signed divide parity");
+    assert.equal(native.rv64DivideSigned(left, right, bits), BigInt.asIntN(bits, signedQuotient), "signed divide oracle");
+    assert.equal(native.rv64RemainderSigned(left, right, bits), rv64RemainderSigned(left, right, bits), "signed remainder parity");
+    assert.equal(native.rv64RemainderSigned(left, right, bits), BigInt.asIntN(bits, signedRemainder), "signed remainder oracle");
+    assert.equal(unsigned(native.rv64DivideUnsigned(...bothUnsigned, bits)), rv64DivideUnsigned(...bothUnsigned, bits), "unsigned divide parity");
+    assert.equal(unsigned(native.rv64DivideUnsigned(...bothUnsigned, bits)), ub === 0n ? (1n << BigInt(bits)) - 1n : ua / ub, "unsigned divide oracle");
+    assert.equal(unsigned(native.rv64RemainderUnsigned(...bothUnsigned, bits)), rv64RemainderUnsigned(...bothUnsigned, bits), "unsigned remainder parity");
+    assert.equal(unsigned(native.rv64RemainderUnsigned(...bothUnsigned, bits)), ub === 0n ? ua : ua % ub, "unsigned remainder oracle");
+  }
+}
+
+console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, branches and all M-extension edge cases");

@@ -4,7 +4,8 @@
   "project": "tsconfig.json",
   "entries": [
     "src/vm/rv64-immediate.ts",
-    "src/core/rv64-branch.ts"
+    "src/core/rv64-branch.ts",
+    "src/core/rv64-arithmetic.ts"
   ],
   "generatedDir": "build/thistle-core-native",
   "outDir": "dist/thistle-core-probe",
