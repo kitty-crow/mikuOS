@@ -184,8 +184,8 @@ test("Baguette's source manifest includes the shared Thistle RV64 module", async
   const dynamic = (name: string): Promise<unknown> => import(name);
   const fs = await dynamic("node:fs/promises") as TextFs;
   const raw = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
-  const manifest = JSON.parse(raw) as { sourceFiles?: string[] };
-  ok(manifest.sourceFiles?.some(path => path.endsWith("/core/rv64-branch.ts")),
+  const manifest = JSON.parse(raw) as { generatedFrom?: Array<{ path: string }> };
+  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/core/rv64-branch.ts")),
     "Baguette must compile the canonical Thistle RV64 source, not an independently maintained branch implementation");
 });
 
