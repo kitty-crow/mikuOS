@@ -179,27 +179,28 @@ const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") =>
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
 
-test("Baguette's source manifest includes the shared Thistle RV64 module", async () => {
+test("Baguette uses canonical Thistle sources rather than an independently maintained Teto kernel", async () => {
   interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
   const dynamic = (name: string): Promise<unknown> => import(name);
   const fs = await dynamic("node:fs/promises") as TextFs;
-  const raw = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
-  const manifest = JSON.parse(raw) as { generatedFrom?: Array<{ path: string }> };
-  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/core/rv64-branch.ts")),
-    "Baguette must compile the canonical Thistle RV64 source, not an independently maintained branch implementation");
+  const rawConfig = await fs.readFile(new URL("../../baguette.config.json", import.meta.url), "utf8");
+  const config = JSON.parse(rawConfig) as { entries?: string[] };
+  ok(config.entries?.includes("src/vm/rv64.ts"),
+    "Baguette must compile Thistle's canonical RV64 executor as an entry point");
+  ok(!config.entries?.includes("src/teto/kernel.ts"),
+    "A separate Teto kernel implementation must never be a Baguette entry point");
+  const rawManifest = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
+  const manifest = JSON.parse(rawManifest) as { generatedFrom?: Array<{ path: string }> };
+  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/vm/rv64.ts")),
+    "The generated WASM manifest must identify the canonical Thistle executor");
 });
 
-test("Thistle preserves its working interpreter unless native-source probing is explicit", async () => {
+test("Thistle preserves its working interpreter without substituting Teto source", async () => {
   const original = boot({ put: () => {}, kernelMode: "thistle" });
   await original.ready;
   eq(original.p.env.has("THISTLE_RV_CORE"), false);
+  eq(original.p.env.has("THISTLE_PORTABLE_PROBE"), false);
   eq(original.k.executionCore, "Thistle TypeScript");
-
-  const portable = boot({ put: () => {}, kernelMode: "thistle", portableCoreProbe: true });
-  await portable.ready;
-  eq(portable.p.env.get("THISTLE_RV_CORE"), "teto-source");
-  eq(portable.p.env.get("THISTLE_PORTABLE_PROBE"), "1");
-  eq(portable.k.executionCore, "Thistle portable source (migration probe)");
 });
 
 test("Thistle's shared RV64 branches preserve 64-bit signed and unsigned conditions", () => {
