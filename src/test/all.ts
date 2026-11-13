@@ -179,6 +179,19 @@ const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") =>
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
 
+test("Thistle preserves its working interpreter unless native-source probing is explicit", async () => {
+  const original = boot({ put: () => {}, kernelMode: "thistle" });
+  await original.ready;
+  eq(original.p.env.has("THISTLE_RV_CORE"), false);
+  eq(original.k.executionCore, "Thistle TypeScript");
+
+  const portable = boot({ put: () => {}, kernelMode: "thistle", portableCoreProbe: true });
+  await portable.ready;
+  eq(portable.p.env.get("THISTLE_RV_CORE"), "teto-source");
+  eq(portable.p.env.get("THISTLE_PORTABLE_PROBE"), "1");
+  eq(portable.k.executionCore, "Thistle portable source (migration probe)");
+});
+
 test("Thistle's shared RV64 branches preserve 64-bit signed and unsigned conditions", () => {
   const values = [
     -(1n << 63n), -2n, -1n, 0n, 1n, 2n, (1n << 63n) - 1n,
