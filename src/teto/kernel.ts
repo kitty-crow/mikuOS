@@ -1,3 +1,4 @@
+import { rv64Branch } from "../core/rv64-branch.js";
 import {
   C_ABI,
   C_ACTIVE_WORKERS,
@@ -2123,15 +2124,8 @@ const floatingOperation = (
   return false;
 };
 
-const branch = (funct3: U32, left: I64, right: I64): I32 => {
-  if (funct3 === 0) return left === right ? 1 : 0;
-  if (funct3 === 1) return left !== right ? 1 : 0;
-  if (funct3 === 4) return left < right ? 1 : 0;
-  if (funct3 === 5) return left >= right ? 1 : 0;
-  if (funct3 === 6) return ux(left) < ux(right) ? 1 : 0;
-  if (funct3 === 7) return ux(left) >= ux(right) ? 1 : 0;
-  return -1;
-};
+const branch = (funct3: U32, left: I64, right: I64): I32 =>
+  rv64Branch(funct3, left, right);
 
 const opImmediate = (
   memory: TetoMemory,
