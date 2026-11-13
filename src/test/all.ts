@@ -23,6 +23,14 @@ import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
+import {
+  rv64CompressedJump,
+  rv64ImmediateB,
+  rv64ImmediateI,
+  rv64ImmediateJ,
+  rv64ImmediateS,
+  rv64ImmediateU,
+} from "../vm/rv64-immediate.js";
 import { localSessionPlan, superviseLocalLogin } from "../main/session.js";
 import { WebSession } from "../main/websession.js";
 import { WebTree } from "../main/webtree.js";
@@ -201,6 +209,29 @@ test("Thistle preserves its working interpreter without substituting Teto source
   eq(original.p.env.has("THISTLE_RV_CORE"), false);
   eq(original.p.env.has("THISTLE_PORTABLE_PROBE"), false);
   eq(original.k.executionCore, "Thistle TypeScript");
+});
+
+test("canonical RV64 immediate decoders retain Thistle's signed arithmetic", () => {
+  const original = (value: number, width: number): number =>
+    Number(BigInt.asIntN(width, BigInt(value)));
+  let word = 0x12345678;
+  const instructions = [0, -1, 0x80000000, 0x7fffffff, 0x000fffff, 0xfff00000, 0x00000800];
+  for (let index = 0; index < 10000; index++) {
+    word = Math.imul(word, 1664525) + 1013904223 | 0;
+    instructions.push(word);
+  }
+  for (const instruction of instructions) {
+    eq(rv64ImmediateI(instruction), original(instruction >>> 20, 12));
+    eq(rv64ImmediateS(instruction), original((instruction >>> 25) << 5 | instruction >>> 7 & 31, 12));
+    eq(rv64ImmediateB(instruction), original((instruction >>> 31) << 12 | (instruction >>> 7 & 1) << 11 |
+      (instruction >>> 25 & 63) << 5 | (instruction >>> 8 & 15) << 1, 13));
+    eq(rv64ImmediateU(instruction), original(instruction & 0xfffff000, 32));
+    eq(rv64ImmediateJ(instruction), original((instruction >>> 31) << 20 | (instruction >>> 12 & 255) << 12 |
+      (instruction >>> 20 & 1) << 11 | (instruction >>> 21 & 1023) << 1, 21));
+    eq(rv64CompressedJump(instruction), original((instruction >>> 1 & 0x800) | (instruction << 2 & 0x400) |
+      (instruction >>> 1 & 0x300) | (instruction << 1 & 0x80) | (instruction >>> 1 & 0x40) |
+      (instruction << 3 & 0x20) | (instruction >>> 7 & 0x10) | (instruction >>> 2 & 0xe), 12));
+  }
 });
 
 test("Thistle's shared RV64 branches preserve 64-bit signed and unsigned conditions", () => {
