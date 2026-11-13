@@ -59,6 +59,9 @@ jobs:
           path: /tmp/mikuos-build.log
           if-no-files-found: ignore
 
+      - name: Validate Node.js parity acceptance script
+        run: bash -n scripts/ci/test-node39-parity.sh
+
       - name: Compile and cross-check canonical Thistle instruction helpers
         shell: bash
         run: |
