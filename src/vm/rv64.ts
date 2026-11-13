@@ -1,4 +1,12 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import {
+  rv64CompressedJump,
+  rv64ImmediateB,
+  rv64ImmediateI,
+  rv64ImmediateJ,
+  rv64ImmediateS,
+  rv64ImmediateU,
+} from "./rv64-immediate.js";
 import { bad, KErr } from "../core/err.js";
 import type { Errno } from "../core/err.js";
 import type { Sys } from "../core/sys.js";
@@ -1077,8 +1085,7 @@ export class Rv64 {
   }
 
   private cj(i: number): bigint {
-    const n = (i >>> 1 & 0x800) | (i << 2 & 0x400) | (i >>> 1 & 0x300) | (i << 1 & 0x80) | (i >>> 1 & 0x40) | (i << 3 & 0x20) | (i >>> 7 & 0x10) | (i >>> 2 & 0xe);
-    return sx(BigInt(n), 12);
+    return BigInt(rv64CompressedJump(i));
   }
 
   private opI(d: number, f: number, i: number, a: bigint): void {
@@ -2409,11 +2416,11 @@ export class Rv64 {
     return a % b;
   }
 
-  private immI(i: number): bigint { return sx(BigInt(i >>> 20), 12); }
-  private immS(i: number): bigint { return sx(BigInt((i >>> 25) << 5 | i >>> 7 & 31), 12); }
-  private immB(i: number): bigint { return sx(BigInt((i >>> 31) << 12 | (i >>> 7 & 1) << 11 | (i >>> 25 & 63) << 5 | (i >>> 8 & 15) << 1), 13); }
-  private immU(i: number): bigint { return sx(BigInt(i & 0xfffff000), 32); }
-  private immJ(i: number): bigint { return sx(BigInt((i >>> 31) << 20 | (i >>> 12 & 255) << 12 | (i >>> 20 & 1) << 11 | (i >>> 21 & 1023) << 1), 21); }
+  private immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }
+  private immS(i: number): bigint { return BigInt(rv64ImmediateS(i)); }
+  private immB(i: number): bigint { return BigInt(rv64ImmediateB(i)); }
+  private immU(i: number): bigint { return BigInt(rv64ImmediateU(i)); }
+  private immJ(i: number): bigint { return BigInt(rv64ImmediateJ(i)); }
   private set(d: number, n: bigint): void { if (d) this.x[d] = sx(n, 64); }
   private addr(n: bigint): bigint { return ux(n); }
   private fd(n: bigint): number { return this.nat(n, "file descriptor", 0x7fffffff); }

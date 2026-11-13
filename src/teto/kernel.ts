@@ -1,5 +1,13 @@
 import { rv64Branch } from "../core/rv64-branch.js";
 import {
+  rv64CompressedJump,
+  rv64ImmediateB,
+  rv64ImmediateI,
+  rv64ImmediateJ,
+  rv64ImmediateS,
+  rv64ImmediateU,
+} from "../vm/rv64-immediate.js";
+import {
   C_ABI,
   C_ACTIVE_WORKERS,
   C_ATOMIC_LOCK,
@@ -1828,22 +1836,12 @@ const fault = (memory: TetoMemory, hart: U32, code: I32, instruction: U32): I32 
   return TETO_BATCH_FAULT;
 };
 
-const immediateI = (instruction: U32): I64 => sx(word(instruction >>> 20), 12);
-const immediateS = (instruction: U32): I64 =>
-  sx(word((instruction >>> 25) << 5 | instruction >>> 7 & 31), 12);
-const immediateB = (instruction: U32): I64 =>
-  sx(word((instruction >>> 31) << 12 | (instruction >>> 7 & 1) << 11 | (instruction >>> 25 & 63) << 5 | (instruction >>> 8 & 15) << 1), 13);
-const immediateU = (instruction: U32): I64 => sx(word(instruction & 0xfffff000), 32);
-const immediateJ = (instruction: U32): I64 =>
-  sx(word((instruction >>> 31) << 20 | (instruction >>> 12 & 255) << 12 | (instruction >>> 20 & 1) << 11 | (instruction >>> 21 & 1023) << 1), 21);
-
-const compressedJump = (instruction: U32): I64 => {
-  const value = instruction >>> 1 & 0x800 | instruction << 2 & 0x400 |
-    instruction >>> 1 & 0x300 | instruction << 1 & 0x80 |
-    instruction >>> 1 & 0x40 | instruction << 3 & 0x20 |
-    instruction >>> 7 & 0x10 | instruction >>> 2 & 0xe;
-  return sx(word(value), 12);
-};
+const immediateI = (instruction: U32): I64 => word(rv64ImmediateI(instruction));
+const immediateS = (instruction: U32): I64 => word(rv64ImmediateS(instruction));
+const immediateB = (instruction: U32): I64 => word(rv64ImmediateB(instruction));
+const immediateU = (instruction: U32): I64 => word(rv64ImmediateU(instruction));
+const immediateJ = (instruction: U32): I64 => word(rv64ImmediateJ(instruction));
+const compressedJump = (instruction: U32): I64 => word(rv64CompressedJump(instruction));
 
 const loadInteger = (
   memory: TetoMemory,
