@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64DivideSigned,
@@ -1128,30 +1129,8 @@ export class Rv64 {
   }
 
   private opR(d: number, f: number, top: number, a: bigint, b: bigint): void {
-    const sh = ux(b) & 63n;
-    if (top === 1) {
-      switch (f) {
-        case 0: this.set(d, a * b); break;
-        case 1: this.set(d, rv64MulHighSigned(a, b)); break;
-        case 2: this.set(d, rv64MulHighSignedUnsigned(a, ux(b))); break;
-        case 3: this.set(d, rv64MulHighUnsigned(ux(a), ux(b))); break;
-        case 4: this.set(d, rv64DivideSigned(a, b, 64)); break;
-        case 5: this.set(d, rv64DivideUnsigned(ux(a), ux(b), 64)); break;
-        case 6: this.set(d, rv64RemainderSigned(a, b, 64)); break;
-        case 7: this.set(d, rv64RemainderUnsigned(ux(a), ux(b), 64)); break;
-      }
-      return;
-    }
-    switch (f) {
-      case 0: if (top === 0) this.set(d, a + b); else if (top === 0x20) this.set(d, a - b); else this.badR(top, f); break;
-      case 1: if (!top) this.set(d, ux(a) << sh); else this.badR(top, f); break;
-      case 2: if (!top) this.set(d, a < b ? 1n : 0n); else this.badR(top, f); break;
-      case 3: if (!top) this.set(d, ux(a) < ux(b) ? 1n : 0n); else this.badR(top, f); break;
-      case 4: if (!top) this.set(d, a ^ b); else this.badR(top, f); break;
-      case 5: if (!top) this.set(d, ux(a) >> sh); else if (top === 0x20) this.set(d, a >> sh); else this.badR(top, f); break;
-      case 6: if (!top) this.set(d, a | b); else this.badR(top, f); break;
-      case 7: if (!top) this.set(d, a & b); else this.badR(top, f); break;
-    }
+    if (rv64RegisterValid(f, top) === 0) this.badR(top, f);
+    this.set(d, rv64RegisterValue(f, top, a, b));
   }
 
   private opRW(d: number, f: number, top: number, a: bigint, b: bigint): void {

@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64CompressedJump,
@@ -2161,30 +2162,8 @@ const opRegister = (
   left: I64,
   right: I64,
 ): boolean => {
-  const shift = wordToU32(ux(right) & 63n);
-  if (top === 1) {
-    if (funct3 === 0) setX(memory, hart, register, left * right);
-    else if (funct3 === 1) setX(memory, hart, register, mulHighSigned(left, right));
-    else if (funct3 === 2) setX(memory, hart, register, mulHighSignedUnsigned(left, ux(right)));
-    else if (funct3 === 3) setX(memory, hart, register, mulHighUnsigned(ux(left), ux(right)));
-    else if (funct3 === 4) setX(memory, hart, register, divSigned(left, right, 64));
-    else if (funct3 === 5) setX(memory, hart, register, divUnsigned(ux(left), ux(right), 64));
-    else if (funct3 === 6) setX(memory, hart, register, remSigned(left, right, 64));
-    else if (funct3 === 7) setX(memory, hart, register, remUnsigned(ux(left), ux(right), 64));
-    else return false;
-    return true;
-  }
-  if (funct3 === 0 && top === 0) setX(memory, hart, register, left + right);
-  else if (funct3 === 0 && top === 0x20) setX(memory, hart, register, left - right);
-  else if (funct3 === 1 && top === 0) setX(memory, hart, register, ux(left) << word(shift));
-  else if (funct3 === 2 && top === 0) setX(memory, hart, register, left < right ? 1n : 0n);
-  else if (funct3 === 3 && top === 0) setX(memory, hart, register, ux(left) < ux(right) ? 1n : 0n);
-  else if (funct3 === 4 && top === 0) setX(memory, hart, register, left ^ right);
-  else if (funct3 === 5 && top === 0) setX(memory, hart, register, ux(left) >> word(shift));
-  else if (funct3 === 5 && top === 0x20) setX(memory, hart, register, left >> word(shift));
-  else if (funct3 === 6 && top === 0) setX(memory, hart, register, left | right);
-  else if (funct3 === 7 && top === 0) setX(memory, hart, register, left & right);
-  else return false;
+  if (rv64RegisterValid(funct3, top) === 0) return false;
+  setX(memory, hart, register, rv64RegisterValue(funct3, top, left, right));
   return true;
 };
 

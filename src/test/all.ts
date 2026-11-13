@@ -23,6 +23,7 @@ import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
   rv64DivideSigned,
@@ -219,6 +220,31 @@ test("canonical RV64 FCLASS distinguishes every IEEE-754 category", () => {
     [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
   ];
   for (const [raw, bits, category] of values) eq(rv64FloatClass(raw, bits), category);
+});
+
+test("canonical RV64 register operations preserve validity and 64-bit results", () => {
+  const values = [-(1n << 63n), -(1n << 31n), -1n, 0n, 1n, 2n, (1n << 31n), (1n << 63n) - 1n];
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  for (const top of [0, 1, 0x20, 2, 0xff]) for (let funct3 = 0; funct3 < 8; funct3++) {
+    const valid = top === 0 || top === 1 || top === 0x20 && (funct3 === 0 || funct3 === 5);
+    eq(rv64RegisterValid(funct3, top), valid ? 1 : 0);
+    if (!valid) continue;
+    for (const left of values) for (const right of values) {
+      const actual = rv64RegisterValue(funct3, top, left, right);
+      eq(actual, signed(actual), "register operation did not truncate to 64 bits");
+      if (top !== 0 && top !== 0x20) continue;
+      const shift = unsigned(right) & 63n;
+      if (funct3 === 0) eq(actual, signed(top === 0 ? left + right : left - right));
+      if (funct3 === 1) eq(actual, signed(unsigned(left) << shift));
+      if (funct3 === 2) eq(actual, left < right ? 1n : 0n);
+      if (funct3 === 3) eq(actual, unsigned(left) < unsigned(right) ? 1n : 0n);
+      if (funct3 === 4) eq(actual, left ^ right);
+      if (funct3 === 5) eq(actual, signed(top === 0 ? unsigned(left) >> shift : left >> shift));
+      if (funct3 === 6) eq(actual, left | right);
+      if (funct3 === 7) eq(actual, left & right);
+    }
+  }
 });
 
 test("canonical Thistle RV64 multiplication and M-extension division preserve edge cases", () => {

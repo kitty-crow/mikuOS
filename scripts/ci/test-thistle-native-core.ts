@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { rv64Branch } from "../../src/core/rv64-branch.ts";
+import { rv64RegisterValid, rv64RegisterValue } from "../../src/core/rv64-register.ts";
 import { rv64FloatClass } from "../../src/core/rv64-fclass.ts";
 import {
   rv64DivideSigned,
@@ -22,6 +23,8 @@ import {
 
 interface NativeCore {
   rv64Branch(funct3: number, left: bigint, right: bigint): number;
+  rv64RegisterValid(funct3: number, top: number): number;
+  rv64RegisterValue(funct3: number, top: number, left: bigint, right: bigint): bigint;
   rv64FloatClass(raw: bigint, bits: number): bigint;
   rv64DivideSigned(left: bigint, right: bigint, bits: number): bigint;
   rv64DivideUnsigned(left: bigint, right: bigint, bits: number): bigint;
@@ -71,6 +74,31 @@ for (const left of samples) for (const right of samples) {
       `rv64Branch disagrees: funct3=${funct3} left=${left} right=${right}`);
   }
 }
+const signed64 = (n: bigint): bigint => BigInt.asIntN(64, n);
+let random = 0x715a9e23;
+const nextWord = (): number => {
+  random = Math.imul(random, 1664525) + 1013904223 | 0;
+  return random >>> 0;
+};
+const registers: bigint[] = [
+  -(1n << 63n), -(1n << 63n) + 1n, -1n, 0n, 1n, 2n, (1n << 63n) - 1n,
+];
+for (let index = 0; index < 250; index++) {
+  registers.push(signed64((BigInt(nextWord()) << 32n) | BigInt(nextWord())));
+}
+for (const top of [0, 1, 0x20, 2]) for (let funct3 = 0; funct3 < 8; funct3++) {
+  const valid = rv64RegisterValid(funct3, top);
+  assert.equal(native.rv64RegisterValid(funct3, top), valid, "register validity mismatch");
+  if (valid === 0) continue;
+  for (let index = 0; index < registers.length; index++) {
+    const left = registers[index]!;
+    const right = registers[(index * 37 + 11) % registers.length]!;
+    const direct = rv64RegisterValue(funct3, top, left, right);
+    assert.equal(native.rv64RegisterValue(funct3, top, left, right), direct,
+      `register mismatch funct3=${funct3} top=${top} left=${left} right=${right}`);
+  }
+}
+
 const floatCategories: Array<[bigint, number, bigint]> = [
   [0xff800000n, 32, 1n], [0xbf800000n, 32, 2n], [0x80000001n, 32, 4n],
   [0x80000000n, 32, 8n], [0n, 32, 16n], [1n, 32, 32n],
@@ -118,4 +146,4 @@ for (const left of boundaries) for (const right of boundaries) {
   }
 }
 
-console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, M-extension edge cases and IEEE-754 FCLASS categories");
+console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, M-extension edge cases, register operations and IEEE-754 FCLASS categories");
