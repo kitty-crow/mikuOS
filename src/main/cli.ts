@@ -59,6 +59,7 @@ const host: Host = {
   account: session.account,
   setId: true,
   kernelMode: requestedKernel,
+  portableCoreProbe: hp.env?.MIKUOS_THISTLE_SOURCE_PROBE === "1",
   ...(tetoProvider ? { teto: tetoProvider } : {}),
 };
 if (session.command && !hp.stdin.isTTY) {
