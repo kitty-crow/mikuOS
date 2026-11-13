@@ -10,7 +10,9 @@
   "generatedDir": "build/thistle-core-native",
   "outDir": "dist/thistle-core-probe",
   "moduleBaseName": "thistle-core-probe",
-  "intrinsicModules": [],
+  "intrinsicModules": [
+    "src/core/rv64-numbers.ts"
+  ],
   "abi": {
     "exports": "all-exported-functions"
   },
