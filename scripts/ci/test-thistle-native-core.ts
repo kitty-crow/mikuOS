@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { rv64Branch } from "../../src/core/rv64-branch.ts";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../../src/core/rv64-immediate-op.ts";
 import { rv64RegisterValid, rv64RegisterValue } from "../../src/core/rv64-register.ts";
 import { rv64FloatClass } from "../../src/core/rv64-fclass.ts";
 import {
@@ -23,6 +24,8 @@ import {
 
 interface NativeCore {
   rv64Branch(funct3: number, left: bigint, right: bigint): number;
+  rv64ImmediateOpValid(funct3: number, instruction: number): number;
+  rv64ImmediateOpValue(funct3: number, instruction: number, left: bigint): bigint;
   rv64RegisterValid(funct3: number, top: number): number;
   rv64RegisterValue(funct3: number, top: number, left: bigint, right: bigint): bigint;
   rv64FloatClass(raw: bigint, bits: number): bigint;
@@ -99,6 +102,21 @@ for (const top of [0, 1, 0x20, 2]) for (let funct3 = 0; funct3 < 8; funct3++) {
   }
 }
 
+let immState = 0xc0ffee12;
+for (let index = 0; index < 1500; index++) {
+  immState = Math.imul(immState, 1664525) + 1013904223 | 0;
+  const instruction = immState >>> 0;
+  for (let funct3 = 0; funct3 < 8; funct3++) {
+    const valid = rv64ImmediateOpValid(funct3, instruction);
+    assert.equal(native.rv64ImmediateOpValid(funct3, instruction), valid, "immediate validity mismatch");
+    if (valid === 0) continue;
+    const left = registers[(index + funct3 * 23) % registers.length]!;
+    assert.equal(native.rv64ImmediateOpValue(funct3, instruction, left),
+      rv64ImmediateOpValue(funct3, instruction, left),
+      `immediate operation mismatch instruction=${instruction} funct3=${funct3} left=${left}`);
+  }
+}
+
 const floatCategories: Array<[bigint, number, bigint]> = [
   [0xff800000n, 32, 1n], [0xbf800000n, 32, 2n], [0x80000001n, 32, 4n],
   [0x80000000n, 32, 8n], [0n, 32, 16n], [1n, 32, 32n],
@@ -146,4 +164,4 @@ for (const left of boundaries) for (const right of boundaries) {
   }
 }
 
-console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, M-extension edge cases, register operations and IEEE-754 FCLASS categories");
+console.log("PASS: canonical Thistle RV64 source matches compiled WebAssembly on 120,000 immediate decodings, M-extension edge cases, register and immediate operations and IEEE-754 FCLASS categories");

@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
@@ -2121,18 +2122,8 @@ const opImmediate = (
   instruction: U32,
   left: I64,
 ): boolean => {
-  const immediate = immediateI(instruction);
-  const shift = instruction >>> 20 & 63;
-  if (funct3 === 0) setX(memory, hart, register, left + immediate);
-  else if (funct3 === 1 && instruction >>> 26 === 0) setX(memory, hart, register, ux(left) << word(shift));
-  else if (funct3 === 2) setX(memory, hart, register, left < immediate ? 1n : 0n);
-  else if (funct3 === 3) setX(memory, hart, register, ux(left) < ux(immediate) ? 1n : 0n);
-  else if (funct3 === 4) setX(memory, hart, register, left ^ immediate);
-  else if (funct3 === 5 && instruction >>> 26 === 0) setX(memory, hart, register, ux(left) >> word(shift));
-  else if (funct3 === 5 && instruction >>> 26 === 0x10) setX(memory, hart, register, left >> word(shift));
-  else if (funct3 === 6) setX(memory, hart, register, left | immediate);
-  else if (funct3 === 7) setX(memory, hart, register, left & immediate);
-  else return false;
+  if (rv64ImmediateOpValid(funct3, instruction) === 0) return false;
+  setX(memory, hart, register, rv64ImmediateOpValue(funct3, instruction, left));
   return true;
 };
 

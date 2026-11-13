@@ -1,4 +1,5 @@
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
@@ -1100,23 +1101,8 @@ export class Rv64 {
   }
 
   private opI(d: number, f: number, i: number, a: bigint): void {
-    const im = this.immI(i), sh = BigInt(i >>> 20 & 63);
-    switch (f) {
-      case 0: this.set(d, a + im); break;
-      case 1: if (i >>> 26) this.bad(i); else this.set(d, ux(a) << sh); break;
-      case 2: this.set(d, a < im ? 1n : 0n); break;
-      case 3: this.set(d, ux(a) < ux(im) ? 1n : 0n); break;
-      case 4: this.set(d, a ^ im); break;
-      case 5: {
-        const top = i >>> 26;
-        if (top === 0) this.set(d, ux(a) >> sh);
-        else if (top === 0x10) this.set(d, a >> sh);
-        else this.bad(i);
-        break;
-      }
-      case 6: this.set(d, a | im); break;
-      case 7: this.set(d, a & im); break;
-    }
+    if (rv64ImmediateOpValid(f, i) === 0) this.bad(i);
+    this.set(d, rv64ImmediateOpValue(f, i, a));
   }
 
   private opIW(d: number, f: number, i: number, a: bigint): void {

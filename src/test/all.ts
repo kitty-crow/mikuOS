@@ -23,6 +23,7 @@ import { LineEditor } from "../sh/editor.js";
 import { hostConfig, mergeConfig } from "../main/config.js";
 import { sourceReleaseName } from "../core/release.js";
 import { rv64Branch } from "../core/rv64-branch.js";
+import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
 import { rv64RegisterValid, rv64RegisterValue } from "../core/rv64-register.js";
 import { rv64FloatClass } from "../core/rv64-fclass.js";
 import {
@@ -220,6 +221,34 @@ test("canonical RV64 FCLASS distinguishes every IEEE-754 category", () => {
     [0x7ff0000000000001n, 64, 256n], [0x7ff8000000000000n, 64, 512n],
   ];
   for (const [raw, bits, category] of values) eq(rv64FloatClass(raw, bits), category);
+});
+
+test("canonical RV64 immediate instructions preserve signed and unsigned values", () => {
+  const signed = (n: bigint): bigint => BigInt.asIntN(64, n);
+  const unsigned = (n: bigint): bigint => BigInt.asUintN(64, n);
+  const values = [-(1n << 63n), -1n, 0n, 1n, (1n << 63n) - 1n];
+  for (const instruction of [0, 0xffffffff, 0x40005013, 0x00001013, 0x00105013, 0x80000013, 0x40000013]) {
+    for (let funct3 = 0; funct3 < 8; funct3++) {
+      const top = instruction >>> 26;
+      const valid = funct3 === 1 ? top === 0 : funct3 === 5 ? top === 0 || top === 0x10 : true;
+      eq(rv64ImmediateOpValid(funct3, instruction), valid ? 1 : 0);
+      if (!valid) continue;
+      const immediate = BigInt.asIntN(12, BigInt(instruction >>> 20));
+      const shift = BigInt(instruction >>> 20 & 63);
+      for (const left of values) {
+        const actual = rv64ImmediateOpValue(funct3, instruction, left);
+        eq(actual, signed(actual), "immediate result not truncated to 64 bits");
+        if (funct3 === 0) eq(actual, signed(left + immediate));
+        else if (funct3 === 1) eq(actual, signed(unsigned(left) << shift));
+        else if (funct3 === 2) eq(actual, left < immediate ? 1n : 0n);
+        else if (funct3 === 3) eq(actual, unsigned(left) < unsigned(immediate) ? 1n : 0n);
+        else if (funct3 === 4) eq(actual, left ^ immediate);
+        else if (funct3 === 5) eq(actual, signed(top === 0 ? unsigned(left) >> shift : left >> shift));
+        else if (funct3 === 6) eq(actual, left | immediate);
+        else if (funct3 === 7) eq(actual, left & immediate);
+      }
+    }
+  }
 });
 
 test("canonical RV64 register operations preserve validity and 64-bit results", () => {
