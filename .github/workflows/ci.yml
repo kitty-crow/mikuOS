@@ -59,6 +59,12 @@ jobs:
           path: /tmp/mikuos-build.log
           if-no-files-found: ignore
 
+      - name: Compile and cross-check canonical Thistle instruction helpers
+        shell: bash
+        run: |
+          bun baguette/src/compiler.ts --config baguette.thistle-core.config.json --skip-determinism-check
+          bun scripts/ci/test-thistle-native-core.ts
+
       - name: Diagnose canonical Thistle source lowering (non-blocking, migration work)
         continue-on-error: true
         shell: bash

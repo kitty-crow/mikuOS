@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "name": "Canonical Thistle native RV64 conformance module",
+  "project": "tsconfig.json",
+  "entries": [
+    "src/vm/rv64-immediate.ts",
+    "src/core/rv64-branch.ts"
+  ],
+  "generatedDir": "build/thistle-core-native",
+  "outDir": "dist/thistle-core-probe",
+  "moduleBaseName": "thistle-core-probe",
+  "intrinsicModules": [],
+  "abi": {
+    "exports": "all-exported-functions"
+  },
+  "memory": {
+    "initialPages": 256,
+    "maximumPages": 32768,
+    "import": true,
+    "export": false
+  },
+  "runtime": "stub",
+  "variants": [
+    {
+      "name": "thistle-core-probe",
+      "threaded": false
+    }
+  ],
+  "allowedHostImports": [
+    {
+      "module": "env",
+      "name": "memory",
+      "kind": "memory"
+    }
+  ],
+  "completeKernel": false,
+  "productionKernel": "Thistle",
+  "typeAliases": {
+    "TetoMemory": "usize",
+    "I8": "i8",
+    "U8": "u8",
+    "I16": "i16",
+    "U16": "u16",
+    "I32": "i32",
+    "U32": "u32",
+    "I64": "i64",
+    "U64": "u64",
+    "F32": "f32",
+    "F64": "f64",
+    "Ptr": "u32"
+  },
+  "abiTypes": {
+    "TetoMemory": "number",
+    "I8": "number",
+    "U8": "number",
+    "I16": "number",
+    "U16": "number",
+    "I32": "number",
+    "U32": "number",
+    "I64": "bigint",
+    "U64": "bigint",
+    "F32": "number",
+    "F64": "number",
+    "Ptr": "number"
+  },
+  "materialiseInferredTypes": true
+}
