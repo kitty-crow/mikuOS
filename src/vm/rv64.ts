@@ -1,3 +1,4 @@
+import { rv64Branch } from "../core/rv64-branch.js";
 import { bad, KErr } from "../core/err.js";
 import type { Errno } from "../core/err.js";
 import type { Sys } from "../core/sys.js";
@@ -1335,13 +1336,8 @@ export class Rv64 {
   }
 
   private branch(f: number, a: bigint, b: bigint): boolean {
-    if (f === 0) return a === b;
-    if (f === 1) return a !== b;
-    if (f === 4) return a < b;
-    if (f === 5) return a >= b;
-    if (f === 6) return ux(a) < ux(b);
-    if (f === 7) return ux(a) >= ux(b);
-    return this.badR(0, f);
+    const result = rv64Branch(f, a, b);
+    return result < 0 ? this.badR(0, f) : result === 1;
   }
 
   private csr(d: number, f: number, i: number, a: bigint, ai: number): void {
