@@ -314,7 +314,7 @@ export class Rv64 {
 
   /** Development parity path: the shared Thistle source core owns instruction execution. */
   private async runTetoSource(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
-    const physicalBytes = 64 * 1024 * 1024;
+    const physicalBytes = (this.s.env("THISTLE_PORTABLE_PROBE") === "1" ? 512 : 64) * 1024 * 1024;
     const memory = directMemory(physicalBytes);
     const exports: TetoExports = {
       tetoKernelInit: (_memory, maxHarts, threaded) => tetoKernelInit(memory, maxHarts, threaded !== 0),
