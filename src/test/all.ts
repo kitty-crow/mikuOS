@@ -187,22 +187,6 @@ const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") =>
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
 
-test("Baguette uses canonical Thistle sources rather than an independently maintained Teto kernel", async () => {
-  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
-  const dynamic = (name: string): Promise<unknown> => import(name);
-  const fs = await dynamic("node:fs/promises") as TextFs;
-  const rawConfig = await fs.readFile(new URL("../../baguette.config.json", import.meta.url), "utf8");
-  const config = JSON.parse(rawConfig) as { entries?: string[] };
-  ok(config.entries?.includes("src/vm/rv64.ts"),
-    "Baguette must compile Thistle's canonical RV64 executor as an entry point");
-  ok(!config.entries?.includes("src/teto/kernel.ts"),
-    "A separate Teto kernel implementation must never be a Baguette entry point");
-  const rawManifest = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
-  const manifest = JSON.parse(rawManifest) as { generatedFrom?: Array<{ path: string }> };
-  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/vm/rv64.ts")),
-    "The generated WASM manifest must identify the canonical Thistle executor");
-});
-
 test("Thistle preserves its working interpreter without substituting Teto source", async () => {
   const original = boot({ put: () => {}, kernelMode: "thistle" });
   await original.ready;
@@ -3581,6 +3565,22 @@ test("globs, find and metadata", async () => {
   x = await r.run("find /tmp/g -name '*.txt' -type f | sort");
   eq(x.out, "/tmp/g/a.txt\n/tmp/g/b.txt\n");
   eq(r.os.s.stat("/tmp/g/a.txt").mode, 0o640);
+});
+
+test("Baguette uses canonical Thistle sources rather than an independently maintained Teto kernel", async () => {
+  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
+  const dynamic = (name: string): Promise<unknown> => import(name);
+  const fs = await dynamic("node:fs/promises") as TextFs;
+  const rawConfig = await fs.readFile(new URL("../../baguette.config.json", import.meta.url), "utf8");
+  const config = JSON.parse(rawConfig) as { entries?: string[] };
+  ok(config.entries?.includes("src/vm/rv64.ts"),
+    "Baguette must compile Thistle's canonical RV64 executor as an entry point");
+  ok(!config.entries?.includes("src/teto/kernel.ts"),
+    "A separate Teto kernel implementation must never be a Baguette entry point");
+  const rawManifest = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
+  const manifest = JSON.parse(rawManifest) as { generatedFrom?: Array<{ path: string }> };
+  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/vm/rv64.ts")),
+    "The generated WASM manifest must identify the canonical Thistle executor");
 });
 
 let pass = 0;
