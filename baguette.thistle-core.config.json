@@ -27,7 +27,8 @@
   "variants": [
     {
       "name": "thistle-core-probe",
-      "threaded": false
+      "threaded": false,
+      "preludeFile": "baguette/prelude/teto-baseline.ts"
     }
   ],
   "allowedHostImports": [
