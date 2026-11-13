@@ -28,7 +28,8 @@
     "baguette:check": "tsc -p baguette/tsconfig.json --noEmit",
     "sync:base": "python3 scripts/release/sync-thistle-base.py",
     "audit:base": "python3 scripts/release/sync-thistle-base.py --check",
-    "git:upload": "bash scripts/release/git-upload.sh"
+    "git:upload": "bash scripts/release/git-upload.sh",
+    "test:node39": "bash scripts/ci/test-node39-parity.sh"
   },
   "mikuos": {
     "version": "0.3"
