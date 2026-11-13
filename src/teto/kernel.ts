@@ -265,10 +265,17 @@ import {
 import type { TetoMemory } from "./memory.js";
 import type { F64, I32, I64, Ptr, U32, U64 } from "./types.js";
 import {
+  rv64DivideSigned as divSigned,
+  rv64DivideUnsigned as divUnsigned,
+  rv64MulHighSigned as mulHighSigned,
+  rv64MulHighSignedUnsigned as mulHighSignedUnsigned,
+  rv64MulHighUnsigned as mulHighUnsigned,
+  rv64RemainderSigned as remSigned,
+  rv64RemainderUnsigned as remUnsigned,
+} from "../core/rv64-arithmetic.js";
+import {
   bitsToF32,
   bitsToF64,
-  divSigned,
-  divUnsigned,
   f32ToBits,
   f64ToBits,
   floatCeil,
@@ -280,11 +287,6 @@ import {
   floatToI64,
   floatToU64,
   floatTrunc,
-  mulHighSigned,
-  mulHighSignedUnsigned,
-  mulHighUnsigned,
-  remSigned,
-  remUnsigned,
   roundF32,
   sx,
   u32word,
