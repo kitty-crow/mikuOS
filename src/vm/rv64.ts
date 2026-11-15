@@ -760,6 +760,9 @@ export class Rv64 {
   }
 
   private tetoScheduleSyscall(session: TetoThreadRuntime, hart: number): void {
+    if (this.s.env("THISTLE_TETO_STRICT") === "1") {
+      bad("ENOSYS", `Teto hart ${hart} requested a direct-Thistle syscall fallback`);
+    }
     const { memory, exports } = session.core;
     const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
     this.xState = new BigInt64Array(memory.buffer, base + H_X, 32);
