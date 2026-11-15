@@ -5,12 +5,12 @@
   "type": "module",
   "description": "mikuOS 0.3, a Unix-like system built on the Thistle kernel.",
   "scripts": {
-    "build": "npm run build:thistle && npm run teto:build",
-    "build:thistle": "npm run clean && tsc -p tsconfig.json && node build/tool/post.js",
-    "teto:build": "bun baguette/src/compiler.ts && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi",
-    "teto:validate": "bun baguette/src/compiler.ts --validate-only",
+    "build": "npm run stage:thistle && npm run build:thistle:staged && npm run teto:build:staged",
+    "build:thistle": "npm run stage:thistle && npm run build:thistle:staged",
+    "teto:build": "npm run stage:thistle && npm run teto:build:staged",
+    "teto:validate": "npm run stage:thistle && (cd deps/teto && THISTLE_USE_STAGED=1 npm run teto:validate)",
     "clean": "rm -rf build dist thistle.js vendor",
-    "test": "npm run build && node build/test/all.js",
+    "test": "npm run build && node scripts/ci/stage-thistle-native.mjs --check && node build/test/all.js",
     "test:toolchain": "bun run thistlecc/test/test.ts",
     "test:guest-toolchain": "npm run build && THISTLE_FUEL=0 node build/test/toolchain.js",
     "test:bun": "npm run build && bun run build/test/bun.js",
@@ -24,11 +24,15 @@
     "check": "npm test",
     "teto:test:cli": "bun baguette.ts --test-cli",
     "teto:test:web": "bun baguette.ts --test-web",
-    "teto:build:fast": "bun baguette/src/compiler.ts --skip-determinism-check",
+    "teto:build:fast": "npm run stage:thistle && (cd deps/teto && THISTLE_USE_STAGED=1 npm run teto:build:fast) && mkdir -p dist/teto && cp deps/teto/dist/teto/* dist/teto/",
     "baguette:check": "tsc -p baguette/tsconfig.json --noEmit",
     "sync:base": "python3 scripts/release/sync-thistle-base.py",
     "audit:base": "python3 scripts/release/sync-thistle-base.py --check",
-    "git:upload": "bash scripts/release/git-upload.sh"
+    "git:upload": "bash scripts/release/git-upload.sh",
+    "test:node39": "bash scripts/ci/test-node39-parity.sh",
+    "stage:thistle": "npm --prefix deps/teto install --package-lock=false && (cd deps/teto && THISTLE_REF=${THISTLE_REF:-main} bash scripts/ci/fetch-thistle-source.sh) && node scripts/ci/stage-thistle-native.mjs",
+    "build:thistle:staged": "npm run clean && tsc -p tsconfig.json && node build/tool/post.js",
+    "teto:build:staged": "(cd deps/teto && THISTLE_USE_STAGED=1 npm run teto:build) && mkdir -p dist/teto && cp deps/teto/dist/teto/* dist/teto/ && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi"
   },
   "mikuos": {
     "version": "0.3"

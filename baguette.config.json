@@ -1,21 +1,22 @@
 {
   "schema": 1,
   "name": "Teto",
-  "project": "tsconfig.teto.json",
+  "project": "deps/teto/build/thistle-source/tsconfig.json",
   "entries": [
-    "src/teto/abi.ts",
-    "src/teto/kernel.ts",
-    "src/teto/vfs.ts",
-    "src/teto/thx.ts",
-    "src/teto/start.ts"
+    "deps/teto/build/thistle-source/src/native/abi.ts",
+    "deps/teto/build/thistle-source/src/native/kernel.ts",
+    "deps/teto/build/thistle-source/src/native/vfs.ts",
+    "deps/teto/build/thistle-source/src/native/thx.ts",
+    "deps/teto/build/thistle-source/src/native/start.ts"
   ],
   "generatedDir": "build/teto-generated",
   "outDir": "dist/teto",
   "moduleBaseName": "teto",
   "intrinsicModules": [
-    "src/teto/types.ts",
-    "src/teto/memory.ts",
-    "src/teto/word.ts"
+    "deps/teto/build/thistle-source/src/native/types.ts",
+    "deps/teto/build/thistle-source/src/native/memory.ts",
+    "deps/teto/build/thistle-source/src/native/word.ts",
+    "deps/teto/build/thistle-source/src/core/rv64-numbers.ts"
   ],
   "abi": {
     "exports": "all-exported-functions",
@@ -35,7 +36,7 @@
     }
   },
   "memory": {
-    "initialPages": 256,
+    "initialPages": 8192,
     "maximumPages": 32768,
     "import": true,
     "export": false
@@ -60,7 +61,7 @@
       "kind": "memory"
     }
   ],
-  "completeKernel": false,
+  "completeKernel": true,
   "productionKernel": "Thistle",
   "typeAliases": {
     "TetoMemory": "usize",
@@ -90,5 +91,7 @@
     "F64": "number",
     "Ptr": "number"
   },
-  "materialiseInferredTypes": true
+  "materialiseInferredTypes": true,
+  "canonicalSource": "Thistle",
+  "canonicalRevision": "ONLY_RESOLVED_BY_deps/teto/scripts/ci/build-thistle-kernel.ts"
 }

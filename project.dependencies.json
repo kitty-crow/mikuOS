@@ -36,6 +36,15 @@
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
+    },
+    {
+      "name": "Teto",
+      "repository": "kitty-crow/teto",
+      "path": "deps/teto",
+      "commit": "9958a781ecb09b1c97e59974047a388d1f34b108",
+      "relationship": "native-kernel",
+      "direct": true,
+      "updatePolicy": "pull-request"
     }
   ]
 }
