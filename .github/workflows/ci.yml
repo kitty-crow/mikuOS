@@ -68,12 +68,12 @@ jobs:
           bun baguette/src/compiler.ts --config baguette.thistle-core.config.json --skip-determinism-check
           bun scripts/ci/test-thistle-native-core.ts
 
-      - name: Diagnose canonical Thistle source lowering (non-blocking, migration work)
-        continue-on-error: true
+      - name: Validate production Thistle native kernel through Bake and Baguette
         shell: bash
         run: |
-          set -o pipefail
-          bun baguette/src/compiler.ts --config baguette.thistle-probe.config.json --validate-only 2>&1 | tee /tmp/thistle-source-probe.log
+          set -Eeuo pipefail
+          node scripts/ci/stage-thistle-native.mjs --check
+          (cd deps/teto && THISTLE_USE_STAGED=1 bun scripts/ci/probe-thistle-kernel.ts)
 
       - name: Test
         run: npm test
