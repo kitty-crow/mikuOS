@@ -30,7 +30,7 @@
     "audit:base": "python3 scripts/release/sync-thistle-base.py --check",
     "git:upload": "bash scripts/release/git-upload.sh",
     "test:node39": "bash scripts/ci/test-node39-parity.sh",
-    "stage:thistle": "npm --prefix deps/teto install --package-lock=false && (cd deps/teto && THISTLE_REF=${THISTLE_REF:-fix/canonical-teto-512m-source} bash scripts/ci/fetch-thistle-source.sh) && node scripts/ci/stage-thistle-native.mjs",
+    "stage:thistle": "npm --prefix deps/teto install --package-lock=false && (cd deps/teto && THISTLE_REF=${THISTLE_REF:-main} bash scripts/ci/fetch-thistle-source.sh) && node scripts/ci/stage-thistle-native.mjs",
     "build:thistle:staged": "npm run clean && tsc -p tsconfig.json && node build/tool/post.js",
     "teto:build:staged": "(cd deps/teto && THISTLE_USE_STAGED=1 npm run teto:build) && mkdir -p dist/teto && cp deps/teto/dist/teto/* dist/teto/ && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi"
   },
