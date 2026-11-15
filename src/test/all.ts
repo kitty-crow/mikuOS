@@ -3711,7 +3711,7 @@ test("globs, find and metadata", async () => {
 });
 
 test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async () => {
-  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
+  interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; readFile(path: URL): Promise<Uint8Array>; }
   const dynamic = (name: string): Promise<unknown> => import(name);
   const fs = await dynamic("node:fs/promises") as TextFs;
   const config = JSON.parse(await fs.readFile(
@@ -3746,6 +3746,20 @@ test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async (
     "A separate Teto kernel must not enter the transitive compilation graph");
   ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/src/native/kernel.ts")),
     "Generated WebAssembly must contain the Bake-lowered Thistle kernel");
+  for (const name of ["abi.ts", "kernel.ts", "memory.ts", "start.ts", "thx.ts", "types.ts", "vfs.ts", "word.ts"]) {
+    const thistle = await fs.readFile(new URL(`../../deps/teto/build/thistle-source/src/native/${name}`, import.meta.url), "utf8");
+    const legacy = await fs.readFile(new URL(`../../src/teto/${name}`, import.meta.url), "utf8");
+    eq(legacy, thistle, `Local compatibility copy of ${name} diverged from canonical Thistle`);
+  }
+  for (const name of ["teto.wasm", "teto-threads.wasm"]) {
+    const upstream = await fs.readFile(new URL(`../../deps/teto/dist/teto/${name}`, import.meta.url));
+    const release = await fs.readFile(new URL(`../../dist/teto/${name}`, import.meta.url));
+    const web = await fs.readFile(new URL(`../../dist/web/teto/${name}`, import.meta.url));
+    eq(release.byteLength, upstream.byteLength, `${name}: package size differs from the upstream compiler output`);
+    ok(release.every((byte, index) => byte === upstream[index]), `${name}: packaged bytes differ from Teto`);
+    eq(web.byteLength, upstream.byteLength, `${name}: browser package size differs from upstream`);
+    ok(web.every((byte, index) => byte === upstream[index]), `${name}: browser kernel is not the exact Thistle-origin WASM`);
+  }
 });
 
 let pass = 0;
