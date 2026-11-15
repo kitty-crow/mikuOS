@@ -1277,7 +1277,7 @@ test("Teto imports and reads a deterministic hard-link-preserving root image", a
   const mod = (name: string): Promise<unknown> => import(name);
   const fs = await mod("node:fs/promises") as HostFs;
   const generated = await loadTeto(Uint8Array.from(await fs.readFile(new URL("../../dist/teto/teto.wasm", import.meta.url))), {
-    initialPages: 1024,
+    initialPages: 8192,
     maximumPages: 32768,
   });
 
