@@ -93,6 +93,11 @@ const files = [
 ];
 const verifyOnly = process.argv.includes("--check");
 for (const [from, to] of files) {
+  // Generation is only valid if the consumer has no independently tracked
+  // kernel implementation that could drift from canonical Thistle.
+  const tracked = spawnSync("git", ["-C", root, "ls-files", "--error-unmatch", to], { stdio: "ignore" });
+  if (tracked.status === 0) throw new Error(`Refusing an independently tracked Thistle kernel copy: ${to}`);
+  if (tracked.status !== 1) throw new Error(`Cannot verify tracked state of generated source: ${to}`);
   const expected = await readFile(resolve(upstream, from));
   const destination = resolve(root, to);
   if (verifyOnly) {
