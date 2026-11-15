@@ -1731,6 +1731,7 @@ test("mikuOS boot mode selects generated Teto without manual guest environment o
   eq(rig.os.activeKernelMode, "teto");
   eq(rig.os.s.env("MIKUOS_KERNEL_MODE"), "teto");
   eq(rig.os.s.env("THISTLE_RV_CORE"), "teto-wasm-core");
+  eq(rig.os.s.env("THISTLE_TETO_STRICT"), "1");
   eq(rig.os.k.name, "Teto");
   await rig.os.hello();
   ok(
