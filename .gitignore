@@ -132,3 +132,22 @@ Thumbs.db
 /.thistle.base.previous/
 !/.thistle.base/
 !/.thistle.base/**
+
+# Canonical Thistle native files are materialised by stage:thistle; never commit copies.
+/src/teto/abi.ts
+/src/teto/kernel.ts
+/src/teto/vfs.ts
+/src/teto/thx.ts
+/src/teto/start.ts
+/src/teto/types.ts
+/src/teto/memory.ts
+/src/teto/word.ts
+/src/core/native-types.ts
+/src/core/rv64-arithmetic.ts
+/src/core/rv64-branch.ts
+/src/core/rv64-fclass.ts
+/src/core/rv64-immediate-op.ts
+/src/core/rv64-numbers.ts
+/src/core/rv64-register.ts
+/src/core/rv64-word.ts
+/src/vm/rv64-immediate.ts
