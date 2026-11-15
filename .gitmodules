@@ -10,3 +10,6 @@
 [submodule "thistlecc"]
 	path = thistlecc
 	url = https://github.com/kitty-crow/thistlecc.git
+[submodule "deps/teto"]
+	path = deps/teto
+	url = https://github.com/kitty-crow/teto.git

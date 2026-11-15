@@ -3709,20 +3709,42 @@ test("globs, find and metadata", async () => {
   eq(r.os.s.stat("/tmp/g/a.txt").mode, 0o640);
 });
 
-test("Baguette uses canonical Thistle sources rather than an independently maintained Teto kernel", async () => {
+test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async () => {
   interface TextFs { readFile(path: URL, encoding: "utf8"): Promise<string>; }
   const dynamic = (name: string): Promise<unknown> => import(name);
   const fs = await dynamic("node:fs/promises") as TextFs;
-  const rawConfig = await fs.readFile(new URL("../../baguette.config.json", import.meta.url), "utf8");
-  const config = JSON.parse(rawConfig) as { entries?: string[] };
-  ok(config.entries?.includes("src/vm/rv64.ts"),
-    "Baguette must compile Thistle's canonical RV64 executor as an entry point");
-  ok(!config.entries?.includes("src/teto/kernel.ts"),
-    "A separate Teto kernel implementation must never be a Baguette entry point");
-  const rawManifest = await fs.readFile(new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8");
-  const manifest = JSON.parse(rawManifest) as { generatedFrom?: Array<{ path: string }> };
-  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/vm/rv64.ts")),
-    "The generated WASM manifest must identify the canonical Thistle executor");
+  const config = JSON.parse(await fs.readFile(
+    new URL("../../baguette.config.json", import.meta.url), "utf8",
+  )) as { entries?: string[]; canonicalSource?: string; completeKernel?: boolean; memory?: { initialPages?: number } };
+  eq(config.canonicalSource, "Thistle");
+  eq(config.completeKernel, true);
+  eq(config.memory?.initialPages, 8192);
+  ok(config.entries?.some(path => path.endsWith("/src/native/kernel.ts")),
+    "mikuOS must declare the canonical native Thistle kernel entry");
+  ok(!config.entries?.some(path => path.includes("src/teto/")),
+    "mikuOS must never build Teto from a local second kernel");
+  const manifest = JSON.parse(await fs.readFile(
+    new URL("../../dist/teto/teto.manifest.json", import.meta.url), "utf8",
+  )) as {
+    canonicalSource?: string;
+    canonicalRevision?: string;
+    canonicalOriginalEntries?: string[];
+    canonicalOriginalModules?: string[];
+    generatedFrom?: Array<{ path: string; sha256: string }>;
+  };
+  eq(manifest.canonicalSource, "Thistle");
+  const selectedSha = (await fs.readFile(
+    new URL("../../deps/teto/build/thistle-source.sha", import.meta.url), "utf8",
+  )).trim();
+  eq(manifest.canonicalRevision, selectedSha);
+  ok(manifest.canonicalOriginalEntries?.includes("src/native/kernel.ts"),
+    "Teto manifest must identify the original Thistle kernel source");
+  ok(manifest.canonicalOriginalModules?.some(path => path.endsWith("/src/native/kernel.ts")),
+    "Teto manifest must record the original native Thistle source graph");
+  ok(!manifest.canonicalOriginalModules?.some(path => path.endsWith("/src/teto/kernel.ts")),
+    "A separate Teto kernel must not enter the transitive compilation graph");
+  ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/src/native/kernel.ts")),
+    "Generated WebAssembly must contain the Bake-lowered Thistle kernel");
 });
 
 let pass = 0;

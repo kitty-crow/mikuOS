@@ -37,7 +37,7 @@ export const fetchTetoProvider = (base: string | URL): TetoImageProvider => {
 /** Validate that the provider supplies a genuine generated Teto kernel module. */
 export const validateTetoProvider = async (provider: TetoImageProvider): Promise<void> => {
   const bytes = await provider.load("baseline");
-  const runtime = await loadTeto(bytes, { initialPages: 1024, maximumPages: 32768 });
+  const runtime = await loadTeto(bytes, { initialPages: 8192, maximumPages: 32768 });
   if (runtime.exports.tetoKernelInit(0, 1, 0) !== 0 || runtime.exports.tetoKernelValid(0) !== 1) {
     throw new Error("Teto startup validation failed");
   }
