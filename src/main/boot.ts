@@ -184,8 +184,9 @@ export class Os {
       this.k.name = "Teto";
       this.p.env.set("MIKUOS_KERNEL_MODE", "teto");
       this.p.env.set("THISTLE_RV_CORE", "teto-wasm-core");
-      // The current migration still delegates syscalls not yet owned by Teto.
-      this.p.env.set("THISTLE_TETO_STRICT", "0");
+      // Strict execution: an unsupported Teto syscall is a visible failure,
+      // never a silent return to the independently executed Thistle VM.
+      this.p.env.set("THISTLE_TETO_STRICT", "1");
       this.k.executionCore = "Teto WebAssembly";
       this.k.log("teto: generated WebAssembly RV64 execution core validated and selected");
     } catch (error) {
