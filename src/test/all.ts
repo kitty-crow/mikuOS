@@ -404,7 +404,7 @@ test("thistle64 releases full pages and clears partial unmaps", () => {
   m.drop(0x20011n, 2); eq(m.used, 65536); eq(m.u32(0x20010n), 0x55000088);
 });
 
-test("direct Thistle RV64 mprotect applies page permissions without changing neighbouring mappings", () => {
+test("direct Thistle RV64 mprotect syscall applies page permissions without changing neighbours", async () => {
   interface Mapping {
     at: bigint;
     end: bigint;
@@ -420,6 +420,8 @@ test("direct Thistle RV64 mprotect applies page permissions without changing nei
     stackAt: bigint;
     mapAt: bigint;
     maps: Mapping[];
+    x: BigInt64Array<ArrayBufferLike>;
+    call(syscall: number): Promise<bigint>;
     mmap(at: bigint, len: bigint, prot: bigint, flags: bigint, fd: bigint, off: bigint): bigint;
     mprotect(at: bigint, len: bigint, prot: bigint): bigint;
     unmap(at: bigint, len: number): void;
@@ -442,7 +444,11 @@ test("direct Thistle RV64 mprotect applies page permissions without changing nei
   eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
   eq(errorCode(() => vm.mem(base + 0x1000n, 4, false)), "EACCES");
   eq(errorCode(() => vm.exec(base + 0x1000n, 4)), "EACCES");
-  eq(vm.mprotect(base + 0x1000n, 0x1000n, 3n), 0n);
+  // Exercise the actual RV64 Linux ABI dispatcher (syscall 226).
+  vm.x[10] = base + 0x1000n;
+  vm.x[11] = 0x1000n;
+  vm.x[12] = 3n;
+  eq(await vm.call(226), 0n);
   vm.mem(base + 0x1000n, 4, true);
   vm.m.set32(base + 0x1000n, 42);
   eq(vm.m.u32(base + 0x1000n), 42);
