@@ -2254,7 +2254,8 @@ export class Rv64 {
   private mprotect(addr0: bigint, len0: bigint, prot0: bigint): bigint {
     const at = this.addr(addr0);
     const size = this.nat(len0, "mprotect length", Number.MAX_SAFE_INTEGER);
-    const prot = this.nat(prot0, "mprotect protection", 7);
+    if (prot0 < 0n || prot0 > 7n) bad("EINVAL", "invalid mprotect protection");
+    const prot = Number(prot0);
     if (!size || (at & (PAGE - 1n))) bad("EINVAL", "invalid mprotect range");
     const end = at + al(BigInt(size));
     if (end > this.m.top) bad("ENOMEM", "mprotect exceeds guest address space");
@@ -2391,10 +2392,21 @@ export class Rv64 {
     if (at < 0n || !Number.isSafeInteger(n) || n < 0 || end > this.m.top) bad("ERANGE", `RV64 memory at 0x${at.toString(16)}`);
     if (!n) return;
     const q = at < this.floor ? this.seg.find(s => at >= s.at && end <= s.end) : undefined;
-    const mapped = !!q || at >= this.floor && end <= this.brk || at >= this.stackAt || this.maps.some(m => at >= m.at && end <= m.end);
-    if (!mapped) bad("ERANGE", `unmapped RV64 memory at 0x${at.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
-    if (wr && q && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
-    if (wr && !q && this.maps.some(m => at >= m.at && end <= m.end && !(m.prot & 2))) bad("EACCES", "write to read-only RV64 mapping");
+    if (q) {
+      if (wr && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
+      if (!wr && !q.flg.includes("r")) bad("EACCES", `read from ${q.name}`);
+      return;
+    }
+    if (at >= this.floor && end <= this.brk || at >= this.stackAt) return;
+    // Multi-byte accesses can cross a boundary created by mprotect. Check
+    // every contiguous mapping, not only one entry covering the whole access.
+    let cursor = at;
+    while (cursor < end) {
+      const region = this.maps.find(m => cursor >= m.at && cursor < m.end);
+      if (!region) bad("ERANGE", `unmapped RV64 memory at 0x${cursor.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
+      if (!(region.prot & (wr ? 2 : 1))) bad("EACCES", wr ? "write to read-only RV64 mapping" : "read from inaccessible RV64 mapping");
+      cursor = region.end < end ? region.end : end;
+    }
   }
 
   private immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }
