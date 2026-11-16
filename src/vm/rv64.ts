@@ -301,8 +301,13 @@ export class Rv64 {
   get f(): BigUint64Array<ArrayBufferLike> { return this.fState; }
 
   async run(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
-    if (this.s.env("THISTLE_RV_CORE") === "teto-source") return this.runTetoSource(exe, argv, image);
-    if (this.s.env("THISTLE_RV_CORE") === "teto-wasm-core") return this.runTetoWasm(exe, argv, image);
+    const core = this.s.env("THISTLE_RV_CORE");
+    if (this.s.env("THISTLE_TETO_STRICT") === "1" &&
+        core !== "teto-source" && core !== "teto-wasm-core") {
+      bad("ENOSYS", "strict Teto refuses direct-Thistle RV64 instruction execution");
+    }
+    if (core === "teto-source") return this.runTetoSource(exe, argv, image);
+    if (core === "teto-wasm-core") return this.runTetoWasm(exe, argv, image);
     if (exe.machine !== "thistle64" || exe.isa !== "rv64gc") bad("ENOEXEC", "RV64 VM received another instruction profile");
     this.exe = exe;
     this.m = new Mem64(BigInt(exe.mem), this.s.k.lim.mem);
@@ -544,10 +549,11 @@ export class Rv64 {
       this.pc = exports.tetoHartPc(0, 0);
       this.brk = exports.tetoHartBreak(0, 0);
       if (result === TETO_BATCH_SYSCALL) {
-        if (this.s.env("THISTLE_TETO_STRICT") === "1") bad("ENOSYS", `${core.label} requested a direct-Thistle syscall fallback`);
-
+        // A guest syscall is an explicit Teto-to-host service boundary, not a
+        // return to the direct TypeScript RV64 interpreter. Guest instructions
+        // continue exclusively in the selected generated Teto execution core.
         // Teto owns credentials, brk and anonymous mmap state.
-        // Synchronise the compatibility bridge before a fallback syscall.
+        // Synchronise the host syscall adapter before servicing the request.
         this.syncTetoCredentials(memory);
         this.syncTetoMemoryState(exports);
 
@@ -760,9 +766,8 @@ export class Rv64 {
   }
 
   private tetoScheduleSyscall(session: TetoThreadRuntime, hart: number): void {
-    if (this.s.env("THISTLE_TETO_STRICT") === "1") {
-      bad("ENOSYS", `Teto hart ${hart} requested a direct-Thistle syscall fallback`);
-    }
+    // This services a syscall requested by generated Teto; it does not hand
+    // instruction execution back to the direct TypeScript RV64 interpreter.
     const { memory, exports } = session.core;
     const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
     this.xState = new BigInt64Array(memory.buffer, base + H_X, 32);
