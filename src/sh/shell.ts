@@ -68,7 +68,7 @@ class CaptureOut implements Out {
   }
 }
 
-const built = new Set(["cd", "export", "unset", "set", "alias", "unalias", "history", "prefs", "jobs", "fg", "wait", "umask", "exit", "logout", "reboot"]);
+const built = new Set([":", "command", "cd", "export", "unset", "set", "alias", "unalias", "history", "prefs", "jobs", "fg", "wait", "umask", "exit", "logout", "reboot"]);
 
 export class Shell {
   readonly hist: string[] = [];
@@ -530,6 +530,65 @@ export class Shell {
 
   private async bi(name: string, a: string[]): Promise<number> {
     switch (name) {
+      case ":": return 0;
+      case "command": {
+        // POSIX command operates on the given name without alias expansion.
+        // Keep shell special built-ins in the current process, particularly
+        // export and cd, and run ordinary commands through the normal PATH.
+        let describe: "path" | "verbose" | undefined;
+        let index = 0;
+        while (index < a.length) {
+          const option = a[index]!;
+          if (option === "--") { index++; break; }
+          if (option === "-v" || option === "-V") {
+            describe = option === "-v" ? "path" : "verbose";
+            index++;
+            continue;
+          }
+          if (option.startsWith("-")) {
+            await this.s.err(`command: unsupported option: ${option}\n`);
+            return 2;
+          }
+          break;
+        }
+        const names = a.slice(index);
+        if (describe) {
+          let failed = false;
+          for (const target of names) {
+            if (built.has(target)) {
+              await this.s.out(describe === "path"
+                ? `${target}\n`
+                : `${target} is a shell built-in\n`);
+              continue;
+            }
+            try {
+              const path = this.s.which(target);
+              await this.s.out(describe === "path"
+                ? `${path}\n`
+                : `${target} is ${path}\n`);
+            } catch {
+              failed = true;
+            }
+          }
+          return failed ? 1 : 0;
+        }
+        if (!names.length) return 0;
+        const [target, ...args] = names;
+        if (built.has(target!)) return this.bi(target!, args);
+
+        // A missing command is not a shell syntax error.
+        try { this.s.which(target!); }
+        catch {
+          await this.s.err(`command: ${target}: not found\n`);
+          return 127;
+        }
+        const proc = this.s.start(target!, args, {
+          io: this.base(),
+          env: this.s.env() as Map<string, string>,
+        });
+        try { return await proc.done; }
+        finally { this.s.reap(proc.pid); }
+      }
       case "cd": {
         const p = a[0] === "-" ? String(this.s.env("OLDPWD") ?? bad("ENOENT", "OLDPWD is not set")) : a[0] ?? String(this.s.env("HOME") ?? "/");
         this.s.cd(p); if (a[0] === "-") await this.s.out(this.s.cwd + "\n"); return 0;
