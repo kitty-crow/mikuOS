@@ -2979,6 +2979,18 @@ test("GNU head dd od and Bash are actual pre-built THX2 guest executables", asyn
   x = await r.run("/bin/bash -c 'printf bash-ready'");
   eq(x.code, 0, x.err);
   eq(x.out, "bash-ready");
+
+  // Linux-style device nodes are character devices, not lazily loaded regular
+  // files. GNU head performs native RV64 openat/read/fstat calls on them.
+  for (const path of ["/dev/zero", "/dev/random", "/dev/urandom"]) {
+    eq(r.os.s.stat(path).kind, "char", path + " is not a character device");
+    x = await r.run(`/bin/head -c 16 ${path} | /bin/od -An -tx1`);
+    eq(x.code, 0, path + " failed: " + x.err);
+    eq(x.err, "", path + " reported an unexpected error");
+    const bytes = x.out.match(/\\b[0-9a-f]{2}\\b/gi) ?? [];
+    eq(bytes.length, 16, path + " did not return exactly 16 bytes");
+    if (path === "/dev/zero") ok(bytes.every(value => value === "00"), "zero device returned nonzero bytes");
+  }
 });
 
 test("thsh folds physical line continuations without changing quoted here-documents", async () => {
@@ -3028,6 +3040,48 @@ test("thsh folds physical line continuations without changing quoted here-docume
   x = await r.run(lines("cat <<EOF", `left${slash}`, "right", "EOF", ""));
   eq(x.code, 0);
   eq(x.out, "leftright\n", "an unquoted here-document lost its established expansion rules");
+});
+
+test("Up and Down traverse full shell history without accidentally entering prefix search", () => {
+  const r = new Rig();
+  r.os.sh.hist.push("pwd", "echo middle", "ls -la");
+  let written = "";
+  const host = {
+    shell: r.os.sh,
+    prompt: () => "$ ",
+    busy: () => false,
+    write: (value: string) => { written += value; },
+    execute: (_source: string) => {},
+    passthrough: (_raw: string) => {},
+    halt: () => {},
+    complete: (line: string) => ({ line, list: [] as string[] }),
+  };
+  const visible = (): string => written.split("\r\x1b[2K").at(-1) ?? "";
+  const editor = new LineEditor(host);
+
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ ls -la"), "first Up did not recall the newest command");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ echo middle"), "second Up incorrectly started prefix search");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ pwd"), "third Up did not recall the oldest command");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ pwd"), "Up at the oldest command changed history");
+  editor.key("\x1b[B");
+  ok(visible().startsWith("$ echo middle"), "Down did not navigate forward");
+  editor.key("\x1b[B");
+  ok(visible().startsWith("$ ls -la"), "Down did not reach newest history");
+  editor.key("\x1b[B");
+  eq(visible(), "$ ", "Down must restore the empty prompt");
+
+  // Prefix search is still useful when a prefix was actually typed.
+  written = "";
+  const prefixed = new LineEditor(host);
+  prefixed.key("ec");
+  prefixed.key("\x1b[A");
+  ok(visible().startsWith("$ echo middle"), "typed-prefix history search regressed");
+  prefixed.key("\x1b[B");
+  ok(visible().startsWith("$ ec"), "Down did not restore typed prefix");
 });
 
 test("line editor clears unaccepted history suggestions before submitting", () => {
