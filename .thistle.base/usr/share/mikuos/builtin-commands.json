@@ -243,16 +243,6 @@
       "defaultProvider": "built-in"
     },
     {
-      "name": "head",
-      "origin": "mikuOS",
-      "implementation": "TypeScript built-in",
-      "description": "Print the first lines of input.",
-      "usage": "head [-n count] [file ...]",
-      "activePath": "/bin/head",
-      "rescuePath": "/usr/libexec/mikuos/builtin/head",
-      "defaultProvider": "built-in"
-    },
-    {
       "name": "help",
       "origin": "mikuOS",
       "implementation": "TypeScript built-in",
