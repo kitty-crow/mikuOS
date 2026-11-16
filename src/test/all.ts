@@ -2987,7 +2987,7 @@ test("GNU head dd od and Bash are actual pre-built THX2 guest executables", asyn
     x = await r.run(`/bin/head -c 16 ${path} | /bin/od -An -tx1`);
     eq(x.code, 0, path + " failed: " + x.err);
     eq(x.err, "", path + " reported an unexpected error");
-    const bytes = x.out.match(/\\b[0-9a-f]{2}\\b/gi) ?? [];
+    const bytes = x.out.match(/\b[0-9a-f]{2}\b/gi) ?? [];
     eq(bytes.length, 16, path + " did not return exactly 16 bytes");
     if (path === "/dev/zero") ok(bytes.every(value => value === "00"), "zero device returned nonzero bytes");
   }
