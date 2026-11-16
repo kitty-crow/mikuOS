@@ -1514,7 +1514,7 @@ export class Rv64 {
       case 221: return this.execve(this.str(a[10]!), this.addr(a[11]!), this.addr(a[12]!));
       case 222: return this.mmap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!, a[15]!);
       case 227: this.flushShared(this.addr(a[10]!), this.nat(a[11]!, "sync length", Number.MAX_SAFE_INTEGER)); return 0n;
-      case 226: return 0n;
+      case 226: return this.mprotect(a[10]!, a[11]!, a[12]!);
       case 233: return 0n;
       case 261: return this.limit(a[10]!, a[11]!, a[12]!, a[13]!);
       case 278: return BigInt(this.random(this.addr(a[10]!), this.nat(a[11]!, "random length", MAX_IO)));
@@ -2247,6 +2247,42 @@ export class Rv64 {
     this.maps.push(ent);
     if (at + z > this.mapAt) this.mapAt = al(at + z);
     return at;
+  }
+
+  /** Linux mprotect(2) on the direct RV64 host bridge. Preserve unmapped gaps and
+   * split affected reservations rather than granting permissions to neighbours. */
+  private mprotect(addr0: bigint, len0: bigint, prot0: bigint): bigint {
+    const at = this.addr(addr0);
+    const size = this.nat(len0, "mprotect length", Number.MAX_SAFE_INTEGER);
+    const prot = this.nat(prot0, "mprotect protection", 7);
+    if (!size || (at & (PAGE - 1n))) bad("EINVAL", "invalid mprotect range");
+    const end = at + al(BigInt(size));
+    if (end > this.m.top) bad("ENOMEM", "mprotect exceeds guest address space");
+
+    // Reject holes before changing anything. A failed syscall must not leave
+    // a partially protected range behind.
+    let cursor = at;
+    while (cursor < end) {
+      const region = this.maps.find(q => cursor >= q.at && cursor < q.end);
+      if (!region) bad("ENOMEM", "mprotect range is not fully mapped");
+      cursor = region.end < end ? region.end : end;
+    }
+
+    const fragment = (q: MapEnt, start: bigint, stop: bigint, protection = q.prot): MapEnt => ({
+      ...q, at: start, end: stop, prot: protection,
+      ...(q.off !== undefined ? { off: q.off + Number(start - q.at) } : {}),
+    });
+    const next: MapEnt[] = [];
+    for (const region of this.maps) {
+      const start = at > region.at ? at : region.at;
+      const stop = end < region.end ? end : region.end;
+      if (start >= stop) { next.push(region); continue; }
+      if (region.at < start) next.push(fragment(region, region.at, start));
+      next.push(fragment(region, start, stop, prot));
+      if (stop < region.end) next.push(fragment(region, stop, region.end));
+    }
+    this.maps.splice(0, this.maps.length, ...next);
+    return 0n;
   }
 
   private remap(old0: bigint, oz0: bigint, nz0: bigint, fl0: bigint, fixed0: bigint): bigint {
