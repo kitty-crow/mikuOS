@@ -404,6 +404,67 @@ test("thistle64 releases full pages and clears partial unmaps", () => {
   m.drop(0x20011n, 2); eq(m.used, 65536); eq(m.u32(0x20010n), 0x55000088);
 });
 
+test("direct Thistle RV64 mprotect applies page permissions without changing neighbouring mappings", () => {
+  interface Mapping {
+    at: bigint;
+    end: bigint;
+    prot: number;
+    shared: boolean;
+    path?: string;
+    off?: number;
+  }
+  interface HostRv64 {
+    m: Mem64;
+    floor: bigint;
+    brk: bigint;
+    stackAt: bigint;
+    mapAt: bigint;
+    maps: Mapping[];
+    mmap(at: bigint, len: bigint, prot: bigint, flags: bigint, fd: bigint, off: bigint): bigint;
+    mprotect(at: bigint, len: bigint, prot: bigint): bigint;
+    unmap(at: bigint, len: number): void;
+    mem(at: bigint, len: number, write?: boolean): void;
+    exec(at: bigint, len: number): void;
+  }
+  const r = new Rig();
+  const vm = new Rv64(r.os.s) as unknown as HostRv64;
+  vm.m = new Mem64(1n << 42n, 1024 * 1024);
+  vm.floor = 0x20000n;
+  vm.brk = vm.floor;
+  vm.stackAt = 1n << 41n;
+  vm.mapAt = 0x4000000000n;
+
+  const errorCode = (fn: () => unknown): string => {
+    try { fn(); return ""; }
+    catch (error) { if (error instanceof KErr) return error.code; throw error; }
+  };
+  const base = vm.mmap(0n, 0x4000n, 0n, 0x22n, -1n, 0n);
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.exec(base + 0x1000n, 4)), "EACCES");
+  eq(vm.mprotect(base + 0x1000n, 0x1000n, 3n), 0n);
+  vm.mem(base + 0x1000n, 4, true);
+  vm.m.set32(base + 0x1000n, 42);
+  eq(vm.m.u32(base + 0x1000n), 42);
+  eq(errorCode(() => vm.mem(base, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x2000n, 4, true)), "EACCES");
+  eq(vm.maps.length, 3);
+  eq(vm.maps[0]!.prot, 0);
+  eq(vm.maps[1]!.prot, 3);
+  eq(vm.maps[2]!.prot, 0);
+
+  eq(vm.mprotect(base + 0x1000n, 0x1000n, 5n), 0n);
+  vm.exec(base + 0x1000n, 4);
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mprotect(base + 0x1001n, 0x1000n, 3n)), "EINVAL");
+  // A failed protect spanning a hole must not alter any part of the range.
+  vm.unmap(base + 0x2000n, 0x1000);
+  const before = vm.maps.map(m => [m.at, m.end, m.prot]);
+  eq(errorCode(() => vm.mprotect(base + 0x1000n, 0x3000n, 3n)), "ENOMEM");
+  eq(show(vm.maps.map(m => [m.at, m.end, m.prot])), show(before));
+  eq(vm.mprotect(base + 0x1000n, 0x1000n, 3n), 0n);
+  vm.mem(base + 0x1000n, 4, true);
+});
+ 
 test("RV64 shared mappings flush on msync, munmap and exit", async () => {
   interface HFs { readFile(p: URL): Promise<Uint8Array>; }
   const mod = (name: string): Promise<unknown> => import(name);
