@@ -3122,6 +3122,9 @@ test("redirects and filesystem commands", async () => {
 
 test("streaming pipeline closes upstream", async () => {
   const r = new Rig();
+  const file = await import("node:fs/promises");
+  const head = new Uint8Array(await file.readFile(new URL("../../.thistle.base/bin/head", import.meta.url)));
+  r.os.s.mkfile("/bin/head", head, 0o755);
   const x = await r.run("yes thistle | head -n 3");
   eq(x.out, "thistle\nthistle\nthistle\n");
   eq(x.err, "", "SIGPIPE leaked as a diagnostic");
