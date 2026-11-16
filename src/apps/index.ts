@@ -2,7 +2,7 @@ import type { Kern } from "../core/kernel.js";
 import { KErr } from "../core/err.js";
 import type { Cred } from "../fs/vfs.js";
 import { BaseName, Cat, Chmod, Chown, Cp, DirName, Find, Ln, Ls, Mkdir, Mv, Pwd, Readlink, Rm, Rmdir, StatApp, Touch } from "./fs.js";
-import { Base64, Cut, Echo, Grep, Head, Printf, Sed, Seq, Sort, Strings, Tail, Tee, Tr, Uniq, Wc, Yes } from "./text.js";
+import { Base64, Cut, Echo, Grep, Printf, Sed, Seq, Sort, Strings, Tail, Tee, Tr, Uniq, Wc, Yes } from "./text.js";
 import { Kill, Ps, Sleep, Time } from "./proc.js";
 import { Clear, DateApp, Df, Dmesg, Env, Expr, FalseApp, FileApp, Free, Help, Hostname, Id, Mount, PrintEnv, TestApp, Thsh, TrueApp, Uname, Uptime, Wasm, Which, Whoami } from "./sys.js";
 import { Wget } from "./net.js";
@@ -135,7 +135,7 @@ export const refreshBuiltinRescues = (k: Kern): void => {
 export const apps = (k: Kern): void => {
   [
     new BaseName(), new Cat(), new Chmod(), new Chown(), new Cp(), new DirName(), new Find(), new Ln(), new Ls(), new Mkdir(), new Mv(), new Pwd(), new Readlink(), new Rm(), new Rmdir(), new StatApp(), new Touch(),
-    new Base64(), new Cut(), new Echo(), new Grep(), new Head(), new Printf(), new Sed(), new Seq(), new Sort(), new Strings(), new Tail(), new Tee(), new Tr(), new Uniq(), new Wc(), new Yes(),
+    new Base64(), new Cut(), new Echo(), new Grep(), new Printf(), new Sed(), new Seq(), new Sort(), new Strings(), new Tail(), new Tee(), new Tr(), new Uniq(), new Wc(), new Yes(),
     new Kill(), new Ps(), new Sleep(), new Time(),
     new Wget(),
     new AsApp(), new LdApp(), new Elf2ThxApp(), new DisApp(), new ObjdumpApp(), new NmApp(), new SizeApp(),
