@@ -1643,7 +1643,10 @@ export class Rv64 {
 
       if (fl & O_DIRECTORY) bad("ENOTDIR", path);
       if (fl & O_CREAT && fl & O_EXCL) bad("EEXIST", path);
-      await this.s.materialise(path);
+      // Only regular files have lazy payloads to materialise. /dev/zero,
+      // /dev/random, /dev/urandom and other character devices already have
+      // live read/write handlers; materialise() rejects them with EISDIR.
+      if (st.kind === "file") await this.s.materialise(path);
     } catch (e) {
       if (!(e instanceof KErr) || e.code !== "ENOENT" || !(fl & O_CREAT)) {
         throw e;
