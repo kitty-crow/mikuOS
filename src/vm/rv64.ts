@@ -2264,8 +2264,7 @@ export class Rv64 {
     // a partially protected range behind.
     let cursor = at;
     while (cursor < end) {
-      const region = this.maps.find(q => cursor >= q.at && cursor < q.end);
-      if (!region) bad("ENOMEM", "mprotect range is not fully mapped");
+      const region = this.maps.find(q => cursor >= q.at && cursor < q.end) ?? bad("ENOMEM", "mprotect range is not fully mapped");
       cursor = region.end < end ? region.end : end;
     }
 
@@ -2402,8 +2401,7 @@ export class Rv64 {
     // every contiguous mapping, not only one entry covering the whole access.
     let cursor = at;
     while (cursor < end) {
-      const region = this.maps.find(m => cursor >= m.at && cursor < m.end);
-      if (!region) bad("ERANGE", `unmapped RV64 memory at 0x${cursor.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
+      const region = this.maps.find(m => cursor >= m.at && cursor < m.end) ?? bad("ERANGE", `unmapped RV64 memory at 0x${cursor.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
       if (!(region.prot & (wr ? 2 : 1))) bad("EACCES", wr ? "write to read-only RV64 mapping" : "read from inaccessible RV64 mapping");
       cursor = region.end < end ? region.end : end;
     }
