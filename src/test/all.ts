@@ -1760,7 +1760,7 @@ test("strict generated Teto keeps RV64 execution in WASM across host-serviced sy
   eq(generated.os.s.env("THISTLE_RV_CORE"), "teto-wasm-core");
   const path = generated.os.load("host-syscall.39", binary);
   const result = await generated.run(path);
-  eq(result.code, expected.code, "Teto did not resume the host-serviced syscall");
+  eq(result.code, expected.code, "Teto did not resume the host-serviced syscall; stderr=" + JSON.stringify(result.err));
   eq(result.out, expected.out);
   eq(result.err, expected.err);
   eq(generated.os.k.executionCore, "Teto WebAssembly");
