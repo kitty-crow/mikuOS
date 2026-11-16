@@ -1719,6 +1719,54 @@ test("byte-identical RV64GC THX and .39 execute inside generated WebAssembly", a
   eq(`${alias.code}:${alias.out}:${alias.err}`, `${thx.code}:${thx.out}:${thx.err}`);
 });
 
+test("strict generated Teto keeps RV64 execution in WASM across host-serviced syscalls", async () => {
+  interface HFs { readFile(path: URL): Promise<Uint8Array>; }
+  const mod = (name: string): Promise<unknown> => import(name);
+  const fs = await mod("node:fs/promises") as HFs;
+  const wasm = Uint8Array.from(await fs.readFile(new URL("../../dist/teto/teto.wasm", import.meta.url)));
+  const provider: TetoImageProvider = { load: async () => wasm };
+
+  // getcwd (RV64 syscall 17) is provided by the host's filesystem service,
+  // not by Teto's native syscall table. It must return to Teto after service.
+  const addi = (rd: number, rs: number, value: number): number =>
+    ((value & 0xfff) << 20 | rs << 15 | rd << 7 | 0x13) >>> 0;
+  const instructions = [
+    (0x20 << 12 | 10 << 7 | 0x37) >>> 0, // lui a0, 0x20: writable guest buffer
+    addi(11, 0, 128),                  // a1: buffer capacity
+    addi(17, 0, 17),                   // a7: getcwd
+    0x00000073,                        // ecall: explicit host-service boundary
+    addi(17, 0, 93),                   // a7: exit
+    0x00000073,                        // ecall: native Teto exit
+  ];
+  const text = new Uint8Array(instructions.length * 4);
+  const view = new DataView(text.buffer);
+  instructions.forEach((word, index) => view.setUint32(index * 4, word, true));
+  const exe = new Exe("thistle64");
+  exe.isa = "rv64gc";
+  exe.entry = 0x10000;
+  exe.sec.push({ name: ".text", flg: "ax", align: 4096, addr: 0x10000, size: text.length, data: text });
+  exe.sec.push({ name: ".data", flg: "aw", align: 4096, addr: 0x20000, size: 4096, data: new Uint8Array(4096) });
+  const binary = codec.pack(exe);
+
+  const direct = new Rig();
+  const directPath = direct.os.load("host-syscall.39", binary);
+  const expected = await direct.run(directPath);
+  ok(expected.code > 0 && expected.code < 128, "the direct Thistle getcwd service did not return a valid path length");
+
+  const generated = new Rig(undefined, false, provider, "teto");
+  await generated.os.ready;
+  eq(generated.os.activeKernelMode, "teto");
+  eq(generated.os.s.env("THISTLE_TETO_STRICT"), "1");
+  eq(generated.os.s.env("THISTLE_RV_CORE"), "teto-wasm-core");
+  const path = generated.os.load("host-syscall.39", binary);
+  const result = await generated.run(path);
+  eq(result.code, expected.code, "Teto did not resume the host-serviced syscall");
+  eq(result.out, expected.out);
+  eq(result.err, expected.err);
+  eq(generated.os.k.executionCore, "Teto WebAssembly");
+  eq(generated.os.s.env("THISTLE_RV_CORE"), "teto-wasm-core");
+});
+
 test("mikuOS boot mode selects generated Teto without manual guest environment overrides", async () => {
   interface HFs { readFile(path: URL): Promise<Uint8Array>; }
   const mod = (name: string): Promise<unknown> => import(name);
