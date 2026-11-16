@@ -156,5 +156,8 @@ if ((INSTALL)); then
   install -m 0644 "$OUT/licenses/coreutils/COPYING" "$ROOT/usr/share/licenses/coreutils/COPYING"
   install -m 0644 "$OUT/licenses/bash/COPYING" "$ROOT/usr/share/licenses/bash/COPYING"
   rm -f -- "$ROOT/usr/libexec/mikuos/builtin/head"
+  # Browser root packaging is driven by this manifest, not directory scans.
+  # Keep it in sync with the six installed files and their licence folders.
+  bun "$PROJECT/scripts/userland/sync-gnu-prebuilt-meta.mts" "$ROOT"
   printf 'Installed GNU binaries into %s/bin; originals backed up in %s\n' "$ROOT" "$backup"
 fi
