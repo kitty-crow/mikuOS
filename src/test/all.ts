@@ -3042,9 +3042,11 @@ test("thsh folds physical line continuations without changing quoted here-docume
   eq(x.out, "leftright\n", "an unquoted here-document lost its established expansion rules");
 });
 
-test("Up and Down traverse full shell history without accidentally entering prefix search", () => {
+test("Up and Down traverse full shell history without accidentally entering prefix search", async () => {
   const r = new Rig();
-  r.os.sh.hist.push("pwd", "echo middle", "ls -la");
+  await r.os.ready;
+  r.os.sh.ensureUserState();
+  r.os.sh.hist.splice(0, r.os.sh.hist.length, "pwd", "echo middle", "ls -la");
   let written = "";
   const host = {
     shell: r.os.sh,
