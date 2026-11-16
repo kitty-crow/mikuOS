@@ -536,10 +536,16 @@ export class Shell {
         // Keep shell special built-ins in the current process, particularly
         // export and cd, and run ordinary commands through the normal PATH.
         let describe: "path" | "verbose" | undefined;
+        let defaultPath = false;
         let index = 0;
         while (index < a.length) {
           const option = a[index]!;
           if (option === "--") { index++; break; }
+          if (option === "-p") {
+            defaultPath = true;
+            index++;
+            continue;
+          }
           if (option === "-v" || option === "-V") {
             describe = option === "-v" ? "path" : "verbose";
             index++;
@@ -552,42 +558,50 @@ export class Shell {
           break;
         }
         const names = a.slice(index);
-        if (describe) {
-          let failed = false;
-          for (const target of names) {
-            if (built.has(target)) {
-              await this.s.out(describe === "path"
-                ? `${target}\n`
-                : `${target} is a shell built-in\n`);
-              continue;
+        const oldPath = this.s.env("PATH");
+        if (defaultPath) this.s.setenv("PATH", "/bin:/usr/bin");
+        try {
+          if (describe) {
+            let failed = false;
+            for (const target of names) {
+              if (built.has(target)) {
+                await this.s.out(describe === "path"
+                  ? `${target}\n`
+                  : `${target} is a shell built-in\n`);
+                continue;
+              }
+              try {
+                const path = this.s.which(target);
+                await this.s.out(describe === "path"
+                  ? `${path}\n`
+                  : `${target} is ${path}\n`);
+              } catch {
+                failed = true;
+              }
             }
-            try {
-              const path = this.s.which(target);
-              await this.s.out(describe === "path"
-                ? `${path}\n`
-                : `${target} is ${path}\n`);
-            } catch {
-              failed = true;
-            }
+            return failed ? 1 : 0;
           }
-          return failed ? 1 : 0;
-        }
-        if (!names.length) return 0;
-        const [target, ...args] = names;
-        if (built.has(target!)) return this.bi(target!, args);
+          if (!names.length) return 0;
+          const [target, ...args] = names;
+          if (built.has(target!)) return this.bi(target!, args);
 
-        // A missing command is not a shell syntax error.
-        try { this.s.which(target!); }
-        catch {
-          await this.s.err(`command: ${target}: not found\n`);
-          return 127;
+          try { this.s.which(target!); }
+          catch {
+            await this.s.err(`command: ${target}: not found\n`);
+            return 127;
+          }
+          const proc = this.s.start(target!, args, {
+            io: this.base(),
+            env: this.s.env() as Map<string, string>,
+          });
+          try { return await proc.done; }
+          finally { this.s.reap(proc.pid); }
+        } finally {
+          if (defaultPath) {
+            if (typeof oldPath === "string") this.s.setenv("PATH", oldPath);
+            else this.s.unset("PATH");
+          }
         }
-        const proc = this.s.start(target!, args, {
-          io: this.base(),
-          env: this.s.env() as Map<string, string>,
-        });
-        try { return await proc.done; }
-        finally { this.s.reap(proc.pid); }
       }
       case "cd": {
         const p = a[0] === "-" ? String(this.s.env("OLDPWD") ?? bad("ENOENT", "OLDPWD is not set")) : a[0] ?? String(this.s.env("HOME") ?? "/");
