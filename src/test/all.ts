@@ -2902,6 +2902,55 @@ test("quoting, variables and command gates", async () => {
   eq(x.out, "A=two\nok\n");
 });
 
+test("command and colon are handled inside /bin/thsh", async () => {
+  const r = new Rig();
+
+  let x = await r.run("/bin/thsh -c ':'");
+  eq(x.code, 0);
+  eq(x.out, "");
+
+  x = await r.run("/bin/thsh -c 'false; :; echo $?'");
+  eq(x.code, 0);
+  eq(x.out, "0\n", "colon must reset exit status to success");
+
+  x = await r.run("/bin/thsh -c 'command -v :; command -v command; command -v head'");
+  eq(x.code, 0);
+  eq(x.out, ":\ncommand\n/bin/head\n");
+
+  x = await r.run("/bin/thsh -c 'command -V command'");
+  eq(x.code, 0);
+  eq(x.out, "command is a shell built-in\n");
+
+  x = await r.run("/bin/thsh -c 'alias echo=false; command echo bypasses-alias'");
+  eq(x.code, 0);
+  eq(x.out, "bypasses-alias\n", "command must not expand aliases of its operand");
+
+  x = await r.run("/bin/thsh -c 'command -v no-such-program'");
+  eq(x.code, 1);
+  eq(x.out, "");
+
+  x = await r.run("/bin/thsh -c 'command no-such-program'");
+  eq(x.code, 127);
+
+  x = await r.run("/bin/thsh -c 'command false'");
+  eq(x.code, 1);
+
+  x = await r.run("/bin/thsh -c 'command cd /tmp; pwd'");
+  eq(x.code, 0);
+  eq(x.out, "/tmp\n", "command cd must act in the same shell");
+
+  x = await r.run("/bin/thsh -c ': > /tmp/colon-created; cat /tmp/colon-created'");
+  eq(x.code, 0);
+  eq(x.out, "");
+  eq(r.os.s.read("/tmp/colon-created"), "");
+
+  for (const name of ["/bin/command", "/bin/:"]) {
+    let installed = true;
+    try { r.os.s.stat(name); } catch { installed = false; }
+    ok(!installed, name + " must remain a shell built-in, not a separate executable");
+  }
+});
+
 test("thsh folds physical line continuations without changing quoted here-documents", async () => {
   const r = new Rig();
   const slash = String.fromCharCode(92);
