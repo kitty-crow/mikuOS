@@ -3046,6 +3046,7 @@ test("Up and Down traverse full shell history without accidentally entering pref
   const r = new Rig();
   await r.os.ready;
   r.os.sh.ensureUserState();
+  r.os.sh.prefs.historyPrefixSearch = true;
   r.os.sh.hist.splice(0, r.os.sh.hist.length, "pwd", "echo middle", "ls -la");
   let written = "";
   const host = {
