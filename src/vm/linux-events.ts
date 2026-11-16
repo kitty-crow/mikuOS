@@ -224,11 +224,18 @@ export class RvLinuxEvents {
     if (limit < 1 || limit > 4096 || timeout < -1) return -22;
     if (!at) return -14;
     this.check(at, limit * 12, true);
-    let count = this.collect(poller, at, limit);
-    if (count || timeout === 0) return count;
-    await this.waitChange(timeout);
-    count = this.collect(poller, at, limit);
-    return this.devices.get(epfd) === poller ? count : -9;
+    // An unrelated descriptor change may wake a waiter without making any
+    // watched descriptor ready. Linux epoll_wait must not report that as a
+    // zero-event return, especially for an infinite timeout.
+    const deadline = timeout > 0 ? Date.now() + timeout : 0;
+    for (;;) {
+      if (this.devices.get(epfd) !== poller) return -9;
+      const count = this.collect(poller, at, limit);
+      if (count || timeout === 0) return count;
+      const remaining = timeout < 0 ? -1 : Math.max(0, deadline - Date.now());
+      if (remaining === 0) return 0;
+      await this.waitChange(remaining);
+    }
   }
 
   private refreshPipeWatches(): void {
