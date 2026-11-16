@@ -15,6 +15,7 @@ import type { Tree, TreeEnt } from "../fs/tree.js";
 import { DirTree } from "../main/dir.js";
 import { Mem64 } from "../vm/mem64.js";
 import { Rv64 } from "../vm/rv64.js";
+import { RvLinuxEvents } from "../vm/linux-events.js";
 import { Sys } from "../core/sys.js";
 import { Tty } from "../io/tty.js";
 import { DEFAULT_CONFIG } from "../core/config.js";
@@ -199,6 +200,35 @@ const test = (name: string, fn: () => void | Promise<void>): void => { tests.pus
 const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") => { if (!v) throw new Error(m); };
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
+
+test("RV64 epoll infinite waits ignore unrelated notifications", async () => {
+  const rig = new Rig();
+  const memory = new Mem64(65536n, 65536);
+  const events = new RvLinuxEvents(rig.os.s, () => memory, () => {});
+  const epoll = events.createEpoll(0);
+  const watched = events.createEventfd(0, 0);
+  const unrelated = events.createEventfd(0, 0);
+  const eventAt = 0x100n, outputAt = 0x200n, valueAt = 0x300n;
+  memory.set32(eventAt, 1); // EPOLLIN
+  memory.set64(eventAt + 4n, 0x123456n);
+  memory.set64(valueAt, 1n);
+  eq(events.ctl(epoll, 1, watched, eventAt), 0); // EPOLL_CTL_ADD
+
+  let settled = false;
+  const pending = events.wait(epoll, outputAt, 1, -1).then(value => {
+    settled = true;
+    return value;
+  });
+  eq(await events.write(unrelated, valueAt, 8), 8n);
+  await Promise.resolve();
+  await Promise.resolve();
+  eq(settled, false, "unrelated wake-up must not complete an infinite epoll wait");
+
+  eq(await events.write(watched, valueAt, 8), 8n);
+  eq(await pending, 1);
+  eq(memory.u32(outputAt), 1);
+  eq(memory.u64(outputAt + 4n), 0x123456n);
+});
 
 test("Thistle preserves its working interpreter without substituting Teto source", async () => {
   const original = boot({ put: () => {}, kernelMode: "thistle" });
