@@ -133,6 +133,10 @@ export class LineEditor {
     if (!prefs.historyPrefixSearch) return false;
 
     if (!this.prefixHistory) {
+      // A first Up from an empty prompt enters ordinary history navigation.
+      // Its recalled command must not become a new prefix on the next Up,
+      // otherwise the editor gets stuck on the most recent entry forever.
+      if (this.historyIndex < this.entries().length) return false;
       if (!this.line || this.cursor !== this.line.length) return false;
 
       const matches = this.prefixMatches(this.line);
