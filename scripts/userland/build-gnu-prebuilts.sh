@@ -4,11 +4,13 @@ set -Eeuo pipefail
 PROJECT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROOT="$PROJECT/.thistle.base"
 INSTALL=0
+REUSE=0
 while (($#)); do
   case "$1" in
     --root) ROOT="$2"; shift 2 ;;
     --install) INSTALL=1; shift ;;
-    -h|--help) echo 'Usage: bash scripts/userland/build-gnu-prebuilts.sh [--root PATH] [--install]'; exit 0 ;;
+    --from-staged) REUSE=1; shift ;;
+    -h|--help) echo 'Usage: bash scripts/userland/build-gnu-prebuilts.sh [--root PATH] [--install] [--from-staged]'; exit 0 ;;
     *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
   esac
 done
@@ -17,16 +19,33 @@ CROSS_PREFIX="${MIKUOS_CROSS_PREFIX:-riscv64-unknown-linux-musl-}"
 CC="${CROSS_PREFIX}gcc"
 AR="${CROSS_PREFIX}ar"
 RANLIB="${CROSS_PREFIX}ranlib"
-for tool in curl tar sha256sum make node readelf "$CC" "$AR" "$RANLIB"; do
+for tool in node install cp; do
   command -v "$tool" >/dev/null || { printf 'Missing tool: %s\n' "$tool" >&2; exit 2; }
 done
-[[ "$("$CC" -dumpmachine)" == *riscv64*musl* ]] || { echo 'Requires the RV64 musl toolchain' >&2; exit 2; }
+
 [[ -f "$PROJECT/build/tool/elf2thx.js" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
   echo 'Build mikuOS before compiling the GNU userland' >&2; exit 2;
 }
 [[ -d "$ROOT" ]] || { printf 'Missing guest root: %s\n' "$ROOT" >&2; exit 2; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mikuos-gnu.XXXXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT
+
+# Preserve completed native binaries before running guest smoke tests. A test
+# failure must never discard a lengthy, successful cross-compilation.
+OUT="$PROJECT/.rebuild-userland/gnu-prebuilts"
+mkdir -p "$WORK/prebuilt" "$OUT/licenses/coreutils" "$OUT/licenses/bash"
+
+if (( ! REUSE )); then
+  for tool in curl tar sha256sum make readelf "$CC" "$AR" "$RANLIB"; do
+    command -v "$tool" >/dev/null || {
+      printf 'Missing build tool: %s\n' "$tool" >&2
+      exit 2
+    }
+  done
+  [[ "$("$CC" -dumpmachine)" == *riscv64*musl* ]] || {
+    echo 'Requires the RV64 musl toolchain' >&2
+    exit 2
+  }
 fetch() {
   curl --fail --location --retry 3 --silent --show-error "$1" -o "$3"
   printf '%s  %s\n' "$2" "$3" | sha256sum --check --status || {
@@ -77,9 +96,41 @@ for name in head dd od bash; do
     printf 'Invalid THX2 format: %s\n' "$name" >&2; exit 1
   }
 done
+
+  for name in head dd od bash; do
+    install -m 0755 "$WORK/prebuilt/$name" "$OUT/$name.39"
+  done
+  install -m 0644 "$WORK/coreutils-9.12/COPYING" "$OUT/licenses/coreutils/COPYING"
+  install -m 0644 "$WORK/bash-5.3/COPYING" "$OUT/licenses/bash/COPYING"
+  echo "Built GNU THX2 binaries preserved in $OUT"
+else
+  echo "Reusing existing GNU THX2 binaries from $OUT (no recompilation)"
+  for name in head dd od bash; do
+    [[ -s "$OUT/$name.39" ]] || {
+      echo "Missing staged binary: $OUT/$name.39" >&2
+      exit 2
+    }
+    [[ "$(head -c 4 "$OUT/$name.39")" == THX2 ]] || {
+      echo "Invalid staged THX2 binary: $OUT/$name.39" >&2
+      exit 2
+    }
+    cp -- "$OUT/$name.39" "$WORK/prebuilt/$name"
+  done
+  for licence in coreutils bash; do
+    [[ -s "$OUT/licenses/$licence/COPYING" ]] || {
+      echo "Missing staged $licence licence" >&2
+      exit 2
+    }
+  done
+fi
+
 candidate="$WORK/root"
 mkdir -p "$candidate/bin"
 cp -a -- "$ROOT/." "$candidate/"
+# Git does not track empty /tmp or /root directories. The synthetic guest
+# root must provide them before dd can create its test files.
+install -d -m 1777 "$candidate/tmp"
+install -d -m 0700 "$candidate/root"
 for name in head dd od bash; do
   install -m 0755 "$WORK/prebuilt/$name" "$candidate/bin/$name"
 done
@@ -90,12 +141,7 @@ for spec in \
   "bash -c 'printf bash-ready'"; do
   bash "$PROJECT/scripts/userland/dual-kernel-test.sh" --root "$candidate" -- "$spec"
 done
-OUT="$PROJECT/.rebuild-userland/gnu-prebuilts"
-mkdir -p "$OUT"
-for name in head dd od bash; do
-  install -m 0755 "$WORK/prebuilt/$name" "$OUT/$name.39"
-done
-printf 'Verified GNU THX2 binaries staged: %s\n' "$OUT"
+printf 'GNU THX2 guest smoke tests passed; staged binaries: %s\n' "$OUT"
 if ((INSTALL)); then
   backup="$PROJECT/.rebuild-userland/pre-install-$(date -u +%Y%m%dT%H%M%SZ)"
   mkdir -p "$backup" "$ROOT/bin" "$ROOT/usr/share/licenses/coreutils" "$ROOT/usr/share/licenses/bash"
@@ -107,8 +153,8 @@ if ((INSTALL)); then
   for name in head dd od bash; do
     install -m 0755 "$WORK/prebuilt/$name" "$ROOT/bin/$name"
   done
-  install -m 0644 "$WORK/coreutils-9.12/COPYING" "$ROOT/usr/share/licenses/coreutils/COPYING"
-  install -m 0644 "$WORK/bash-5.3/COPYING" "$ROOT/usr/share/licenses/bash/COPYING"
+  install -m 0644 "$OUT/licenses/coreutils/COPYING" "$ROOT/usr/share/licenses/coreutils/COPYING"
+  install -m 0644 "$OUT/licenses/bash/COPYING" "$ROOT/usr/share/licenses/bash/COPYING"
   rm -f -- "$ROOT/usr/libexec/mikuos/builtin/head"
   printf 'Installed GNU binaries into %s/bin; originals backed up in %s\n' "$ROOT" "$backup"
 fi
