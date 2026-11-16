@@ -1744,8 +1744,8 @@ test("strict generated Teto keeps RV64 execution in WASM across host-serviced sy
   const exe = new Exe("thistle64");
   exe.isa = "rv64gc";
   exe.entry = 0x10000;
-  exe.sec.push({ name: ".text", flg: "ax", align: 4096, addr: 0x10000, size: text.length, data: text });
-  exe.sec.push({ name: ".data", flg: "aw", align: 4096, addr: 0x20000, size: 4096, data: new Uint8Array(4096) });
+  exe.sec.push({ name: ".text", flg: "rx", align: 4096, addr: 0x10000, size: text.length, data: text });
+  exe.sec.push({ name: ".data", flg: "rw", align: 4096, addr: 0x20000, size: 4096, data: new Uint8Array(4096) });
   const binary = codec.pack(exe);
 
   const direct = new Rig();
