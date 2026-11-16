@@ -122,7 +122,7 @@ export class Help extends App {
     await s.out("mikuOS userland commands:\n\n");
     const q = s.apps();
     for (let i = 0; i < q.length; i += 3) await s.out(q.slice(i, i + 3).map(x => x.name.padEnd(12)).join("") + "\n");
-    await s.out("\nShell built-ins: cd export unset set alias unalias history jobs fg wait umask exit reboot\nUse 'help name' or 'name --help' for details. Try 'hello.wasm'.\n");
+    await s.out("\nShell built-ins: : command cd export unset set alias unalias history jobs fg wait umask exit reboot\nUse 'help name' or 'name --help' for details. Try 'hello.wasm'.\n");
     return 0;
   }
 }
