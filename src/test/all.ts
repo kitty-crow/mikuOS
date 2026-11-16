@@ -440,6 +440,7 @@ test("direct Thistle RV64 mprotect applies page permissions without changing nei
   };
   const base = vm.mmap(0n, 0x4000n, 0n, 0x22n, -1n, 0n);
   eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, false)), "EACCES");
   eq(errorCode(() => vm.exec(base + 0x1000n, 4)), "EACCES");
   eq(vm.mprotect(base + 0x1000n, 0x1000n, 3n), 0n);
   vm.mem(base + 0x1000n, 4, true);
@@ -447,6 +448,8 @@ test("direct Thistle RV64 mprotect applies page permissions without changing nei
   eq(vm.m.u32(base + 0x1000n), 42);
   eq(errorCode(() => vm.mem(base, 4, true)), "EACCES");
   eq(errorCode(() => vm.mem(base + 0x2000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x1ffcn, 8, false)), "EACCES",
+    "a read crossing into a PROT_NONE neighbour must fail");
   eq(vm.maps.length, 3);
   eq(vm.maps[0]!.prot, 0);
   eq(vm.maps[1]!.prot, 3);
@@ -456,6 +459,10 @@ test("direct Thistle RV64 mprotect applies page permissions without changing nei
   vm.exec(base + 0x1000n, 4);
   eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
   eq(errorCode(() => vm.mprotect(base + 0x1001n, 0x1000n, 3n)), "EINVAL");
+  eq(errorCode(() => vm.mprotect(base, 0x1000n, 8n)), "EINVAL");
+  eq(vm.mprotect(base + 0x2000n, 0x2000n, 1n), 0n);
+  vm.mem(base + 0x1ffcn, 8, false);
+  eq(errorCode(() => vm.mem(base + 0x2000n, 4, true)), "EACCES");
   // A failed protect spanning a hole must not alter any part of the range.
   vm.unmap(base + 0x2000n, 0x1000);
   const before = vm.maps.map(m => [m.at, m.end, m.prot]);
