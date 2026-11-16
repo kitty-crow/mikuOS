@@ -47,23 +47,6 @@ export class Printf extends App {
   }
 }
 
-export class Head extends App {
-  constructor() { super("head", "Print the first lines of input.", "head [-n count] [file ...]"); }
-  override async run(s: Sys, a: string[]): Promise<number> {
-    let n = 10;
-    if (a[0] === "-n") { n = narg(a[1] ?? "", "line count"); a.splice(0, 2); }
-    else if (/^-\d+$/.test(a[0] ?? "")) n = Number(a.shift()!.slice(1));
-    if (a.length) for (const [, x] of await src(s, a)) await s.out(lines(x).slice(0, n).join("\n") + (n && x ? "\n" : ""));
-    else {
-      let q = "";
-      while (lines(q).length < n) { const b = await s.chunk(); if (!b) break; q += b; }
-      const z = lines(q).slice(0, n);
-      if (z.length) await s.out(z.join("\n") + "\n");
-    }
-    return 0;
-  }
-}
-
 export class Tail extends App {
   constructor() { super("tail", "Print the final lines of input.", "tail [-n count] [file ...]"); }
   override async run(s: Sys, a: string[]): Promise<number> {
