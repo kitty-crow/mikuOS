@@ -36,7 +36,7 @@ fetch() {
 fetch https://ftp.gnu.org/gnu/coreutils/coreutils-9.12.tar.xz \
   a480198559733e9b3da999e90543ac6f888a2caa544d8d664c5a1f17e528e210 "$WORK/coreutils.tar.xz"
 fetch https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz \
-  62dd49c44c399ed1b3f7f731e87a782334d834f08e098a35f2c87547d5dbb269 "$WORK/bash.tar.gz"
+  0d5cd86965f869a26cf64f4b71be7b96f90a3ba8b3d74e27e8e9d9d5550f31ba "$WORK/bash.tar.gz"
 tar -xJf "$WORK/coreutils.tar.xz" -C "$WORK"
 tar -xzf "$WORK/bash.tar.gz" -C "$WORK"
 JOBS="${MIKUOS_BUILD_JOBS:-2}"
