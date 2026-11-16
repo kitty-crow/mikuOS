@@ -2956,13 +2956,15 @@ test("command and colon are handled inside /bin/thsh", async () => {
 });
 
 test("GNU head dd od and Bash are actual pre-built THX2 guest executables", async () => {
+  const file = await import("node:fs/promises");
   const r = new Rig();
   for (const command of ["head", "dd", "od", "bash"]) {
     const path = "/bin/" + command;
-    const bin = r.os.s.readb(path);
+    const bin = new Uint8Array(await file.readFile(new URL("../../.thistle.base" + path, import.meta.url)));
     eq(dec(bin.slice(0, 4)), "THX2",
       path + " must be native GNU RV64GC THX2, not a TypeScript launcher");
     ok(bin.length > 256, path + " is not a complete executable");
+    r.os.s.mkfile(path, bin, 0o755);
   }
 
   let x = await r.run("printf 'first\nsecond\n' | /bin/head -n 1");
