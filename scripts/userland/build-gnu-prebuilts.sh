@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Build genuine GNU userland as RV64GC THX2, without modifying the live root until verified.
+set -Eeuo pipefail
+PROJECT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$PROJECT/.thistle.base"
+INSTALL=0
+while (($#)); do
+  case "$1" in
+    --root) ROOT="$2"; shift 2 ;;
+    --install) INSTALL=1; shift ;;
+    -h|--help) echo 'Usage: bash scripts/userland/build-gnu-prebuilts.sh [--root PATH] [--install]'; exit 0 ;;
+    *) printf 'Unknown argument: %s\n' "$1" >&2; exit 2 ;;
+  esac
+done
+TARGET=riscv64-unknown-linux-musl
+CROSS_PREFIX="${MIKUOS_CROSS_PREFIX:-riscv64-unknown-linux-musl-}"
+CC="${CROSS_PREFIX}gcc"
+AR="${CROSS_PREFIX}ar"
+RANLIB="${CROSS_PREFIX}ranlib"
+for tool in curl tar sha256sum make node readelf "$CC" "$AR" "$RANLIB"; do
+  command -v "$tool" >/dev/null || { printf 'Missing tool: %s\n' "$tool" >&2; exit 2; }
+done
+[[ "$("$CC" -dumpmachine)" == *riscv64*musl* ]] || { echo 'Requires the RV64 musl toolchain' >&2; exit 2; }
+[[ -f "$PROJECT/build/tool/elf2thx.js" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
+  echo 'Build mikuOS before compiling the GNU userland' >&2; exit 2;
+}
+[[ -d "$ROOT" ]] || { printf 'Missing guest root: %s\n' "$ROOT" >&2; exit 2; }
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/mikuos-gnu.XXXXXXXX")"
+trap 'rm -rf -- "$WORK"' EXIT
+fetch() {
+  curl --fail --location --retry 3 --silent --show-error "$1" -o "$3"
+  printf '%s  %s\n' "$2" "$3" | sha256sum --check --status || {
+    printf 'Invalid GNU source checksum: %s\n' "$1" >&2; return 1;
+  }
+}
+fetch https://ftp.gnu.org/gnu/coreutils/coreutils-9.12.tar.xz \
+  a480198559733e9b3da999e90543ac6f888a2caa544d8d664c5a1f17e528e210 "$WORK/coreutils.tar.xz"
+fetch https://ftp.gnu.org/gnu/bash/bash-5.3.tar.gz \
+  62dd49c44c399ed1b3f7f731e87a782334d834f08e098a35f2c87547d5dbb269 "$WORK/bash.tar.gz"
+tar -xJf "$WORK/coreutils.tar.xz" -C "$WORK"
+tar -xzf "$WORK/bash.tar.gz" -C "$WORK"
+JOBS="${MIKUOS_BUILD_JOBS:-2}"
+[[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid build job count' >&2; exit 2; }
+mkdir -p "$WORK/core-build" "$WORK/bash-build" "$WORK/prebuilt"
+(
+  cd "$WORK/core-build"
+  CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS=-O2 LDFLAGS=-static \
+    "$WORK/coreutils-9.12/configure" --host="$TARGET" --prefix=/usr --disable-nls
+  make --jobs="$JOBS" src/head src/dd src/od
+)
+(
+  cd "$WORK/bash-build"
+  CC="$CC" AR="$AR" RANLIB="$RANLIB" CFLAGS=-O2 LDFLAGS=-static \
+    "$WORK/bash-5.3/configure" --host="$TARGET" --prefix=/usr \
+      --disable-nls --without-bash-malloc
+  make --jobs="$JOBS" bash
+)
+for name in head dd od bash; do
+  case "$name" in
+    bash) elf="$WORK/bash-build/bash" ;;
+    *) elf="$WORK/core-build/src/$name" ;;
+  esac
+  [[ -s "$elf" ]] || { printf 'Missing GNU ELF: %s\n' "$elf" >&2; exit 1; }
+  readelf -h "$elf" | grep -Eq 'Machine:[[:space:]]+RISC-V' || {
+    printf 'Not a RISC-V ELF: %s\n' "$elf" >&2; exit 1;
+  }
+  if readelf -l "$elf" | grep -q 'INTERP'; then
+    printf 'Refusing dynamically linked GNU %s\n' "$name" >&2; exit 1
+  fi
+  node "$PROJECT/build/tool/elf2thx.js" "$elf" "$WORK/prebuilt/$name"
+  [[ "$(head -c 4 "$WORK/prebuilt/$name")" == THX2 ]] || {
+    printf 'Invalid THX2 format: %s\n' "$name" >&2; exit 1
+  }
+done
+candidate="$WORK/root"
+mkdir -p "$candidate/bin"
+cp -a -- "$ROOT/." "$candidate/"
+for name in head dd od bash; do
+  install -m 0755 "$WORK/prebuilt/$name" "$candidate/bin/$name"
+done
+rm -f -- "$candidate/usr/libexec/mikuos/builtin/head"
+for spec in \
+  "printf 'one\\ntwo\\n' | head -n 1" \
+  "printf 'ABC' >/tmp/data; dd if=/tmp/data of=/tmp/copy bs=1 count=3; od -An -tx1 /tmp/copy" \
+  "bash -c 'printf bash-ready'"; do
+  bash "$PROJECT/scripts/userland/dual-kernel-test.sh" --root "$candidate" -- "$spec"
+done
+OUT="$PROJECT/.rebuild-userland/gnu-prebuilts"
+mkdir -p "$OUT"
+for name in head dd od bash; do
+  install -m 0755 "$WORK/prebuilt/$name" "$OUT/$name.39"
+done
+printf 'Verified GNU THX2 binaries staged: %s\n' "$OUT"
+if ((INSTALL)); then
+  backup="$PROJECT/.rebuild-userland/pre-install-$(date -u +%Y%m%dT%H%M%SZ)"
+  mkdir -p "$backup" "$ROOT/bin" "$ROOT/usr/share/licenses/coreutils" "$ROOT/usr/share/licenses/bash"
+  for name in head dd od bash; do
+    if [[ -e "$ROOT/bin/$name" || -L "$ROOT/bin/$name" ]]; then
+      cp -a -- "$ROOT/bin/$name" "$backup/$name"
+    fi
+  done
+  for name in head dd od bash; do
+    install -m 0755 "$WORK/prebuilt/$name" "$ROOT/bin/$name"
+  done
+  install -m 0644 "$WORK/coreutils-9.12/COPYING" "$ROOT/usr/share/licenses/coreutils/COPYING"
+  install -m 0644 "$WORK/bash-5.3/COPYING" "$ROOT/usr/share/licenses/bash/COPYING"
+  rm -f -- "$ROOT/usr/libexec/mikuos/builtin/head"
+  printf 'Installed GNU binaries into %s/bin; originals backed up in %s\n' "$ROOT" "$backup"
+fi
