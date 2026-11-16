@@ -2913,9 +2913,13 @@ test("command and colon are handled inside /bin/thsh", async () => {
   eq(x.code, 0);
   eq(x.out, "0\n", "colon must reset exit status to success");
 
-  x = await r.run("/bin/thsh -c 'command -v :; command -v command; command -v head'");
+  x = await r.run("/bin/thsh -c 'command -v :; command -v command; command -v true'");
   eq(x.code, 0);
-  eq(x.out, ":\ncommand\n/bin/head\n");
+  eq(x.out, ":\ncommand\n/bin/true\n");
+
+  x = await r.run("/bin/thsh -c 'command -p -v true'");
+  eq(x.code, 0);
+  eq(x.out, "/bin/true\n");
 
   x = await r.run("/bin/thsh -c 'command -V command'");
   eq(x.code, 0);
@@ -2949,6 +2953,30 @@ test("command and colon are handled inside /bin/thsh", async () => {
     try { r.os.s.stat(name); } catch { installed = false; }
     ok(!installed, name + " must remain a shell built-in, not a separate executable");
   }
+});
+
+test("GNU head dd od and Bash are actual pre-built THX2 guest executables", async () => {
+  const r = new Rig();
+  for (const command of ["head", "dd", "od", "bash"]) {
+    const path = "/bin/" + command;
+    const bin = r.os.s.readb(path);
+    eq(dec(bin.slice(0, 4)), "THX2",
+      path + " must be native GNU RV64GC THX2, not a TypeScript launcher");
+    ok(bin.length > 256, path + " is not a complete executable");
+  }
+
+  let x = await r.run("printf 'first\nsecond\n' | /bin/head -n 1");
+  eq(x.code, 0);
+  eq(x.out, "first\n");
+  x = await r.run("printf 'ABC' > /tmp/gnu-data; /bin/dd if=/tmp/gnu-data of=/tmp/gnu-copy bs=1 count=3");
+  eq(x.code, 0, x.err);
+  eq(r.os.s.read("/tmp/gnu-copy"), "ABC");
+  x = await r.run("/bin/od -An -tx1 /tmp/gnu-copy");
+  eq(x.code, 0);
+  ok(/\b41\s+42\s+43\b/.test(x.out), "GNU od output does not match the copied bytes");
+  x = await r.run("/bin/bash -c 'printf bash-ready'");
+  eq(x.code, 0, x.err);
+  eq(x.out, "bash-ready");
 });
 
 test("thsh folds physical line continuations without changing quoted here-documents", async () => {
