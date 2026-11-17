@@ -156,6 +156,20 @@ const required = [
   "tetoExitHart",
 ] as const;
 
+/** Initial host memory estimate; the kernel's sparse virtual address space is separate. */
+export const tetoRecommendedPages = (imageBytes: number, minimumPages = 8192): number => {
+  const maximumPages = 32768;
+  if (!Number.isSafeInteger(imageBytes) || imageBytes < 0 ||
+      !Number.isSafeInteger(minimumPages) || minimumPages < 1024 || minimumPages > maximumPages) {
+    throw new RangeError("invalid Teto memory budget");
+  }
+  // Retain the experimental image-size allowance without lowering the host's
+  // existing minimum. This is headroom, not a guarantee of guest heap capacity.
+  const pages = Math.max(minimumPages, Math.ceil((64 * 1024 * 1024 + 8 * imageBytes) / 65536));
+  if (pages > maximumPages) throw new RangeError("Teto image exceeds the memory budget");
+  return pages;
+};
+
 export const loadTeto = async (
   bytes: BufferSource,
   options: TetoLoadOptions = {},

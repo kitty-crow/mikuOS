@@ -143,7 +143,7 @@ import {
   W_BATCHES,
   W_INSTRUCTIONS,
 } from "../teto/abi.js";
-import { loadTeto } from "../teto/loader.js";
+import { loadTeto, tetoRecommendedPages } from "../teto/loader.js";
 import type { TetoImageProvider } from "../teto/loader.js";
 import type { TetoExports } from "../teto/loader.js";
 import type { KernelMode } from "../teto/provider.js";
@@ -1065,6 +1065,18 @@ test("Teto owns RV64 brk growth, bounds and shrink zeroing", async () => {
   const sourceResult = exercise(source, sourceMemory.bytes);
   const generatedResult = exercise(generated.exports, new Uint8Array(generated.memory.buffer));
   eq(generatedResult, sourceResult);
+});
+
+test("Teto sizes host memory for large guest images without reducing the existing minimum", () => {
+  eq(tetoRecommendedPages(0), 8192);
+  eq(tetoRecommendedPages(0, 1024), 1024);
+  eq(tetoRecommendedPages(53 * 1024 * 1024, 1024), 7808);
+  eq(tetoRecommendedPages(53 * 1024 * 1024), 8192);
+  eq(tetoRecommendedPages(100 * 1024 * 1024), 13824);
+  let rejected = false;
+  try { tetoRecommendedPages(300 * 1024 * 1024); }
+  catch (error) { rejected = error instanceof RangeError; }
+  ok(rejected, "Teto accepted an image beyond its memory ceiling");
 });
 
 test("Teto honours MAP_FIXED replacement inside MAP_NORESERVE reservations", async () => {
