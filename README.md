@@ -11,14 +11,13 @@ The 0.3 release is styled **v｡三**.
     npm install
     npm run build
 
-The build compiles the TypeScript host, generates the baseline and
+The build compiles the TypeScript host, compiles the pinned modular WAT into the baseline and
 threaded Teto kernels, validates their manifest and prepares the
 static browser files.
 
 ## Run
 
-Automatic selection prefers Teto and falls back to Thistle if the
-generated kernel cannot be loaded:
+The default CLI uses Teto. Automatic selection allows fallback to Thistle:
 
     bun mikuos.ts
     bun mikuos.ts --kernel=auto

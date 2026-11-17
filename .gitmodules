@@ -1,15 +1,15 @@
 [submodule "kittyx"]
 	path = kittyx
-	url = https://github.com/kitty-crow/kittyx.git
+	url = https://github.com/kittycrow-kittyx/kittyx.git
 [submodule "src/asm"]
 	path = src/asm
-	url = https://github.com/kitty-crow/thistle-asm.git
+	url = https://github.com/kittycrow-kittyx/thistle-asm.git
 [submodule "baguette"]
 	path = baguette
-	url = https://github.com/kitty-crow/baguette.git
+	url = https://github.com/kittycrow-kittyx/baguette.git
 [submodule "thistlecc"]
 	path = thistlecc
-	url = https://github.com/kitty-crow/thistlecc.git
+	url = https://github.com/kittycrow-kittyx/thistlecc.git
 [submodule "deps/teto"]
 	path = deps/teto
-	url = https://github.com/kitty-crow/teto.git
+	url = https://github.com/kittycrow-kittyx/teto.git

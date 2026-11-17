@@ -1,9 +1,7 @@
-# Canonical native Teto provenance in mikuOS
+# Teto source provenance
 
-mikuOS builds Teto from the authoritative [Thistle](https://github.com/kitty-crow/thistle) `main` source. There is no checked-in `src/teto/kernel.ts` or separately maintained native kernel in mikuOS or Teto.
+mikuOS pins Teto as a Git submodule. The Teto snapshot consists of Baguette-generated modular WAT, its link layout and the source provenance manifest. Its Thistle gitlink must match the canonical revision in that manifest.
 
-`npm run build` resolves and records an immutable Thistle commit SHA exactly once. It stages 17 byte-for-byte host-source views from that checkout (for the direct TypeScript execution and cross-checks), compiles mikuOS, then asks the pinned `deps/teto` build to **reuse that identical checkout** and compile baseline and threaded WASM through Bake and Baguette. A changed SHA, missing checkout, modified tracked upstream source, reintroduced tracked native copy, or generated-source mismatch fails the build.
+The build stages direct TypeScript compatibility files from that exact Thistle revision, validates their origin, builds the host and compiles the committed Teto source. It does not regenerate the production kernel from moving upstream branches.
 
-The production Teto WebAssembly is copied unchanged into `dist/teto` and the web distribution. The source/ABI provenance test, 512 MiB linear-memory requirement (8,192 pages), guest instruction checks, native memory/VFS/THX tests, and strict Teto execution tests are required in CI. Explicit Teto mode must never fall back silently to the direct interpreter. Native-source validation is a required CI step, not a non-blocking diagnostic.
-
-The older Thistle host adapters and compatibility tooling remain separate from the native Teto compilation entries. They do not supply an independently maintained native kernel.
+The baseline and threaded binaries must match Teto's reference hashes. The same bytes are copied to the CLI and browser distributions. CI checks guest execution and the kernel ABI in explicit Teto mode; the CLI must not fall back silently.
