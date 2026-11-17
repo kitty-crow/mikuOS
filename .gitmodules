@@ -4,9 +4,6 @@
 [submodule "src/asm"]
 	path = src/asm
 	url = https://github.com/kittycrow-kittyx/thistle-asm.git
-[submodule "baguette"]
-	path = baguette
-	url = https://github.com/kittycrow-kittyx/baguette.git
 [submodule "thistlecc"]
 	path = thistlecc
 	url = https://github.com/kittycrow-kittyx/thistlecc.git

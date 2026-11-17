@@ -20,15 +20,6 @@
       "updatePolicy": "pull-request"
     },
     {
-      "name": "Baguette",
-      "repository": "kittycrow-kittyx/baguette",
-      "path": "baguette",
-      "commit": "1bac7a3309af4cda7e8b160af643f0a4e9e689fe",
-      "relationship": "build",
-      "direct": false,
-      "updatePolicy": "pull-request"
-    },
-    {
       "name": "ThistleCC",
       "repository": "kittycrow-kittyx/thistlecc",
       "path": "thistlecc",

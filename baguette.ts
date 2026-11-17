@@ -1,5 +1,2 @@
-/**
- * Stable mikuOS entry point for Baguette.
- * The complete compiler and orchestration source lives under ./baguette.
- */
-import "./baguette/src/cli.ts";
+// Historical build command; kernel compilation is delegated to the pinned Teto source.
+import "./src/tool/teto-build.ts";

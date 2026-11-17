@@ -1,17 +1,14 @@
 # Dependencies
 
-The repository pins its non-fork dependencies as Git submodules:
+mikuOS pins its dependencies as Git submodules:
 
-- `kittyx` contains target and format contracts;
-- `src/asm` contains ThistleASM;
-- `baguette` contains the WebAssembly compiler;
-- `thistlecc` contains the C and C++ compiler driver.
+- `kittyx`: target and format contracts.
+- `src/asm`: ThistleASM.
+- `thistlecc`: the C and C++ compiler driver.
+- `deps/teto`: generated modular WAT and its standalone kernel build.
 
-`project.dependencies.json` records the same commits in a
-machine-readable form. A fresh checkout should run:
+Teto owns the pins for Thistle, Bake and Baguette. mikuOS consumes the compiled WASM and does not maintain a separate compiler pin for kernel generation.
 
-    git submodule update --init --recursive
+`project.dependencies.json` records the exact direct and contract dependency revisions. Initialise recursive submodules on a fresh checkout.
 
-Dependency update workflows test a proposed revision and open a
-draft pull request. They do not merge or move the pinned commit
-automatically.
+Dependency update workflows test exact candidate revisions and open draft pull requests. They do not merge them automatically.

@@ -49,9 +49,9 @@ interface NativeCore {
   rv64CompressedJump(instruction: number): number;
 }
 
-const bytes = await readFile(new URL("../../dist/thistle-core-probe/thistle-core-probe.wasm", import.meta.url));
+const bytes = await readFile(new URL("../../dist/teto/teto.wasm", import.meta.url));
 const module = await WebAssembly.instantiate(bytes, {
-  env: { memory: new WebAssembly.Memory({ initial: 256, maximum: 32768 }) },
+  env: { memory: new WebAssembly.Memory({ initial: 8192, maximum: 32768 }) },
 });
 const native = module.instance.exports as unknown as NativeCore;
 const compare = [
