@@ -203,7 +203,7 @@ const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.
 
 test("RV64 epoll infinite waits ignore unrelated notifications", async () => {
   const rig = new Rig();
-  const memory = new Mem64(65536n, 65536);
+  const memory = new Mem64(1024n * 1024n, 65536);
   const events = new RvLinuxEvents(rig.os.s, () => memory, () => {});
   const epoll = events.createEpoll(0);
   const watched = events.createEventfd(0, 0);
