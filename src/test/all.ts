@@ -15,6 +15,7 @@ import type { Tree, TreeEnt } from "../fs/tree.js";
 import { DirTree } from "../main/dir.js";
 import { Mem64 } from "../vm/mem64.js";
 import { Rv64 } from "../vm/rv64.js";
+import { RvLinuxEvents } from "../vm/linux-events.js";
 import { Sys } from "../core/sys.js";
 import { Tty } from "../io/tty.js";
 import { DEFAULT_CONFIG } from "../core/config.js";
@@ -199,6 +200,35 @@ const test = (name: string, fn: () => void | Promise<void>): void => { tests.pus
 const ok: (v: unknown, m?: string) => asserts v = (v, m = "assertion failed") => { if (!v) throw new Error(m); };
 const show = (v: unknown): string => JSON.stringify(v, (_k, x: unknown) => typeof x === "bigint" ? `${x}n` : x);
 const eq = (a: unknown, b: unknown, m = "values differ"): void => { if (!Object.is(a, b)) throw new Error(`${m}: ${show(a)} != ${show(b)}`); };
+
+test("RV64 epoll infinite waits ignore unrelated notifications", async () => {
+  const rig = new Rig();
+  const memory = new Mem64(65536n, 65536);
+  const events = new RvLinuxEvents(rig.os.s, () => memory, () => {});
+  const epoll = events.createEpoll(0);
+  const watched = events.createEventfd(0, 0);
+  const unrelated = events.createEventfd(0, 0);
+  const eventAt = 0x100n, outputAt = 0x200n, valueAt = 0x300n;
+  memory.set32(eventAt, 1); // EPOLLIN
+  memory.set64(eventAt + 4n, 0x123456n);
+  memory.set64(valueAt, 1n);
+  eq(events.ctl(epoll, 1, watched, eventAt), 0); // EPOLL_CTL_ADD
+
+  let settled = false;
+  const pending = events.wait(epoll, outputAt, 1, -1).then(value => {
+    settled = true;
+    return value;
+  });
+  eq(await events.write(unrelated, valueAt, 8), 8n);
+  await Promise.resolve();
+  await Promise.resolve();
+  eq(settled, false, "unrelated wake-up must not complete an infinite epoll wait");
+
+  eq(await events.write(watched, valueAt, 8), 8n);
+  eq(await pending, 1);
+  eq(memory.u32(outputAt), 1);
+  eq(memory.u64(outputAt + 4n), 0x123456n);
+});
 
 test("Thistle preserves its working interpreter without substituting Teto source", async () => {
   const original = boot({ put: () => {}, kernelMode: "thistle" });
@@ -404,6 +434,80 @@ test("thistle64 releases full pages and clears partial unmaps", () => {
   m.drop(0x20011n, 2); eq(m.used, 65536); eq(m.u32(0x20010n), 0x55000088);
 });
 
+test("direct Thistle RV64 mprotect syscall applies page permissions without changing neighbours", async () => {
+  interface Mapping {
+    at: bigint;
+    end: bigint;
+    prot: number;
+    shared: boolean;
+    path?: string;
+    off?: number;
+  }
+  interface HostRv64 {
+    m: Mem64;
+    floor: bigint;
+    brk: bigint;
+    stackAt: bigint;
+    mapAt: bigint;
+    maps: Mapping[];
+    x: BigInt64Array<ArrayBufferLike>;
+    call(syscall: number): Promise<bigint>;
+    mmap(at: bigint, len: bigint, prot: bigint, flags: bigint, fd: bigint, off: bigint): bigint;
+    mprotect(at: bigint, len: bigint, prot: bigint): bigint;
+    unmap(at: bigint, len: number): void;
+    mem(at: bigint, len: number, write?: boolean): void;
+    exec(at: bigint, len: number): void;
+  }
+  const r = new Rig();
+  const vm = new Rv64(r.os.s) as unknown as HostRv64;
+  vm.m = new Mem64(1n << 42n, 1024 * 1024);
+  vm.floor = 0x20000n;
+  vm.brk = vm.floor;
+  vm.stackAt = 1n << 41n;
+  vm.mapAt = 0x4000000000n;
+
+  const errorCode = (fn: () => unknown): string => {
+    try { fn(); return ""; }
+    catch (error) { if (error instanceof KErr) return error.code; throw error; }
+  };
+  const base = vm.mmap(0n, 0x4000n, 0n, 0x22n, -1n, 0n);
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, false)), "EACCES");
+  eq(errorCode(() => vm.exec(base + 0x1000n, 4)), "EACCES");
+  // Exercise the actual RV64 Linux ABI dispatcher (syscall 226).
+  vm.x[10] = base + 0x1000n;
+  vm.x[11] = 0x1000n;
+  vm.x[12] = 3n;
+  eq(await vm.call(226), 0n);
+  vm.mem(base + 0x1000n, 4, true);
+  vm.m.set32(base + 0x1000n, 42);
+  eq(vm.m.u32(base + 0x1000n), 42);
+  eq(errorCode(() => vm.mem(base, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x2000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mem(base + 0x1ffcn, 8, false)), "EACCES",
+    "a read crossing into a PROT_NONE neighbour must fail");
+  eq(vm.maps.length, 3);
+  eq(vm.maps[0]!.prot, 0);
+  eq(vm.maps[1]!.prot, 3);
+  eq(vm.maps[2]!.prot, 0);
+
+  eq(vm.mprotect(base + 0x1000n, 0x1000n, 5n), 0n);
+  vm.exec(base + 0x1000n, 4);
+  eq(errorCode(() => vm.mem(base + 0x1000n, 4, true)), "EACCES");
+  eq(errorCode(() => vm.mprotect(base + 0x1001n, 0x1000n, 3n)), "EINVAL");
+  eq(errorCode(() => vm.mprotect(base, 0x1000n, 8n)), "EINVAL");
+  eq(vm.mprotect(base + 0x2000n, 0x2000n, 1n), 0n);
+  vm.mem(base + 0x1ffcn, 8, false);
+  eq(errorCode(() => vm.mem(base + 0x2000n, 4, true)), "EACCES");
+  // A failed protect spanning a hole must not alter any part of the range.
+  vm.unmap(base + 0x2000n, 0x1000);
+  const before = vm.maps.map(m => [m.at, m.end, m.prot]);
+  eq(errorCode(() => vm.mprotect(base + 0x1000n, 0x3000n, 3n)), "ENOMEM");
+  eq(show(vm.maps.map(m => [m.at, m.end, m.prot])), show(before));
+  eq(vm.mprotect(base + 0x1000n, 0x1000n, 3n), 0n);
+  vm.mem(base + 0x1000n, 4, true);
+});
+ 
 test("RV64 shared mappings flush on msync, munmap and exit", async () => {
   interface HFs { readFile(p: URL): Promise<Uint8Array>; }
   const mod = (name: string): Promise<unknown> => import(name);
@@ -2979,6 +3083,18 @@ test("GNU head dd od and Bash are actual pre-built THX2 guest executables", asyn
   x = await r.run("/bin/bash -c 'printf bash-ready'");
   eq(x.code, 0, x.err);
   eq(x.out, "bash-ready");
+
+  // Linux-style device nodes are character devices, not lazily loaded regular
+  // files. GNU head performs native RV64 openat/read/fstat calls on them.
+  for (const path of ["/dev/zero", "/dev/random", "/dev/urandom"]) {
+    eq(r.os.s.stat(path).kind, "char", path + " is not a character device");
+    x = await r.run(`/bin/head -c 16 ${path} | /bin/od -An -tx1`);
+    eq(x.code, 0, path + " failed: " + x.err);
+    eq(x.err, "", path + " reported an unexpected error");
+    const bytes = x.out.match(/\b[0-9a-f]{2}\b/gi) ?? [];
+    eq(bytes.length, 16, path + " did not return exactly 16 bytes");
+    if (path === "/dev/zero") ok(bytes.every(value => value === "00"), "zero device returned nonzero bytes");
+  }
 });
 
 test("thsh folds physical line continuations without changing quoted here-documents", async () => {
@@ -3028,6 +3144,51 @@ test("thsh folds physical line continuations without changing quoted here-docume
   x = await r.run(lines("cat <<EOF", `left${slash}`, "right", "EOF", ""));
   eq(x.code, 0);
   eq(x.out, "leftright\n", "an unquoted here-document lost its established expansion rules");
+});
+
+test("Up and Down traverse full shell history without accidentally entering prefix search", async () => {
+  const r = new Rig();
+  await r.os.ready;
+  r.os.sh.ensureUserState();
+  r.os.sh.prefs.historyPrefixSearch = true;
+  r.os.sh.hist.splice(0, r.os.sh.hist.length, "pwd", "echo middle", "ls -la");
+  let written = "";
+  const host = {
+    shell: r.os.sh,
+    prompt: () => "$ ",
+    busy: () => false,
+    write: (value: string) => { written += value; },
+    execute: (_source: string) => {},
+    passthrough: (_raw: string) => {},
+    halt: () => {},
+    complete: (line: string) => ({ line, list: [] as string[] }),
+  };
+  const visible = (): string => written.split("\r\x1b[2K").at(-1) ?? "";
+  const editor = new LineEditor(host);
+
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ ls -la"), "first Up did not recall the newest command");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ echo middle"), "second Up incorrectly started prefix search");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ pwd"), "third Up did not recall the oldest command");
+  editor.key("\x1b[A");
+  ok(visible().startsWith("$ pwd"), "Up at the oldest command changed history");
+  editor.key("\x1b[B");
+  ok(visible().startsWith("$ echo middle"), "Down did not navigate forward");
+  editor.key("\x1b[B");
+  ok(visible().startsWith("$ ls -la"), "Down did not reach newest history");
+  editor.key("\x1b[B");
+  eq(visible(), "$ ", "Down must restore the empty prompt");
+
+  // Prefix search is still useful when a prefix was actually typed.
+  written = "";
+  const prefixed = new LineEditor(host);
+  prefixed.key("ec");
+  prefixed.key("\x1b[A");
+  ok(visible().startsWith("$ echo middle"), "typed-prefix history search regressed");
+  prefixed.key("\x1b[B");
+  ok(visible().startsWith("$ ec"), "Down did not restore typed prefix");
 });
 
 test("line editor clears unaccepted history suggestions before submitting", () => {

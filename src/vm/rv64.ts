@@ -1513,7 +1513,7 @@ export class Rv64 {
       case 221: return this.execve(this.str(a[10]!), this.addr(a[11]!), this.addr(a[12]!));
       case 222: return this.mmap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!, a[15]!);
       case 227: this.flushShared(this.addr(a[10]!), this.nat(a[11]!, "sync length", Number.MAX_SAFE_INTEGER)); return 0n;
-      case 226: return 0n;
+      case 226: return this.mprotect(a[10]!, a[11]!, a[12]!);
       case 233: return 0n;
       case 261: return this.limit(a[10]!, a[11]!, a[12]!, a[13]!);
       case 278: return BigInt(this.random(this.addr(a[10]!), this.nat(a[11]!, "random length", MAX_IO)));
@@ -1642,7 +1642,10 @@ export class Rv64 {
 
       if (fl & O_DIRECTORY) bad("ENOTDIR", path);
       if (fl & O_CREAT && fl & O_EXCL) bad("EEXIST", path);
-      await this.s.materialise(path);
+      // Only regular files have lazy payloads to materialise. /dev/zero,
+      // /dev/random, /dev/urandom and other character devices already have
+      // live read/write handlers; materialise() rejects them with EISDIR.
+      if (st.kind === "file") await this.s.materialise(path);
     } catch (e) {
       if (!(e instanceof KErr) || e.code !== "ENOENT" || !(fl & O_CREAT)) {
         throw e;
@@ -2245,6 +2248,42 @@ export class Rv64 {
     return at;
   }
 
+  /** Linux mprotect(2) on the direct RV64 host bridge. Preserve unmapped gaps and
+   * split affected reservations rather than granting permissions to neighbours. */
+  private mprotect(addr0: bigint, len0: bigint, prot0: bigint): bigint {
+    const at = this.addr(addr0);
+    const size = this.nat(len0, "mprotect length", Number.MAX_SAFE_INTEGER);
+    if (prot0 < 0n || prot0 > 7n) bad("EINVAL", "invalid mprotect protection");
+    const prot = Number(prot0);
+    if (!size || (at & (PAGE - 1n))) bad("EINVAL", "invalid mprotect range");
+    const end = at + al(BigInt(size));
+    if (end > this.m.top) bad("ENOMEM", "mprotect exceeds guest address space");
+
+    // Reject holes before changing anything. A failed syscall must not leave
+    // a partially protected range behind.
+    let cursor = at;
+    while (cursor < end) {
+      const region = this.maps.find(q => cursor >= q.at && cursor < q.end) ?? bad("ENOMEM", "mprotect range is not fully mapped");
+      cursor = region.end < end ? region.end : end;
+    }
+
+    const fragment = (q: MapEnt, start: bigint, stop: bigint, protection = q.prot): MapEnt => ({
+      ...q, at: start, end: stop, prot: protection,
+      ...(q.off !== undefined ? { off: q.off + Number(start - q.at) } : {}),
+    });
+    const next: MapEnt[] = [];
+    for (const region of this.maps) {
+      const start = at > region.at ? at : region.at;
+      const stop = end < region.end ? end : region.end;
+      if (start >= stop) { next.push(region); continue; }
+      if (region.at < start) next.push(fragment(region, region.at, start));
+      next.push(fragment(region, start, stop, prot));
+      if (stop < region.end) next.push(fragment(region, stop, region.end));
+    }
+    this.maps.splice(0, this.maps.length, ...next);
+    return 0n;
+  }
+
   private remap(old0: bigint, oz0: bigint, nz0: bigint, fl0: bigint, fixed0: bigint): bigint {
     const old = this.addr(old0), on = this.nat(oz0, "old mapping length", Number.MAX_SAFE_INTEGER), nn = this.nat(nz0, "new mapping length", Number.MAX_SAFE_INTEGER);
     const oz = al(BigInt(on)), nz = al(BigInt(nn)), fl = this.nat(fl0, "remap flags", 3);
@@ -2351,10 +2390,20 @@ export class Rv64 {
     if (at < 0n || !Number.isSafeInteger(n) || n < 0 || end > this.m.top) bad("ERANGE", `RV64 memory at 0x${at.toString(16)}`);
     if (!n) return;
     const q = at < this.floor ? this.seg.find(s => at >= s.at && end <= s.end) : undefined;
-    const mapped = !!q || at >= this.floor && end <= this.brk || at >= this.stackAt || this.maps.some(m => at >= m.at && end <= m.end);
-    if (!mapped) bad("ERANGE", `unmapped RV64 memory at 0x${at.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
-    if (wr && q && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
-    if (wr && !q && this.maps.some(m => at >= m.at && end <= m.end && !(m.prot & 2))) bad("EACCES", "write to read-only RV64 mapping");
+    if (q) {
+      if (wr && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
+      if (!wr && !q.flg.includes("r")) bad("EACCES", `read from ${q.name}`);
+      return;
+    }
+    if (at >= this.floor && end <= this.brk || at >= this.stackAt) return;
+    // Multi-byte accesses can cross a boundary created by mprotect. Check
+    // every contiguous mapping, not only one entry covering the whole access.
+    let cursor = at;
+    while (cursor < end) {
+      const region = this.maps.find(m => cursor >= m.at && cursor < m.end) ?? bad("ERANGE", `unmapped RV64 memory at 0x${cursor.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
+      if (!(region.prot & (wr ? 2 : 1))) bad("EACCES", wr ? "write to read-only RV64 mapping" : "read from inaccessible RV64 mapping");
+      cursor = region.end < end ? region.end : end;
+    }
   }
 
   private immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }
