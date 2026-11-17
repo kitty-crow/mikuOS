@@ -1994,7 +1994,8 @@ test("canonical mikuOS release metadata stays aligned", async () => {
   ok(page.includes("<title>初音ミクOS v｡三</title>"));
   ok(!ignore.split(/\r?\n/).includes("ports/"), "native source tree is broadly ignored");
   ok(ignore.includes("ports/**/*.o"), "reproducible native objects are not ignored");
-  ok(mikuosEntry.includes('import "./src/main/cli.ts"'));
+  ok(mikuosEntry.includes('await import("./src/main/cli.ts")'));
+  ok(mikuosEntry.includes("neruCliRequest(process.argv.slice(2), process.env)"));
   ok(thistleEntry.includes('import "./src/main/cli.ts"'));
 });
 
