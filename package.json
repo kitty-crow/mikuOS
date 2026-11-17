@@ -10,7 +10,7 @@
     "teto:build": "npm run stage:thistle && npm run teto:build:staged",
     "teto:validate": "npm --prefix deps/teto install --package-lock=false && npm --prefix deps/teto run build",
     "clean": "rm -rf build dist thistle.js vendor",
-    "test": "npm run build && node scripts/ci/stage-thistle-native.mjs --check && node build/test/all.js",
+    "test": "npm run build && node scripts/ci/stage-thistle-native.mjs --check && node --test build/backends/neru/cli.test.js && node build/test/all.js",
     "test:toolchain": "bun run thistlecc/test/test.ts",
     "test:guest-toolchain": "npm run build && THISTLE_FUEL=0 node build/test/toolchain.js",
     "test:bun": "npm run build && bun run build/test/bun.js",

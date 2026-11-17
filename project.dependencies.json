@@ -36,6 +36,15 @@
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"
+    },
+    {
+      "name": "Neru",
+      "repository": "kittycrow-kittyx/neru",
+      "path": "deps/neru",
+      "commit": "6efda8eaab6a949563b94d18bad3712e57336823",
+      "relationship": "runtime",
+      "direct": true,
+      "updatePolicy": "pull-request"
     }
   ]
 }
