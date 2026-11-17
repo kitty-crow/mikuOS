@@ -1,6 +1,6 @@
 /**
- * Stage direct TypeScript imports from the SAME immutable Thistle checkout
- * that Bake and Baguette use for production Teto. No native kernel file is
+ * Stage direct TypeScript imports from the exact Thistle gitlink and source
+ * provenance recorded by Teto. No native kernel file is
  * maintained in mikuOS. --check verifies byte-for-byte equivalence.
  */
 import { spawnSync } from "node:child_process";
@@ -9,9 +9,19 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const upstream = resolve(root, "deps/teto/build/thistle-source");
-const shaFile = resolve(root, "deps/teto/build/thistle-source.sha");
-const recorded = (await readFile(shaFile, "utf8")).trim();
+const teto = resolve(root, "deps/teto");
+const upstream = resolve(teto, "thistle");
+const manifest = JSON.parse(await readFile(resolve(teto, "teto.manifest.json"), "utf8"));
+const recorded = manifest.canonicalRevision;
+const pin = spawnSync("git", ["-C", teto, "ls-tree", "HEAD", "thistle"], { encoding: "utf8" });
+if (manifest.canonicalSource !== "Thistle" || manifest.toolchain?.Thistle !== recorded ||
+    pin.status !== 0 || !pin.stdout.startsWith(`160000 commit ${recorded}\tthistle`)) {
+  throw new Error("Teto manifest and canonical Thistle gitlink disagree");
+}
+const checkedRoot = spawnSync("git", ["-C", upstream, "rev-parse", "--show-toplevel"], { encoding: "utf8" });
+if (checkedRoot.status !== 0 || checkedRoot.stdout.trim() !== upstream) {
+  throw new Error("Canonical Thistle submodule is not initialised");
+}
 const git = spawnSync("git", ["-C", upstream, "rev-parse", "HEAD"], { encoding: "utf8" });
 if (!/^[0-9a-f]{40}$/.test(recorded) || git.status !== 0 || git.stdout.trim() !== recorded) {
   throw new Error("Native staging requires the exact recorded canonical Thistle checkout");

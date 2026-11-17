@@ -3,7 +3,7 @@
   "dependencies": [
     {
       "name": "KITTYX",
-      "repository": "kitty-crow/kittyx",
+      "repository": "kittycrow-kittyx/kittyx",
       "path": "kittyx",
       "commit": "6d6dbac796d59e8ea07c52cbcd3a0b7f181da163",
       "relationship": "contract",
@@ -12,7 +12,7 @@
     },
     {
       "name": "ThistleASM",
-      "repository": "kitty-crow/thistle-asm",
+      "repository": "kittycrow-kittyx/thistle-asm",
       "path": "src/asm",
       "commit": "2e6ce603ceeb5b202aa68c0b1a5001fba85b8d77",
       "relationship": "runtime",
@@ -20,17 +20,8 @@
       "updatePolicy": "pull-request"
     },
     {
-      "name": "Baguette",
-      "repository": "kitty-crow/baguette",
-      "path": "baguette",
-      "commit": "51314b0eb0fa6eae17772b59332e299052446726",
-      "relationship": "build",
-      "direct": false,
-      "updatePolicy": "pull-request"
-    },
-    {
       "name": "ThistleCC",
-      "repository": "kitty-crow/thistlecc",
+      "repository": "kittycrow-kittyx/thistlecc",
       "path": "thistlecc",
       "commit": "0639f51d58979a888138d410daba4731b1045619",
       "relationship": "build",
@@ -39,9 +30,9 @@
     },
     {
       "name": "Teto",
-      "repository": "kitty-crow/teto",
+      "repository": "kittycrow-kittyx/teto",
       "path": "deps/teto",
-      "commit": "9958a781ecb09b1c97e59974047a388d1f34b108",
+      "commit": "82d2742f0527f77f7f411fe7af41db8fb764a807",
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"

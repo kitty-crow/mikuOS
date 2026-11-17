@@ -3845,7 +3845,7 @@ test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async (
   const dynamic = (name: string): Promise<unknown> => import(name);
   const fs = await dynamic("node:fs/promises") as TextFs;
   const config = JSON.parse(await fs.readFile(
-    new URL("../../baguette.config.json", import.meta.url), "utf8",
+    new URL("../../deps/teto/baguette.config.json", import.meta.url), "utf8",
   )) as { entries?: string[]; canonicalSource?: string; completeKernel?: boolean; memory?: { initialPages?: number } };
   eq(config.canonicalSource, "Thistle");
   eq(config.completeKernel, true);
@@ -3864,11 +3864,11 @@ test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async (
     generatedFrom?: Array<{ path: string; sha256: string }>;
   };
   eq(manifest.canonicalSource, "Thistle");
-  const selectedSha = (await fs.readFile(
-    new URL("../../deps/teto/build/thistle-source.sha", import.meta.url), "utf8",
-  )).trim();
+  const selectedSha = (JSON.parse(await fs.readFile(
+    new URL("../../deps/teto/teto.manifest.json", import.meta.url), "utf8",
+  )) as { canonicalRevision: string }).canonicalRevision;
   eq(manifest.canonicalRevision, selectedSha);
-  ok(manifest.canonicalOriginalEntries?.includes("src/native/kernel.ts"),
+  ok(manifest.canonicalOriginalEntries?.some(path => path.endsWith("/src/native/kernel.ts")),
     "Teto manifest must identify the original Thistle kernel source");
   ok(manifest.canonicalOriginalModules?.some(path => path.endsWith("/src/native/kernel.ts")),
     "Teto manifest must record the original native Thistle source graph");
@@ -3877,7 +3877,7 @@ test("mikuOS consumes the exact Thistle -> Bake -> Baguette Teto build", async (
   ok(manifest.generatedFrom?.some(entry => entry.path.endsWith("/src/native/kernel.ts")),
     "Generated WebAssembly must contain the Bake-lowered Thistle kernel");
   for (const name of ["abi.ts", "kernel.ts", "memory.ts", "start.ts", "thx.ts", "types.ts", "vfs.ts", "word.ts"]) {
-    const thistle = await fs.readFile(new URL(`../../deps/teto/build/thistle-source/src/native/${name}`, import.meta.url), "utf8");
+    const thistle = await fs.readFile(new URL(`../../deps/teto/thistle/src/native/${name}`, import.meta.url), "utf8");
     const legacy = await fs.readFile(new URL(`../../src/teto/${name}`, import.meta.url), "utf8");
     eq(legacy, thistle, `Local compatibility copy of ${name} diverged from canonical Thistle`);
   }

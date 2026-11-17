@@ -6,37 +6,14 @@ A complete build starts from a recursive checkout:
     npm install
     npm run build
 
-`npm run build` runs `build:thistle` followed by `teto:build`.
-`build:thistle` compiles the TypeScript host and prepares the static
-host files.
+mikuOS pins Teto. Teto pins Thistle, Bake and Baguette. Its source-generation workflow lowers Thistle through Bake and emits modular WAT through Baguette. mikuOS does not run this generation pipeline.
 
-Teto compilation has one canonical toolchain dependency:
+The normal build stages the exact Thistle compatibility source recorded in Teto's provenance, compiles the TypeScript host, runs Teto's standalone WAT build, and copies its validated binaries and ABI metadata to the CLI and static browser distributions.
 
-    src/teto TypeScript
-        -> pinned Baguette compiler
-        -> Baguette's pinned Bake validation and safe lowering stage
-        -> Baguette subset validation and AOT compilation
-        -> dist/teto WebAssembly
+Important outputs:
 
-mikuOS tracks Baguette as a submodule. Bake is owned and pinned recursively by
-Baguette, so mikuOS does not carry a separate Bake dependency or preprocessing
-script. Baguette isolates the five Teto kernel entries from `tsconfig.teto.json`
-and their imported kernel dependencies before passing them through Bake. Browser
-loaders, host adapters and alternative kernels remain outside that project
-boundary.
+- `build/`: compiled host JavaScript.
+- `dist/teto/`: baseline and threaded WebAssembly, manifest and ABI declaration.
+- `dist/web/`: static browser application and packaged root image.
 
-Baguette remains the final validator and WebAssembly compiler. Its Bake stage is
-compile-time tooling only and introduces no runtime, interpreter or virtual
-machine into Teto. `BAGUETTE_BAKE_ENGINE` may select Bake's `auto`, `host` or
-`wasm` core; `auto` is the default.
-
-Important outputs are:
-
-- `build/` for compiled host JavaScript;
-- `build/baguette-bake/` for Baguette's Bake input, lowered source and report;
-- `build/teto-generated/` for Baguette's generated TypeScript;
-- `dist/teto/teto.wasm` and `teto-threads.wasm`;
-- `dist/teto/teto.manifest.json`;
-- `dist/web/` for the static site and packaged root image.
-
-`npm test` rebuilds the project and runs the integration suite.
+`npm test` rebuilds the project and runs the integration suite. `npm run teto:test:cli` boots the built kernel explicitly and runs a guest RV64GC executable.

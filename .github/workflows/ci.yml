@@ -62,18 +62,58 @@ jobs:
       - name: Validate Node.js parity acceptance script
         run: bash -n scripts/ci/test-node39-parity.sh
 
-      - name: Compile and cross-check canonical Thistle instruction helpers
+      - name: Cross-check compiled Teto against canonical instruction helpers
         shell: bash
         run: |
-          bun baguette/src/compiler.ts --config baguette.thistle-core.config.json --skip-determinism-check
           bun scripts/ci/test-thistle-native-core.ts
 
-      - name: Validate production Thistle native kernel through Bake and Baguette
+      - name: Validate pinned Thistle source and compiled Teto
         shell: bash
         run: |
           set -Eeuo pipefail
           node scripts/ci/stage-thistle-native.mjs --check
-          (cd deps/teto && THISTLE_USE_STAGED=1 bun scripts/ci/probe-thistle-kernel.ts)
+          (cd deps/teto && sha256sum -c SHA256SUMS)
+          cmp deps/teto/dist/teto/teto.wasm dist/teto/teto.wasm
+          cmp deps/teto/dist/teto/teto-threads.wasm dist/teto/teto-threads.wasm
+
+      - name: Boot Teto through Bun and execute a guest RV64GC binary
+        run: npm run teto:test:cli
 
       - name: Test
-        run: npm test
+        run: node build/test/all.js
+
+  fresh-tmp-checkout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Clone the exact candidate under /tmp
+        shell: bash
+        env:
+          TEST_REV: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          work="$(mktemp -d /tmp/mikuos-teto.XXXXXXXX)"
+          git clone --no-checkout https://github.com/kittycrow-kittyx/mikuOS.git "$work/mikuOS"
+          git -C "$work/mikuOS" checkout --detach "$TEST_REV"
+          git -C "$work/mikuOS" submodule update --init --recursive
+          echo "MIKUOS_TMP=$work/mikuOS" >> "$GITHUB_ENV"
+      - name: Build from clean source and execute Bun CLI
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cd "$MIKUOS_TMP"
+          nice -n 10 npm install --package-lock=false
+          nice -n 10 npm run build
+          bash scripts/ci/test-teto-cli.sh
+          printf 'echo MIKUOS_DEFAULT_TETO\n/tmp/hello-rv64.39\n' |
+            timeout 180 nice -n 10 bun run mikuos --bin assets/hello-rv64.39 hello-rv64.39 2>&1 | tee /tmp/mikuos-default-teto.log
+          grep -F 'Kernel source: Teto.' /tmp/mikuos-default-teto.log
+          grep -F 'MIKUOS_DEFAULT_TETO' /tmp/mikuos-default-teto.log
+          grep -F 'hello from Teto RV64GC' /tmp/mikuos-default-teto.log
+          ! grep -Ei 'ENOEXEC|fell back to Thistle|not found|startup validation failed' /tmp/mikuos-default-teto.log
