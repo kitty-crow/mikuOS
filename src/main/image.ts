@@ -12,7 +12,7 @@ import { CRT032_TAS, CRT0_TAS, FIB_TAS, HELLO32_TAS, HELLO_TAS, SYS32_TAS, SYS_T
 
 const r: Cred = { uid: 0, gid: 0, ruid: 0, euid: 0, suid: 0, rgid: 0, egid: 0, sgid: 0, groups: [0] };
 
-export const ROOT_IMAGE_VERSION = 5;
+export const ROOT_IMAGE_VERSION = 6;
 
 const osRelease = (k: Kern): string => {
   const config = k.config;

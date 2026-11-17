@@ -79,6 +79,9 @@ jobs:
       - name: Boot Teto through Bun and execute a guest RV64GC binary
         run: npm run teto:test:cli
 
+      - name: Boot the committed userland and execute native GNU programmes
+        run: bash scripts/ci/test-base-userland.sh
+
       - name: Test
         run: node build/test/all.js
 
@@ -111,9 +114,12 @@ jobs:
           nice -n 10 npm install --package-lock=false
           nice -n 10 npm run build
           bash scripts/ci/test-teto-cli.sh
-          printf 'echo MIKUOS_DEFAULT_TETO\n/tmp/hello-rv64.39\n' |
+          printf 'echo MIKUOS_DEFAULT_TETO\n/tmp/hello-rv64.39\ncommand -v dd && command -v od && command -v head && command -v bash\n' |
             timeout 180 nice -n 10 bun run mikuos --bin assets/hello-rv64.39 hello-rv64.39 2>&1 | tee /tmp/mikuos-default-teto.log
           grep -F 'Kernel source: Teto.' /tmp/mikuos-default-teto.log
           grep -F 'MIKUOS_DEFAULT_TETO' /tmp/mikuos-default-teto.log
           grep -F 'hello from Teto RV64GC' /tmp/mikuos-default-teto.log
+          for cmd in dd od head bash; do
+            tr -d '\r' < /tmp/mikuos-default-teto.log | grep -Fx "/bin/$cmd"
+          done
           ! grep -Ei 'ENOEXEC|fell back to Thistle|not found|startup validation failed' /tmp/mikuos-default-teto.log

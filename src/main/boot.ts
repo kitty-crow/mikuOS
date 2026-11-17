@@ -19,6 +19,7 @@ export interface Host {
   put(s: string, ch: Ch): void | Promise<void>;
   halt?(): void;
   tree?: Tree;
+  requireTree?: boolean;
   pkg?: { install(kernel: Kern): Promise<boolean> };
   config?: SystemConfig;
   account?: AccountConfig;
@@ -149,6 +150,7 @@ export class Os {
         this.k.log(`hostfs: initialized / in ${this.host.tree.label}`);
       }
     } catch (e) {
+      if (this.host.requireTree) throw e;
       this.k.disk = false;
       live(this.k);
       this.k.log(`persist: restore failed: ${e instanceof Error ? e.message : String(e)}`);
