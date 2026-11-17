@@ -568,10 +568,9 @@ export class Rv64 {
         const descriptor = exports.tetoHostDescriptor(0, 0);
         const address = exports.tetoHostAddress(0, 0);
         const length = exports.tetoHostLength(0, 0);
-        const fd = this.s.p.fds.get(descriptor);
         let hostResult: bigint;
         try {
-          hostResult = fd?.output ? BigInt(await fd.output.wr(this.m.read(address, length))) : -9n;
+          hostResult = BigInt(await this.write(descriptor, this.m.read(address, length)));
         } catch (error) {
           if (!(error instanceof KErr)) throw error;
           hostResult = -BigInt(eno[error.code] ?? 5);
@@ -794,12 +793,12 @@ export class Rv64 {
     const work = (async () => {
       const operation = exports.tetoHostOperation(0, hart);
       if (operation !== TETO_HOST_WRITE) bad("ENOSYS", `unsupported Teto host operation ${operation}`);
-      const fd = this.s.p.fds.get(exports.tetoHostDescriptor(0, hart));
+      const descriptor = exports.tetoHostDescriptor(0, hart);
       const address = exports.tetoHostAddress(0, hart);
       const length = exports.tetoHostLength(0, hart);
       let value: bigint;
       try {
-        value = fd?.output ? BigInt(await fd.output.wr(this.m.read(address, length))) : -9n;
+        value = BigInt(await this.write(descriptor, this.m.read(address, length)));
       } catch (error) {
         if (!(error instanceof KErr)) throw error;
         value = -BigInt(eno[error.code] ?? 5);
