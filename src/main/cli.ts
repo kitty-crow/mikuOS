@@ -5,7 +5,6 @@ import type { Host } from "./boot.js";
 import { hostConfig } from "./config.js";
 import { LineEditor } from "../sh/editor.js";
 import { localSessionPlan, superviseLocalLogin } from "./session.js";
-import { rootPkg } from "./pkg.js";
 import { cachedTetoProvider, kernelMode } from "../teto/provider.js";
 import type { TetoImageProvider, TetoVariant } from "../teto/loader.js";
 
@@ -65,8 +64,9 @@ if (session.command && !hp.stdin.isTTY) {
   throw new Error("local login mode requires a terminal");
 }
 if (!noRoot) {
-  host.tree = new DirTree(root!);
-  host.pkg = rootPkg;
+  const base = new URL("../../.thistle.base/", import.meta.url);
+  host.tree = new DirTree(root!, base, di < 0 && !hp.env?.MIKUOS_ROOT && !hp.env?.THISTLE_ROOT);
+  host.requireTree = true;
 }
 const os = boot(host);
 

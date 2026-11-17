@@ -1,5 +1,6 @@
 import { fileSum } from "../fs/tree.js";
 import type { Tree, TreeEnt } from "../fs/tree.js";
+import { ROOT_IMAGE_VERSION } from "./image.js";
 
 interface Dent { name: string; isDirectory(): boolean; isFile(): boolean; isSymbolicLink(): boolean; }
 interface Stat { mode: number; uid: number; gid: number; atimeMs: number; mtimeMs: number; ctimeMs: number; ino: number | bigint; dev: number | bigint; isFile(): boolean; }
@@ -35,9 +36,15 @@ export class DirTree implements Tree {
   private image = 0;
   private readonly root: string;
 
-  constructor(root: string | URL) {
+  private readonly baseRoot: string | undefined;
+
+  constructor(root: string | URL, base?: URL, private readonly upgradeLegacy = false) {
     this.root = root instanceof URL ? url.fileURLToPath(root) : path.resolve(root);
     if (path.dirname(this.root) === this.root) throw new Error("refusing to use the host filesystem root as a Thistle root");
+    this.baseRoot = base ? path.resolve(url.fileURLToPath(base)) : undefined;
+    if (this.baseRoot && (path.resolve(this.root) === this.baseRoot || path.resolve(this.root).startsWith(this.baseRoot + path.sep) || this.baseRoot.startsWith(path.resolve(this.root) + path.sep))) {
+      throw new Error("the immutable base and writable guest root must be separate");
+    }
     this.label = this.root;
   }
 
@@ -46,7 +53,12 @@ export class DirTree implements Tree {
   async pull(): Promise<TreeEnt[] | null> {
     await fs.mkdir(this.root, { recursive: true });
     const man = await this.man(), listed = (await fs.readdir(this.root, { withFileTypes: true })).filter(x => x.name !== metaName && x.name !== `${metaName}.tmp`);
-    if (!man && !listed.length) return null;
+    if (!man && !listed.length) {
+      if (!this.baseRoot) return null;
+      this.old.clear();
+      this.image = 0;
+      return this.readBase();
+    }
     this.image = man?.image ?? 0;
     this.old = new Map((man?.ent ?? []).map(x => [x.p, x]));
     let seq = Math.max(0, ...[...this.old.values()].map(x => x.id)) + 1;
@@ -85,6 +97,9 @@ export class DirTree implements Tree {
     };
     await walk(this.root, "");
     this.old = new Map(out.map(e => [e.p, meta(e)]));
+    if (this.baseRoot && this.upgradeLegacy && this.image < ROOT_IMAGE_VERSION) {
+      return this.addMissingSystemFiles(out, await this.readBase());
+    }
     return out;
   }
 
@@ -132,6 +147,52 @@ export class DirTree implements Tree {
     for (const e of [...dirs].reverse()) try { await fs.chmod(this.abs(e.p), e.mode); } catch { /* Host ACLs get the final word. */ }
     this.old = new Map(next.map(x => [x.p, x]));
     this.image = imageVersion;
+  }
+
+
+  /** Read the committed guest metadata, including directories Git omits. */
+  private async readBase(): Promise<TreeEnt[]> {
+    const root = this.baseRoot!;
+    const manifest = JSON.parse(td.decode(await fs.readFile(path.join(root, metaName)))) as Man;
+    if (manifest.ver !== 1 || !Array.isArray(manifest.ent) || !manifest.ent.some(e => e.p === "/" && e.k === "d")) {
+      throw new Error("invalid committed root image metadata");
+    }
+    const entries: TreeEnt[] = [];
+    const payloads = new Map<number, Uint8Array>();
+    const seen = new Set<string>();
+    for (const entry of manifest.ent) {
+      if (!entry.p.startsWith("/") || entry.p.split("/").includes("..") || seen.has(entry.p) ||
+          !["d", "f", "l"].includes(entry.k)) throw new Error("invalid committed root path: " + entry.p);
+      seen.add(entry.p);
+      if (entry.p === "/" + metaName || entry.p === "/dev" || entry.p.startsWith("/dev/") ||
+          entry.p === "/proc" || entry.p.startsWith("/proc/")) continue;
+      if (entry.k === "f") {
+        let data = payloads.get(entry.id);
+        if (!data) {
+          data = new Uint8Array(await fs.readFile(path.join(root, entry.p.slice(1))));
+          payloads.set(entry.id, data);
+        }
+        entries.push({ ...entry, data, sum: fileSum(data), size: data.length });
+      } else entries.push({ ...entry });
+    }
+    return entries;
+  }
+
+  /** Migrate old default CLI roots without replacing existing paths. */
+  private addMissingSystemFiles(current: TreeEnt[], base: TreeEnt[]): TreeEnt[] {
+    const byPath = new Map(current.map(entry => [entry.p, entry]));
+    const ids = new Map<number, number>();
+    let next = Math.max(0, ...current.map(entry => entry.id));
+    const system = /^\/(?:bin|sbin|usr|etc|boot|lib|lib64|opt)(?:\/|$)/;
+    for (const entry of [...base].sort((a, b) => a.p.split("/").length - b.p.split("/").length)) {
+      if (!system.test(entry.p) || byPath.has(entry.p)) continue;
+      const parent = entry.p.slice(0, entry.p.lastIndexOf("/")) || "/";
+      if (byPath.get(parent)?.k !== "d") continue;
+      let id = ids.get(entry.id);
+      if (id === undefined) { id = ++next; ids.set(entry.id, id); }
+      byPath.set(entry.p, { ...entry, id });
+    }
+    return [...byPath.values()];
   }
 
   private abs(p: string): string {

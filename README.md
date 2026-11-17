@@ -33,6 +33,8 @@ Build the static site:
 
 The resulting site is in `dist/web`.
 
+The CLI initialises its writable root from the committed `.thistle.base/` image. It uses `/bin/thsh` by default; `/bin/bash` is an installed alternative. See [root image and userland](docs/userland.md).
+
 ## Documentation
 
 - [System architecture](docs/architecture.md)
