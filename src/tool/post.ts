@@ -56,13 +56,22 @@ try {
   throw new Error("The independent mikuOS boot programme requires clang with wasm32 support", { cause: error });
 }
 await build({
-  entryPoints: [decodeURIComponent(new URL("src/boot/loader.js", root).pathname)],
+  entryPoints: [decodeURIComponent(new URL("src/boot/loader.ts", root).pathname)],
   outfile: decodeURIComponent(new URL("bootloader.js", web).pathname),
   bundle: false,
   platform: "browser",
   format: "iife",
   target: ["es2022"],
   minify: true,
+  legalComments: "none",
+});
+await build({
+  entryPoints: [decodeURIComponent(new URL("src/boot/standalone.ts", root).pathname)],
+  outfile: decodeURIComponent(new URL("boot-standalone.js", web).pathname),
+  bundle: false,
+  platform: "browser",
+  format: "iife",
+  target: ["es2022"],
   legalComments: "none",
 });
 console.log("Early mikuOS boot programme compiled with the original Unicode colour.h logo");
@@ -126,7 +135,6 @@ console.log(
   `${packagedRoot.core.packedSize} packed bytes`,
 );
 await Promise.all([
-  fs.copyFile(new URL("src/boot/standalone.js", root), new URL("boot-standalone.js", web)),
   fs.copyFile(new URL("index.html", root), new URL("index.html", web)),
   fs.copyFile(new URL("style.css", root), new URL("style.css", web)),
   fs.copyFile(

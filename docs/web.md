@@ -20,6 +20,10 @@ is the MIT-licensed parser from
 The host C build tool generates `build/boot/generated-logo.h` before compiling
 the freestanding module as part of the normal build.
 
+The Pages build generates `bootloader.js` and `boot-standalone.js` from
+`src/boot/loader.ts` and `src/boot/standalone.ts`. The browser asset names
+and entry points remain unchanged.
+
 `bootloader.js` instantiates the module and directs its output to xterm.js.
 Progress advances at runtime loading, manifest, filesystem download,
 persistence, kernel and shell milestones. The download stage uses measured

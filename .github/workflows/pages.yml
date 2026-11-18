@@ -50,6 +50,8 @@ jobs:
 
           test -s dist/web/index.html
           test -s dist/web/thistle.js
+          test -s dist/web/bootloader.js
+          test -s dist/web/boot-standalone.js
           test -s dist/web/teto/teto.wasm
           test -s dist/web/teto/teto-threads.wasm
           test -s dist/web/root/manifest.json

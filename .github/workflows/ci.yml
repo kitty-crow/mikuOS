@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          node scripts/ci/stage-thistle-native.mjs --check
+          bun scripts/ci/stage-thistle-native.mts --check
           (cd deps/teto && sha256sum -c SHA256SUMS)
           cmp deps/teto/dist/teto/teto.wasm dist/teto/teto.wasm
           cmp deps/teto/dist/teto/teto-threads.wasm dist/teto/teto-threads.wasm

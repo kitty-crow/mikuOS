@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "scripts/ci/stage-thistle-native.mts",
+    "scripts/test-stage0.mts",
+    "assets/fixtures/mmap-shared-gen.mts"
+  ]
+}

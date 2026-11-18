@@ -11,10 +11,16 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const teto = resolve(root, "deps/teto");
 const upstream = resolve(teto, "thistle");
-const manifest = JSON.parse(await readFile(resolve(teto, "teto.manifest.json"), "utf8"));
+const manifest: unknown = JSON.parse(await readFile(resolve(teto, "teto.manifest.json"), "utf8"));
+if (typeof manifest !== "object" || manifest === null || !("canonicalRevision" in manifest) ||
+    typeof manifest.canonicalRevision !== "string" || !("canonicalSource" in manifest) ||
+    !("toolchain" in manifest) || typeof manifest.toolchain !== "object" ||
+    manifest.toolchain === null || !("Thistle" in manifest.toolchain)) {
+  throw new Error("Invalid Teto provenance manifest");
+}
 const recorded = manifest.canonicalRevision;
 const pin = spawnSync("git", ["-C", teto, "ls-tree", "HEAD", "thistle"], { encoding: "utf8" });
-if (manifest.canonicalSource !== "Thistle" || manifest.toolchain?.Thistle !== recorded ||
+if (manifest.canonicalSource !== "Thistle" || manifest.toolchain.Thistle !== recorded ||
     pin.status !== 0 || !pin.stdout.startsWith(`160000 commit ${recorded}\tthistle`)) {
   throw new Error("Teto manifest and canonical Thistle gitlink disagree");
 }
@@ -31,7 +37,7 @@ for (const args of [["diff", "--quiet"], ["diff", "--cached", "--quiet"]]) {
     throw new Error("Canonical Thistle checkout contains modified tracked source");
   }
 }
-const files = [
+const files: readonly (readonly [string, string])[] = [
   [
     "src/native/abi.ts",
     "src/teto/abi.ts"
