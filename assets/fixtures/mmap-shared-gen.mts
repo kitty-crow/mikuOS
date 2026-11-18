@@ -1,7 +1,7 @@
 import { mkdir, writeFile, chmod } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { codec, Exe } from "../../build/asm/fmt.js";
+import { codec, Exe } from "../../src/asm/fmt.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = resolve(here, "../mmap-shared.thx");
@@ -10,35 +10,35 @@ const dataAddr = 0x20000;
 const pathAddr = dataAddr;
 const page = 4096;
 const size = page * 3;
-const code = [];
+const code: number[] = [];
 
 const r = { zero: 0, ra: 1, sp: 2, t0: 5, t1: 6, s0: 8, s1: 9, a0: 10, a1: 11, a2: 12, a3: 13, a4: 14, a5: 15, a7: 17 };
 
-const u32 = n => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n >>> 0, true); return b; };
-const emit = n => code.push(...u32(n));
-const bits = (n, width) => Number(BigInt.asUintN(width, BigInt(n)));
-const iop = (op, rd, f3, rs1, imm) => emit((bits(imm, 12) << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
-const rop = (op, rd, f3, rs1, rs2, f7 = 0) => emit((f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
-const sop = (op, f3, rs1, rs2, imm) => {
+const u32 = (n: number) => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n >>> 0, true); return b; };
+const emit = (n: number) => code.push(...u32(n));
+const bits = (n: number, width: number) => Number(BigInt.asUintN(width, BigInt(n)));
+const iop = (op: number, rd: number, f3: number, rs1: number, imm: number) => emit((bits(imm, 12) << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
+const rop = (op: number, rd: number, f3: number, rs1: number, rs2: number, f7 = 0) => emit((f7 << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | (rd << 7) | op);
+const sop = (op: number, f3: number, rs1: number, rs2: number, imm: number) => {
   const q = bits(imm, 12);
   emit(((q >>> 5) << 25) | (rs2 << 20) | (rs1 << 15) | (f3 << 12) | ((q & 31) << 7) | op);
 };
-const lui = (rd, imm20) => emit((imm20 << 12) | (rd << 7) | 0x37);
-const addi = (rd, rs1, imm) => iop(0x13, rd, 0, rs1, imm);
-const li = (rd, imm) => {
+const lui = (rd: number, imm20: number) => emit((imm20 << 12) | (rd << 7) | 0x37);
+const addi = (rd: number, rs1: number, imm: number) => iop(0x13, rd, 0, rs1, imm);
+const li = (rd: number, imm: number) => {
   if (imm >= -2048 && imm <= 2047) { addi(rd, r.zero, imm); return; }
   const hi = Math.trunc((imm + 0x800) / 0x1000);
   const lo = imm - hi * 0x1000;
   lui(rd, hi);
   if (lo) addi(rd, rd, lo);
 };
-const la = (rd, addr) => li(rd, addr);
-const mv = (rd, rs) => addi(rd, rs, 0);
-const add = (rd, rs1, rs2) => rop(0x33, rd, 0, rs1, rs2);
-const sb = (rs2, rs1, imm) => sop(0x23, 0, rs1, rs2, imm);
+const la = (rd: number, addr: number) => li(rd, addr);
+const mv = (rd: number, rs: number) => addi(rd, rs, 0);
+const add = (rd: number, rs1: number, rs2: number) => rop(0x33, rd, 0, rs1, rs2);
+const sb = (rs2: number, rs1: number, imm: number) => sop(0x23, 0, rs1, rs2, imm);
 const ecall = () => emit(0x00000073);
-const syscall = n => { li(r.a7, n); ecall(); };
-const writeString = (base, s) => {
+const syscall = (n: number) => { li(r.a7, n); ecall(); };
+const writeString = (base: number, s: string) => {
   [...new TextEncoder().encode(s)].forEach((ch, i) => {
     li(r.t0, ch);
     sb(r.t0, base, i);
