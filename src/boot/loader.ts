@@ -47,7 +47,7 @@ interface BootExports extends WebAssembly.Exports {
     }
 
     const previous = screen.style.transform;
-    function align() {
+    const align = (): void => {
       screen.style.transform = previous;
       const viewport = host.getBoundingClientRect();
       const grid = screen.getBoundingClientRect();
@@ -58,7 +58,7 @@ interface BootExports extends WebAssembly.Exports {
         screen.style.transform = (previous ? previous + " " : "") +
           "translateX(" + offset + "px)";
       }
-    }
+    };
     align();
     return { align, restore() { screen.style.transform = previous; } };
   }
@@ -88,7 +88,7 @@ interface BootExports extends WebAssembly.Exports {
       alignment.align();
       wasm.boot_resize(size.cols, size.rows);
     });
-    return {
+    const display: BootDisplay = {
       report(phase: number, done = 0, total = 0) {
         if (!finished) wasm.boot_update(phase, done, total);
       },
@@ -117,6 +117,7 @@ interface BootExports extends WebAssembly.Exports {
         }
       },
     };
+    return display;
   }
 
   // Starts a real browser script request. No blob URLs or dynamic evaluation.
