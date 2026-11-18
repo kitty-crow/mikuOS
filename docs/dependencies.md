@@ -1,14 +1,23 @@
 # Dependencies
 
-mikuOS pins its dependencies as Git submodules:
+Git submodules identify the dependency revisions for a checkout.
 
-- `kittyx`: target and format contracts.
-- `src/asm`: ThistleASM.
-- `thistlecc`: the C and C++ compiler driver.
-- `deps/teto`: generated modular WAT and its standalone kernel build.
+| Path | Purpose |
+| --- | --- |
+| `kittyx` | Machine and executable-format contracts |
+| `src/asm` | Assembler and binary tooling |
+| `thistlecc` | C and C++ compiler driver |
+| `deps/teto` | Generated modular WAT and standalone kernel build |
 
-Teto owns the pins for Thistle, Bake and Baguette. mikuOS consumes the compiled WASM and does not maintain a separate compiler pin for kernel generation.
+Initialise the dependencies with:
 
-`project.dependencies.json` records the exact direct and contract dependency revisions. Initialise recursive submodules on a fresh checkout.
+```sh
+git submodule update --init --recursive
+```
 
-Dependency update workflows test exact candidate revisions and open draft pull requests. They do not merge them automatically.
+Teto owns its source and compiler dependency pins. mikuOS consumes
+the generated kernel through its pinned Teto checkout.
+
+`project.dependencies.json` records dependency relationships and
+revisions. Review manifest entries, Git submodule pins and test
+results together when accepting dependency updates.

@@ -1,19 +1,35 @@
 # Build and generated files
 
-A complete build starts from a recursive checkout:
+```sh
+git submodule update --init --recursive
+npm install
+npm run build
+```
 
-    git submodule update --init --recursive
-    npm install
-    npm run build
+The build runs three stages:
 
-mikuOS pins Teto. Teto pins Thistle, Bake and Baguette. Its source-generation workflow lowers Thistle through Bake and emits modular WAT through Baguette. mikuOS does not run this generation pipeline.
+1. `stage:thistle` initialises the pinned Teto and Thistle checkouts
+   and stages the required compatibility source.
+2. `build:thistle:staged` compiles the TypeScript host.
+3. `teto:build:staged` assembles the committed Teto WAT and copies
+   the resulting artefacts into the distribution.
 
-The normal build stages the exact Thistle compatibility source recorded in Teto's provenance, compiles the TypeScript host, runs Teto's standalone WAT build, and copies its validated binaries and ABI metadata to the CLI and static browser distributions.
+Kernel source generation belongs to Teto's regeneration workflow.
+The mikuOS build consumes the pinned source snapshot.
 
-Important outputs:
+| Output | Contents |
+| --- | --- |
+| `build/` | Compiled host JavaScript |
+| `dist/teto/` | Baseline and threaded WASM, manifest and ABI metadata |
+| `dist/web/` | Static browser application and packaged root image |
 
-- `build/`: compiled host JavaScript.
-- `dist/teto/`: baseline and threaded WebAssembly, manifest and ABI declaration.
-- `dist/web/`: static browser application and packaged root image.
+## Test
 
-`npm test` rebuilds the project and runs the integration suite. `npm run teto:test:cli` boots the built kernel explicitly and runs a guest RV64GC executable.
+```sh
+npm test
+npm run teto:test:cli
+```
+
+The first command rebuilds the project and runs the integration
+suite. The second boots the compiled kernel explicitly and runs
+a guest RV64GC executable.

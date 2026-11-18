@@ -1,39 +1,49 @@
 # MIKU
 
-**MIKU** (**MIKU Is Not the Kernel; it's Userspace**) is the
-userspace of **初音ミクOS**, written **mikuOS** in Latin script.
+**MIKU**: MIKU Is Not the Kernel; it's Userspace.
 
-The 0.3 release is styled **v｡三**.
+mikuOS (初音ミクOS) provides a Unix-like userspace with a common root image,
+accounts, shell, command set and THX executable support. Release 0.3 is styled
+**v｡三**.
 
 ## Build
 
-    git submodule update --init --recursive
-    npm install
-    npm run build
+```sh
+git submodule update --init --recursive
+npm install
+npm run build
+```
 
-The build compiles the TypeScript host, compiles the pinned modular WAT into the baseline and
-threaded Teto kernels, validates their manifest and prepares the
-static browser files.
+The build compiles the hosted runtime, assembles the pinned Teto WAT
+modules and prepares the static browser files. See [build and generated files](docs/build.md).
 
 ## Run
 
-The default CLI uses Teto. Automatic selection allows fallback to Thistle:
+```sh
+bun mikuos.ts --kernel=teto
+bun mikuos.ts --kernel=thistle
+bun mikuos.ts --kernel=auto
+```
 
-    bun mikuos.ts
-    bun mikuos.ts --kernel=auto
+The CLI and browser default to Teto. `auto` permits fallback to the hosted
+Thistle implementation if Teto cannot be loaded. The kernel choices above
+are the modes exposed by this branch's host.
 
-Select either kernel explicitly:
+A host directory can be selected with `--root PATH`. `--bin PATH NAME`
+loads a supported guest executable into the running system.
 
-    bun mikuos.ts --kernel=teto
-    bun mikuos.ts --kernel=thistle
+Build and preview the static site:
 
-Build the static site:
+```sh
+npm run web
+npm run serve:web
+```
 
-    npm run web
+Static files are written to `dist/web/`.
 
-The resulting site is in `dist/web`.
-
-The CLI initialises its writable root from the committed `.thistle.base/` image. It uses `/bin/thsh` by default; `/bin/bash` is an installed alternative. See [root image and userland](docs/userland.md).
+The CLI initialises its writable root from `.thistle.base/`.
+The default shell is `/bin/thsh`; `/bin/bash` is an installed
+alternative. See [root image and userland](docs/userland.md).
 
 ## Documentation
 
@@ -46,5 +56,5 @@ The CLI initialises its writable root from the committed `.thistle.base/` image.
 
 ## Licence
 
-Original project code is MIT licensed. Bundled and installed
-third-party software retains its own licence; see `THIRD_PARTY.md`.
+[MIT](LICENSE) for original code. Bundled software retains its upstream
+licences; see [third-party software](THIRD_PARTY.md).

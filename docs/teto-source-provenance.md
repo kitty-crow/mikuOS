@@ -1,7 +1,23 @@
-# Teto source provenance
+# Kernel source provenance
 
-mikuOS pins Teto as a Git submodule. The Teto snapshot consists of Baguette-generated modular WAT, its link layout and the source provenance manifest. Its Thistle gitlink must match the canonical revision in that manifest.
+The pinned Teto snapshot contains modular WAT, its link layout,
+ABI declarations and source provenance.
 
-The build stages direct TypeScript compatibility files from that exact Thistle revision, validates their origin, builds the host and compiles the committed Teto source. It does not regenerate the production kernel from moving upstream branches.
+The Thistle gitlink in Teto identifies the corresponding canonical
+kernel revision. The hosted build stages compatibility modules
+from that same checkout and validates their origin.
 
-The baseline and threaded binaries must match Teto's reference hashes. The same bytes are copied to the CLI and browser distributions. CI checks guest execution and the kernel ABI in explicit Teto mode; the CLI must not fall back silently.
+Teto's standalone build assembles its committed WAT. The resulting
+baseline and threaded WebAssembly binaries are copied into the
+CLI and browser distributions.
+
+The build checks the reference hashes. Explicit Teto execution
+reports kernel-loading errors rather than selecting the hosted
+fallback.
+
+```sh
+npm test
+```
+
+The integration suite verifies source staging, guest execution
+and kernel compatibility.
