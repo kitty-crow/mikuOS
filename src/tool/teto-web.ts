@@ -32,4 +32,4 @@ await build({
 });
 
 console.log("prepared dist/web/teto-test.html and Baguette-generated Teto assets");
-(globalThis as unknown as { process?: { exit(code?: number): never } }).process?.exit(0);
+process.exit(0);

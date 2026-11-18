@@ -1,4 +1,5 @@
-import { mkdir, writeFile, chmod } from "node:fs/promises";
+import { writeFile, chmod } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { codec, Exe } from "../../src/asm/fmt.ts";
@@ -97,6 +98,6 @@ exe.sec.push({ name: ".text", flg: "rx", align: 4096, data: new Uint8Array(code)
 exe.sec.push({ name: ".rodata", flg: "r", align: 4096, data, size: data.length, addr: dataAddr });
 exe.ident.push("Generated RV64 mmap shared flush regression fixture");
 
-await mkdir(dirname(out), { recursive: true });
+mkdirSync(dirname(out), { recursive: true });
 await writeFile(out, codec.pack(exe));
 await chmod(out, 0o755);

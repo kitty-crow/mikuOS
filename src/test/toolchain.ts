@@ -2,7 +2,7 @@ import { boot } from "../main/boot.js";
 import { rootPkg } from "../main/pkg.js";
 import { Exe, codec } from "../asm/fmt.js";
 
-const ok: (v: unknown, m: string) => asserts v = (v, m) => { if (!v) throw new Error(m); };
+const ok: (v: boolean, m: string) => asserts v = (v, m) => { if (!v) throw new Error(m); };
 let out = "", err = "";
 const os = boot({ put: (s, ch) => { if (ch === "err") err += s; else out += s; }, pkg: rootPkg });
 

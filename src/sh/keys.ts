@@ -58,12 +58,12 @@ const normalise = (name: string): string => {
   return aliases.get(compact) ?? compact;
 };
 
-const hexSequence = (name: string): string | undefined => {
+const hexSequence = (name: string): string | null => {
   const match = /^hex:(.*)$/i.exec(name.trim());
-  if (!match) return undefined;
+  if (!match) return null;
 
-  const value = match[1]!.replace(/(?:0x|[^0-9a-f])/gi, "");
-  if (!value || value.length % 2 !== 0) return undefined;
+  const value = (match[1] ?? "").replace(/(?:0x|[^0-9a-f])/gi, "");
+  if (!value || value.length % 2 !== 0) return null;
 
   const bytes: number[] = [];
   for (let at = 0; at < value.length; at += 2) {
@@ -78,7 +78,7 @@ export const bindingNames = (binding: string): string[] =>
 
 export const keySequences = (name: string): readonly string[] => {
   const raw = hexSequence(name);
-  if (raw !== undefined) return [raw];
+  if (raw !== null) return [raw];
   return sequences.get(normalise(name)) ?? [];
 };
 

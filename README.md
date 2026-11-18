@@ -47,6 +47,7 @@ alternative. See [root image and userland](docs/userland.md).
 
 ## Documentation
 
+- [Source module index](docs/index.md)
 - [System architecture](docs/architecture.md)
 - [Build and generated files](docs/build.md)
 - [Dependencies](docs/dependencies.md)
