@@ -686,10 +686,10 @@ test("generated Teto executes bounded RV64 batches with direct-source parity", a
     once(event: "message", listener: (value: unknown) => void): HostWorker;
     once(event: "error", listener: (value: unknown) => void): HostWorker;
   }
-  interface HostWorkerConstructor {
+  interface HostWorkerCtor {
     new(url: URL, options: { workerData: unknown }): HostWorker;
   }
-  const workerThreads = await mod("node:worker_threads") as { Worker: HostWorkerConstructor };
+  const workerThreads = await mod("node:worker_threads") as { Worker: HostWorkerCtor };
   const runWorker = (worker: number): Promise<WorkerReport> => new Promise((resolve, reject) => {
     const thread = new workerThreads.Worker(new URL("./teto-worker.js", import.meta.url), {
       workerData: { bytes: threadedBytes, memory: parallel.memory, worker, budget: 8192 },
