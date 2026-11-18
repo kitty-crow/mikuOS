@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "*.ts",
+    "scripts/**/*.ts",
+    "scripts/**/*.mts",
+    "assets/fixtures/**/*.mts"
+  ]
+}

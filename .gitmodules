@@ -10,3 +10,6 @@
 [submodule "deps/teto"]
 	path = deps/teto
 	url = https://github.com/kittycrow-kittyx/teto.git
+[submodule "code-guards"]
+	path = code-guards
+	url = https://github.com/kitty-crow/code-guards.git

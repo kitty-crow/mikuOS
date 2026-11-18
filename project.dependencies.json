@@ -36,6 +36,15 @@
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"
+    },
+    {
+      "name": "Code Guards",
+      "repository": "kitty-crow/code-guards",
+      "path": "code-guards",
+      "commit": "ed92b24c29a21c6cf03486c73b070005bb7bb959",
+      "relationship": "build",
+      "direct": true,
+      "updatePolicy": "pull-request"
     }
   ]
 }

@@ -56,7 +56,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mikuos-build-log
-          path: /tmp/mikuos-build.log
+          path: |
+            /tmp/mikuos-build.log
+            logs/code-guards.json
           if-no-files-found: ignore
 
       - name: Validate Node.js parity acceptance script
@@ -123,3 +125,10 @@ jobs:
             tr -d '\r' < /tmp/mikuos-default-teto.log | grep -Fx "/bin/$cmd"
           done
           ! grep -Ei 'ENOEXEC|fell back to Thistle|not found|startup validation failed' /tmp/mikuos-default-teto.log
+      - name: Upload Code Guards report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mikuos-fresh-code-guards
+          path: ${{ env.MIKUOS_TMP }}/logs/code-guards.json
+          if-no-files-found: ignore

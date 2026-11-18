@@ -30,9 +30,11 @@
     "git:upload": "bash scripts/release/git-upload.sh",
     "test:node39": "bash scripts/ci/test-node39-parity.sh",
     "stage:thistle": "git submodule update --init deps/teto && git -C deps/teto submodule update --init thistle && bun scripts/ci/stage-thistle-native.mts",
-    "build:thistle:staged": "npm run clean && npm run check:scripts && tsc -p tsconfig.json && node build/tool/post.js",
+    "build:thistle:staged": "npm run clean && npm run guards:staged && npm run check:scripts && tsc -p tsconfig.json && node build/tool/post.js",
     "teto:build:staged": "npm --prefix deps/teto install --package-lock=false && npm --prefix deps/teto run build && mkdir -p dist/teto && cp deps/teto/dist/teto/* dist/teto/ && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi",
-    "check:scripts": "tsc --noEmit -p tsconfig.tools.json"
+    "check:scripts": "tsc --noEmit -p tsconfig.tools.json",
+    "guards": "npm run stage:thistle && npm run guards:staged",
+    "guards:staged": "git submodule update --init -- code-guards && npm --prefix code-guards install --package-lock=false --no-audit --no-fund && bash -o pipefail -c 'mkdir -p logs && bun code-guards/src/cli.ts all --project tsconfig.guards.json --include-tests --strict --format json | tee logs/code-guards.json'"
   },
   "mikuos": {
     "version": "0.3"
