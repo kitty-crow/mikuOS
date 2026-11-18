@@ -34,7 +34,7 @@
     "teto:build:staged": "npm --prefix deps/teto install --package-lock=false && npm --prefix deps/teto run build && mkdir -p dist/teto && cp deps/teto/dist/teto/* dist/teto/ && if [ -f build/tool/teto-web.js ] && [ -f dist/web/index.html ]; then node build/tool/teto-web.js; fi",
     "check:scripts": "tsc --noEmit -p tsconfig.tools.json",
     "guards": "npm run stage:thistle && npm run guards:staged",
-    "guards:staged": "git submodule update --init -- code-guards && npm --prefix code-guards install --package-lock=false --no-audit --no-fund && bash -o pipefail -c 'mkdir -p logs && bun code-guards/src/cli.ts all --project tsconfig.guards.json --include-tests --strict --format json | tee logs/code-guards.json'"
+    "guards:staged": "git submodule update --init -- code-guards && npm --prefix code-guards install --package-lock=false --no-audit --no-fund && bash scripts/ci/guards.sh"
   },
   "mikuos": {
     "version": "0.3"
