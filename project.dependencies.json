@@ -41,7 +41,7 @@
       "name": "Code Guards",
       "repository": "kitty-crow/code-guards",
       "path": "code-guards",
-      "commit": "b858b0e0a912b1315fde3203d1e7bcc2ff2d5427",
+      "commit": "551f5c8004077f16d6e9caac266ee9a32f079a1d",
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
