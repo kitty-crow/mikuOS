@@ -1,5 +1,5 @@
-import { boot } from "../build/main/boot.js";
-import { DEFAULT_CONFIG } from "../build/core/config.js";
+import { boot } from "../src/main/boot.ts";
+import { DEFAULT_CONFIG } from "../src/core/config.ts";
 
 const os = boot({
   config: DEFAULT_CONFIG,
@@ -8,20 +8,20 @@ const os = boot({
 
 await os.ready;
 
-const builtins = JSON.parse(
+const builtins: unknown = JSON.parse(
   os.s.read("/usr/share/mikuos/builtin-commands.json"),
 );
 
-if (builtins.schema !== 1) throw new Error("bad built-in manifest schema");
+if (typeof builtins !== "object" || builtins === null || !("schema" in builtins) || builtins.schema !== 1 || !("commands" in builtins) || !Array.isArray(builtins.commands)) throw new Error("bad built-in manifest schema");
 if (builtins.commands.length !== os.s.apps().length) {
   throw new Error("built-in manifest count does not match the app registry");
 }
 
-const compiler = JSON.parse(
+const compiler: unknown = JSON.parse(
   os.s.read("/usr/share/mikuos/compiler-infrastructure.json"),
 );
 
-if (compiler.schema !== 1) throw new Error("bad compiler manifest schema");
+if (typeof compiler !== "object" || compiler === null || !("schema" in compiler) || compiler.schema !== 1) throw new Error("bad compiler manifest schema");
 
 for (const app of os.s.apps()) {
   const path = `/usr/libexec/mikuos/builtin/${app.name}`;
