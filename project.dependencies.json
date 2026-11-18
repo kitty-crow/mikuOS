@@ -5,7 +5,7 @@
       "name": "KITTYX",
       "repository": "kittycrow-kittyx/kittyx",
       "path": "kittyx",
-      "commit": "6d6dbac796d59e8ea07c52cbcd3a0b7f181da163",
+      "commit": "076774c11103c996910c0f939deff9164e5f12d9",
       "relationship": "contract",
       "direct": false,
       "updatePolicy": "pull-request"
@@ -14,7 +14,7 @@
       "name": "ThistleASM",
       "repository": "kittycrow-kittyx/thistle-asm",
       "path": "src/asm",
-      "commit": "2e6ce603ceeb5b202aa68c0b1a5001fba85b8d77",
+      "commit": "7e84b58d8c2450a5f4bab0342f601f005c719478",
       "relationship": "runtime",
       "direct": true,
       "updatePolicy": "pull-request"
@@ -23,7 +23,7 @@
       "name": "ThistleCC",
       "repository": "kittycrow-kittyx/thistlecc",
       "path": "thistlecc",
-      "commit": "0639f51d58979a888138d410daba4731b1045619",
+      "commit": "2d434056fe2d5c1c6a880e7c16f513558edea4a4",
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
@@ -41,7 +41,7 @@
       "name": "Neru",
       "repository": "kittycrow-kittyx/neru",
       "path": "deps/neru",
-      "commit": "6efda8eaab6a949563b94d18bad3712e57336823",
+      "commit": "c050d1b4e1d5ecd218999aca5f6f471fc01b27d6",
       "relationship": "runtime",
       "direct": true,
       "updatePolicy": "pull-request"
