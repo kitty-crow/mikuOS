@@ -1,29 +1,30 @@
 const MB = 1024 * 1024;
 const GB = 1024 * MB;
 
-interface Host {
-  navigator?: { deviceMemory?: number };
-  process?: {
-    env?: Record<string, string | undefined>;
-    getBuiltinModule?(name: string): { totalmem?(): number };
-  };
-}
+interface MemoryNavigator extends Navigator { deviceMemory: number | null }
 
-const host = globalThis as unknown as Host;
+const nodeRam = (): number | null => {
+  if (typeof process === "undefined") return null;
+  const builtin = process.getBuiltinModule ?? null;
+  if (builtin === null) return null;
+  const os = process.getBuiltinModule("node:os") ?? null;
+  return os === null ? null : os.totalmem();
+};
 
 const ram = (): number => {
-  const web = host.navigator?.deviceMemory;
-  if (web && Number.isFinite(web)) return web * GB;
+  const browser = typeof navigator === "undefined" ? null : navigator as MemoryNavigator;
+  const web = browser === null ? null : browser.deviceMemory ?? null;
+  if (web !== null && web > 0 && Number.isFinite(web)) return web * GB;
   try {
-    const n = host.process?.getBuiltinModule?.("os").totalmem?.();
-    if (n && Number.isFinite(n)) return n;
-  } catch { /* Some hosts quite reasonably keep their RAM to themselves. */ }
+    const n = nodeRam();
+    if (n !== null && n > 0 && Number.isFinite(n)) return n;
+  } catch { return 2 * GB; }
   return 2 * GB;
 };
 
 const env = (k: string, d: number, zero = false): number => {
-  const s = host.process?.env?.[k];
-  if (s === undefined || s === "") return d;
+  const s = typeof process === "undefined" ? null : process.env[k] ?? null;
+  if (s === null || s === "") return d;
   const n = Number(s);
   if (!Number.isSafeInteger(n) || n < 0 || (!zero && !n)) throw new Error(`${k} must be ${zero ? "a non-negative" : "a positive"} integer`);
   return n;

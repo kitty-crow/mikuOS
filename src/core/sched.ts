@@ -11,7 +11,7 @@ export class Sched {
       const i = this.ready.indexOf(p.pid);
       if (i >= 0) this.ready.splice(i, 1);
       this.ticks++;
-      void fn();
+      fn().catch(() => p.end(126));
     });
   }
 

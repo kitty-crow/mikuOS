@@ -12,7 +12,7 @@ export class KErr extends Error {
   }
 }
 
-export const bad = (code: Errno, msg?: string): never => {
+export const bad = (code: Errno, msg: string = code): never => {
   throw new KErr(code, msg);
 };
 
@@ -20,3 +20,9 @@ export const msg = (e: unknown): string => {
   if (e instanceof KErr) return `${e.code}: ${e.message}`;
   return e instanceof Error ? e.message : String(e);
 };
+
+/** Convert a checked lookup to its value or raise an invalid-memory error. */
+export function requireValue<T>(value: T | null, context: string): T {
+  if (value === null) return bad("EFAULT", `${context}: missing value`);
+  return value;
+}
