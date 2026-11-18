@@ -44,7 +44,7 @@
     "target": "2.2"
   },
   "devDependencies": {
-    "@kitty-crow/code-guards": "git+https://github.com/kitty-crow/code-guards.git#b858b0e0a912b1315fde3203d1e7bcc2ff2d5427",
+    "@kitty-crow/code-guards": "git+https://github.com/kitty-crow/code-guards.git#551f5c8004077f16d6e9caac266ee9a32f079a1d",
     "@types/bun": "^1.3.14",
     "@types/node": "^26.1.1",
     "assemblyscript": "0.28.19",
