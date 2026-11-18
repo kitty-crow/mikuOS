@@ -25,6 +25,8 @@ The mikuOS build consumes the pinned source snapshot.
 
 ## Code Guards
 
+Code Guards is installed as an npm development dependency pinned to an exact Git revision in `package.json` and `package-lock.json`.
+
 `npm run guards` stages the native source and runs every Code Guards check,
 including documentation and tests. Warnings fail the command. Findings are
 written to `logs/code-guards.json` and printed to standard output. Semantic

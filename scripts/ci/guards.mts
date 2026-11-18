@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { loadProject } from "../../code-guards/src/project.ts";
+import { loadProject } from "@kitty-crow/code-guards/dist/src/project.js";
 import {
   noNestedIf, typeReuse, functionQuality, moduleCohesion, codeHealth,
   crossModule, documentation, repoHygiene, enterpriseLookingNaming, reviewPractices,
-} from "../../code-guards/src/guards/index.ts";
-import { renderFindings } from "../../code-guards/src/diagnostics.ts";
+} from "@kitty-crow/code-guards/dist/src/guards/index.js";
+import { renderFindings } from "@kitty-crow/code-guards/dist/src/diagnostics.js";
 
 const root = process.argv[2] ?? "";
 if (!root) throw new Error("missing isolated guard workspace");
