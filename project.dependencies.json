@@ -23,7 +23,7 @@
       "name": "Teto",
       "repository": "kittycrow-kittyx/teto",
       "path": "deps/teto",
-      "commit": "ac0a32062e71a42eea06657565b8e6b736240814",
+      "commit": "08cca5952951c86092e97196b009e167f8da9dee",
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"

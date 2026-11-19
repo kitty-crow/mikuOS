@@ -6,6 +6,12 @@ mikuOS (初音ミクOS) provides a Unix-like userspace with a common root image,
 accounts, shell, command set and THX executable support. Release 0.3 is styled
 **v｡三**.
 
+## Kernel branch
+
+`mikuOS-Teto` pins [Teto v2.2.0](https://github.com/kittycrow-kittyx/teto/releases/tag/v2.2.0) at `08cca5952951c86092e97196b009e167f8da9dee`.
+
+The existing Teto host integration is retained.
+
 ## Build
 
 ```sh

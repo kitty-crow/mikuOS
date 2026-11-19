@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - mikuOS-Teto
   workflow_dispatch:
 
 permissions:

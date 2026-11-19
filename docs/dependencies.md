@@ -1,19 +1,13 @@
 # Dependencies
 
-Git submodules identify the dependency revisions for a checkout.
+| Path | Release | Purpose |
+| --- | --- | --- |
+| `src/asm` | v2.1.1 | Assembler and binary tools |
+| `thistlecc` | v2.1.1 | Compiler driver |
+| `deps/teto` | v2.2.0 | Teto kernel |
 
-| Path | Purpose |
-| --- | --- |
-| `src/asm` | Assembler and binary tooling |
-| `thistlecc` | C and C++ compiler driver |
-| `deps/teto` | Generated modular WAT and standalone kernel build |
+KITTYX is inherited from the pinned upstream ancestry, not pinned separately in mikuOS. The selected kernel owns its own compiler dependencies. The exact gitlinks are recorded in `project.dependencies.json`; corresponding published releases are recorded in `upstream.releases.json`.
 
-KITTYX is inherited through ThistleASM and the selected kernel's toolchain; mikuOS does not maintain a separate KITTYX pin. ThistleCC also inherits the contract through its ThistleASM pin.
+Initialise with `git submodule update --init --recursive`.
 
-Initialise the dependencies with:
-
-```sh
-git submodule update --init --recursive
-```
-
-Teto owns its source and compiler dependency pins. `project.dependencies.json` records the direct dependency relationships and revisions. Review manifest entries, gitlinks and test results together when accepting dependency updates.
+The existing Teto host integration is retained.
