@@ -19,11 +19,11 @@ CROSS_PREFIX="${MIKUOS_CROSS_PREFIX:-riscv64-unknown-linux-musl-}"
 CC="${CROSS_PREFIX}gcc"
 AR="${CROSS_PREFIX}ar"
 RANLIB="${CROSS_PREFIX}ranlib"
-for tool in node install cp; do
+for tool in bun install cp; do
   command -v "$tool" >/dev/null || { printf 'Missing tool: %s\n' "$tool" >&2; exit 2; }
 done
 
-[[ -f "$PROJECT/build/tool/elf2thx.js" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
+[[ -f "$PROJECT/src/tool/elf2thx.ts" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
   echo 'Build mikuOS before compiling the GNU userland' >&2; exit 2;
 }
 [[ -d "$ROOT" ]] || { printf 'Missing guest root: %s\n' "$ROOT" >&2; exit 2; }
@@ -91,7 +91,7 @@ for name in head dd od bash; do
   if readelf -l "$elf" | grep -q 'INTERP'; then
     printf 'Refusing dynamically linked GNU %s\n' "$name" >&2; exit 1
   fi
-  node "$PROJECT/build/tool/elf2thx.js" "$elf" "$WORK/prebuilt/$name"
+  bun "$PROJECT/src/tool/elf2thx.ts" "$elf" "$WORK/prebuilt/$name"
   [[ "$(head -c 4 "$WORK/prebuilt/$name")" == THX2 ]] || {
     printf 'Invalid THX2 format: %s\n' "$name" >&2; exit 1
   }

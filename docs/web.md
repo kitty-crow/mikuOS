@@ -1,8 +1,8 @@
 # Static browser build
 
 ```sh
-npm run web
-npm run serve:web
+bun run web
+bun run serve:web
 ```
 
 The site in `dist/web/` loads the host, root image and Teto modules using

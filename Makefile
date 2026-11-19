@@ -3,34 +3,34 @@
 all: build
 
 install:
-	npm install
+	bun install --frozen-lockfile --ignore-scripts
 
 build:
-	npm run build
+	bun run build
 
 test:
-	npm test
+	bun run test
 
 toolchain:
-	npm run test:toolchain
+	bun run test:toolchain
 
 guest-toolchain:
-	npm run test:guest-toolchain
+	bun run test:guest-toolchain
 
 bun:
-	npm run test:bun
+	bun run test:bun
 
 run:
 	bun run mikuos.ts
 
 web:
-	npm run web
+	bun run web
 
 web-preview:
-	npm run serve:web
+	bun run serve:web
 
 release:
-	npm run release:source
+	bun run release:source
 
 clean:
-	npm run clean
+	bun run clean

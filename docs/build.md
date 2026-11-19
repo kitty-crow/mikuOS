@@ -2,15 +2,15 @@
 
 ```sh
 git submodule update --init --recursive
-npm install
-npm run build
+bun install --frozen-lockfile --ignore-scripts
+bun run build
 ```
 
 The build runs three stages:
 
 1. `stage:thistle` initialises the pinned Teto and Thistle checkouts
    and stages the required compatibility source.
-2. `build:thistle:staged` runs Code Guards in strict mode before compiling the TypeScript host.
+2. `build:thistle:staged` runs Code Guards in strict mode before type-checking the TypeScript host and producing browser assets.
 3. `teto:build:staged` assembles the committed Teto WAT and copies
    the resulting artefacts into the distribution.
 
@@ -19,15 +19,15 @@ The mikuOS build consumes the pinned source snapshot.
 
 | Output | Contents |
 | --- | --- |
-| `build/` | Compiled host JavaScript |
+| `build/` | Generated build assets; host TypeScript runs directly with Bun |
 | `dist/teto/` | Baseline and threaded WASM, manifest and ABI metadata |
 | `dist/web/` | Static browser application and packaged root image |
 
 ## Code Guards
 
-Code Guards is installed as an npm development dependency pinned to an exact Git revision in `package.json` and `package-lock.json`.
+Code Guards is installed as a Bun development dependency pinned to an exact Git revision in `package.json` and `bun.lock`.
 
-`npm run guards` stages the native source and runs every Code Guards check,
+`bun run guards` stages the native source and runs every Code Guards check,
 including documentation and tests. Warnings fail the command. Findings are
 written to `logs/code-guards.json` and printed to standard output. Semantic
 guards require the local model, downloaded on first use.
@@ -35,8 +35,8 @@ guards require the local model, downloaded on first use.
 ## Test
 
 ```sh
-npm test
-npm run teto:test:cli
+bun run test
+bun run teto:test:cli
 ```
 
 The first command rebuilds the project and runs the integration

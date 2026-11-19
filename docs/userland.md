@@ -34,8 +34,8 @@ The host converter imports compatible statically linked,
 little-endian RISC-V ELF64 executables into THX2:
 
 ```sh
-npm run build
-npm run host:elf2thx -- input.elf output.39
+bun run build
+bun run host:elf2thx -- input.elf output.39
 ```
 
 Dynamic interpreters and dynamic ELF segments are rejected.

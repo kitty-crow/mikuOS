@@ -815,7 +815,7 @@ def main() -> int:
             if expected != current:
                 print(
                     "ERROR: .thistle.base is stale.\n"
-                    "Run: npm run git:upload",
+                    "Run: bun run git:upload",
                     file=sys.stderr,
                 )
                 return 1

@@ -166,7 +166,7 @@ await Promise.all([
 ]);
 
 await build({
-  entryPoints: [decodeURIComponent(new URL("main/web.js", dst).pathname)],
+  entryPoints: [decodeURIComponent(new URL("main/web.ts", src).pathname)],
   outfile: decodeURIComponent(bundle.pathname),
   bundle: true,
   platform: "browser",

@@ -51,11 +51,11 @@ done
 (($# == 1)) || { echo "error: provide exactly one guest command string after --" >&2; usage >&2; exit 2; }
 COMMAND="$1"
 [[ -d "$ROOT" ]] || { echo "error: root does not exist: $ROOT" >&2; exit 2; }
-[[ -f "$PROJECT/build/main/cli.js" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
-  echo "error: build output is missing; run npm run build first" >&2
+[[ -f "$PROJECT/src/main/cli.ts" && -f "$PROJECT/dist/teto/teto.wasm" ]] || {
+  echo "error: build output is missing; run bun run build first" >&2
   exit 2
 }
-command -v node >/dev/null || { echo "error: node is required to launch the built CLI" >&2; exit 2; }
+command -v bun >/dev/null || { echo "error: Bun is required to launch the built CLI" >&2; exit 2; }
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/mikuos-userland-test.XXXXXX")"
 cleanup() {
@@ -81,7 +81,7 @@ run_one() {
   set +e
   printf '%s\n' "$COMMAND" | (
     cd "$PROJECT"
-    MIKUOS_ROOT="$root" node build/main/cli.js "--kernel=$kernel"
+    MIKUOS_ROOT="$root" bun src/main/cli.ts "--kernel=$kernel"
   ) >"$output" 2>&1
   local status=$?
   set -e

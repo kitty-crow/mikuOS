@@ -20,7 +20,7 @@ need() {
         die "Required command is missing: $1"
 }
 
-for command in git python3 tar gzip sha256sum npm node find gitleaks; do
+for command in git python3 tar gzip sha256sum bun find gitleaks; do
     need "$command"
 done
 
@@ -84,9 +84,9 @@ python3 scripts/release/sync-thistle-base.py
 
 printf '\n===== Building and testing mikuOS =====\n'
 
-npm ci
-npm run build
-node build/test/all.js
+bun install --frozen-lockfile --ignore-scripts
+bun run build
+bun src/test/all.ts
 
 test -s dist/web/root/manifest.json ||
     die "The browser root manifest was not created"

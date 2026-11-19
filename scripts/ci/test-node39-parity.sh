@@ -11,7 +11,7 @@ if [[ ! -f "$GUEST" ]]; then
   exit 2
 fi
 if [[ ! -f "$REPO/dist/teto/teto.wasm" ]]; then
-  printf 'Missing compiled Teto. Run npm run build first.\n' >&2
+  printf 'Missing compiled Teto. Run bun run build first.\n' >&2
   exit 2
 fi
 if ! command -v bun >/dev/null || ! command -v timeout >/dev/null; then

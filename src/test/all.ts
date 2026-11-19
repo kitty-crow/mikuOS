@@ -712,7 +712,7 @@ test("generated Teto executes bounded RV64 batches with direct-source parity", a
   }
   const workerThreads = await hostModule("node:worker_threads") as { Worker: HostWorkerCtor };
   const runWorker = (worker: number): Promise<WorkerReport> => new Promise((resolve, reject) => {
-    const thread = new workerThreads.Worker(new URL("./teto-worker.js", import.meta.url), {
+    const thread = new workerThreads.Worker(new URL("./teto-worker.ts", import.meta.url), {
       workerData: { bytes: threadedBytes, memory: parallel.memory, worker, budget: 8192 },
     });
     thread.once("message", value => resolve(value as WorkerReport));
@@ -2062,7 +2062,7 @@ test("canonical mikuOS release metadata stays aligned", async () => {
   assert.equal(pkg.name, "mikuos");
   assert.equal(pkg.version, "0.3.0");
   assert.equal((withValue(pkg.scripts ?? null, value => (value["test:toolchain"] ?? null)) ?? null), "bun run thistlecc/test/test.ts");
-  assert.ok((withValue(withValue(pkg.scripts ?? null, value => (value["test:guest-toolchain"] ?? null)) ?? null, value => value.includes("build/test/toolchain.js")) ?? null));
+  assert.ok((withValue(withValue(pkg.scripts ?? null, value => (value["test:guest-toolchain"] ?? null)) ?? null, value => value.includes("src/test/toolchain.ts")) ?? null));
   assert.equal(withValue(fileConfig.os ?? null, value => value.version), "0.3");
   assert.equal(withValue(fileConfig.kernel ?? null, value => value.version), "2.1.0");
   assert.equal(loaded.os.prettyName, "初音ミクOS v｡三");

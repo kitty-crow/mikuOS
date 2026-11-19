@@ -12,7 +12,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v4
         with:
           submodules: false
 
@@ -31,25 +32,19 @@ jobs:
           path: /tmp/mikuos-submodules.log
           if-no-files-found: ignore
 
-      - uses: oven-sh/setup-bun@v2
-
-      - uses: actions/setup-node@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
+          bun-version: 1.4.5
 
-      - name: Install
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build
         shell: bash
         run: |
           set -o pipefail
-          npm run build 2>&1 | tee /tmp/mikuos-build.log
+          bun run build 2>&1 | tee /tmp/mikuos-build.log
 
       - name: Upload failed build log
         if: failure()
@@ -61,7 +56,7 @@ jobs:
             logs/code-guards.json
           if-no-files-found: ignore
 
-      - name: Validate Node.js parity acceptance script
+      - name: Validate guest Node.js parity acceptance script
         run: bash -n scripts/ci/test-node39-parity.sh
 
       - name: Cross-check compiled Teto against canonical instruction helpers
@@ -79,24 +74,22 @@ jobs:
           cmp deps/teto/dist/teto/teto-threads.wasm dist/teto/teto-threads.wasm
 
       - name: Boot Teto through Bun and execute a guest RV64GC binary
-        run: npm run teto:test:cli
+        run: bun run teto:test:cli
 
       - name: Boot the committed userland and execute native GNU programmes
         run: bash scripts/ci/test-base-userland.sh
 
       - name: Test
-        run: node build/test/all.js
+        run: bun src/test/all.ts
 
   fresh-tmp-checkout:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: oven-sh/setup-bun@v2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.14"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
+          bun-version: 1.4.5
       - name: Clone the exact candidate under /tmp
         shell: bash
         env:
@@ -113,8 +106,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           cd "$MIKUOS_TMP"
-          nice -n 10 npm install --package-lock=false
-          nice -n 10 npm run build
+          nice -n 10 bun install --frozen-lockfile --ignore-scripts
+          nice -n 10 bun run build
           bash scripts/ci/test-teto-cli.sh
           printf 'echo MIKUOS_DEFAULT_TETO\n/tmp/hello-rv64.39\ncommand -v dd && command -v od && command -v head && command -v bash\n' |
             timeout 180 nice -n 10 bun run mikuos --bin assets/hello-rv64.39 hello-rv64.39 2>&1 | tee /tmp/mikuos-default-teto.log

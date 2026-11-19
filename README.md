@@ -16,11 +16,11 @@ The existing Teto host integration is retained.
 
 ```sh
 git submodule update --init --recursive
-npm install
-npm run build
+bun install --frozen-lockfile --ignore-scripts
+bun run build
 ```
 
-The build compiles the hosted runtime, assembles the pinned Teto WAT
+The build type-checks the hosted runtime without emitting JavaScript for the host, assembles the pinned Teto WAT
 modules and prepares the static browser files. See [build and generated files](docs/build.md).
 
 ## Run
@@ -41,8 +41,8 @@ loads a supported guest executable into the running system.
 Build and preview the static site:
 
 ```sh
-npm run web
-npm run serve:web
+bun run web
+bun run serve:web
 ```
 
 Static files are written to `dist/web/`.

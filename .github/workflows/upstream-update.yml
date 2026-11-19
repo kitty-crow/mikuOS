@@ -21,20 +21,21 @@ jobs:
   compatibility:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - uses: actions/setup-node@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
+          bun-version: 1.4.5
       - name: Select candidate Teto gitlink
         env:
           REVISION: ${{ github.event.client_payload.new_commit || inputs.revision }}
         run: scripts/ci/update-upstream.sh "$REVISION"
-      - run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - run: npm run build && npm test
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - run: bun run build && bun run test
       - name: Open draft pull request
         env:
           GH_TOKEN: ${{ github.token }}
