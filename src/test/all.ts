@@ -1547,23 +1547,8 @@ test("Teto builds the initial RV64 process stack inside source and generated ker
   const generated = await loadTeto(wasmBytes);
 
   // Validation precedes mutation so failures leave the current operation in a defined state.
-  const exercise = (core: StartupCore, bytes: Uint8Array): string => {
-    // Read virtual stack data through mapped pages; a rejected startup block must not increment the successful-load metric.
-    assert.equal(core.tetoKernelInit(0, 1, 0), 0);
-    assert.equal(core.tetoHartInit(0, 0, 0x0000ffffffffffffn, 0n), 0);
-    assert.equal(core.tetoProcessInit(0, 0, 81, 1, 1000, 0, 0, 1000, 0, 0), 0);
-    const imageAt = core.tetoImageReserve(0, image.length) >>> 0;
-    bytes.set(image, imageAt);
-    assert.equal(core.tetoLoadThx(0, 0, imageAt, image.length), TETO_THX_OK);
-    assert.equal(core.tetoImageRelease(0, imageAt, image.length), TETO_THX_OK);
-    const blockAt = core.tetoImageReserve(0, startup.length) >>> 0;
-    bytes.set(startup, blockAt);
-    assert.equal(core.tetoBuildInitialStack(0, 0, blockAt, startup.length, 2 * 1024 * 1024), TETO_START_OK);
-    assert.equal(core.tetoImageRelease(0, blockAt, startup.length), TETO_THX_OK);
-
-    const sp = core.tetoHartStackPointer(0, 0);
-    assert.equal(core.tetoHartStackBottom(0, 0), 1024n * 1024n * 1024n - 2n * 1024n * 1024n);
-    assert.equal(core.tetoHartGetX(0, 0, 2), sp);
+  const guestAccess = (core: StartupCore, bytes: Uint8Array) => {
+    // Translate virtual pages before reading stack words or zero-terminated strings.
     const guestByte = (address: bigint): number => {
       const frame = core.tetoGuestPage(0, 0, address, 0) >>> 0;
       assert.ok(frame < 0xfffffffe, `unmapped startup byte at 0x${address.toString(16)}`);
@@ -1583,21 +1568,16 @@ test("Teto builds the initial RV64 process stack inside source and generated ker
       }
       throw new Error("unterminated Teto startup string");
     };
-    assert.equal(guestWord(sp), 2n);
-    const argv0 = guestWord(sp + 8n), argv1 = guestWord(sp + 16n);
-    assert.equal(guestString(argv0), "/tmp/hello-rv64.39");
-    assert.equal(guestString(argv1), "alpha");
-    assert.equal(guestWord(sp + 24n), 0n);
-    const env0 = guestWord(sp + 32n), env1 = guestWord(sp + 40n);
-    assert.equal(guestString(env0), "HOME=/home/guest");
-    assert.equal(guestString(env1), "USER=guest");
-    assert.equal(guestWord(sp + 48n), 0n);
-    const aux = sp + 56n;
+    return { byte: guestByte, word: guestWord, string: guestString };
+  };
+
+  const auxiliaryVector = (word: (at: bigint) => bigint, argv0: bigint, at: bigint): [bigint, string] => {
+    // Check the Linux auxiliary vector against the credentials supplied to this startup image.
     let random = 0n;
     let summary = "";
     for (let index = 0; index < 15; index++) {
-      const key = guestWord(aux + BigInt(index * 16));
-      const value = guestWord(aux + BigInt(index * 16 + 8));
+      const key = word(at + BigInt(index * 16));
+      const value = word(at + BigInt(index * 16 + 8));
       if (key === 9n) assert.equal(value, 0x10000n);
       if (key === 11n) assert.equal(value, 1000n);
       if (key === 12n) assert.equal(value, 0n);
@@ -1609,6 +1589,37 @@ test("Teto builds the initial RV64 process stack inside source and generated ker
       summary += `${key}:${value};`;
     }
     assert.ok(random !== 0n);
+    return [random, summary];
+  };
+
+  const exercise = (core: StartupCore, bytes: Uint8Array): string => {
+    // Read virtual stack data through mapped pages; a rejected startup block must not increment the successful-load metric.
+    assert.equal(core.tetoKernelInit(0, 1, 0), 0);
+    assert.equal(core.tetoHartInit(0, 0, 0x0000ffffffffffffn, 0n), 0);
+    assert.equal(core.tetoProcessInit(0, 0, 81, 1, 1000, 0, 0, 1000, 0, 0), 0);
+    const imageAt = core.tetoImageReserve(0, image.length) >>> 0;
+    bytes.set(image, imageAt);
+    assert.equal(core.tetoLoadThx(0, 0, imageAt, image.length), TETO_THX_OK);
+    assert.equal(core.tetoImageRelease(0, imageAt, image.length), TETO_THX_OK);
+    const blockAt = core.tetoImageReserve(0, startup.length) >>> 0;
+    bytes.set(startup, blockAt);
+    assert.equal(core.tetoBuildInitialStack(0, 0, blockAt, startup.length, 2 * 1024 * 1024), TETO_START_OK);
+    assert.equal(core.tetoImageRelease(0, blockAt, startup.length), TETO_THX_OK);
+
+    const sp = core.tetoHartStackPointer(0, 0);
+    assert.equal(core.tetoHartStackBottom(0, 0), 1024n * 1024n * 1024n - 2n * 1024n * 1024n);
+    assert.equal(core.tetoHartGetX(0, 0, 2), sp);
+    const { byte: guestByte, word: guestWord, string: guestString } = guestAccess(core, bytes);
+    assert.equal(guestWord(sp), 2n);
+    const argv0 = guestWord(sp + 8n), argv1 = guestWord(sp + 16n);
+    assert.equal(guestString(argv0), "/tmp/hello-rv64.39");
+    assert.equal(guestString(argv1), "alpha");
+    assert.equal(guestWord(sp + 24n), 0n);
+    const env0 = guestWord(sp + 32n), env1 = guestWord(sp + 40n);
+    assert.equal(guestString(env0), "HOME=/home/guest");
+    assert.equal(guestString(env1), "USER=guest");
+    assert.equal(guestWord(sp + 48n), 0n);
+    const [random, summary] = auxiliaryVector(guestWord, argv0, sp + 56n);
     for (let index = 0; index < 16; index++) assert.equal(guestByte(random + BigInt(index)), index);
     assert.equal(core.tetoHartMetric(0, 0, H_STARTUP_LOADS), 1n);
 

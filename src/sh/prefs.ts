@@ -129,6 +129,78 @@ export interface ParsedPrefs {
   unknown: Map<string, string>;
 }
 
+const applyBooleanPreference = (prefs: ShellPrefs, key: string, value: string): boolean => {
+  switch (key) {
+    case "autocomplete":
+    case "autocompleteCaseSensitive":
+    case "history":
+    case "historyDeduplicate":
+    case "historyIgnoreSpace":
+    case "historyTimestamps":
+    case "historyPrefixSearch":
+    case "reverseSearch":
+    case "ctrlSForwardSearch":
+    case "heredocSilent":
+    case "clearScrollback":
+    case "colour":
+    case "bell":
+    case "showWelcome":
+      prefs[key] = booleanValue(key, value);
+      return true;
+    default: return false;
+  }
+};
+
+const applyTextPreference = (prefs: ShellPrefs, key: string, value: string): boolean => {
+  switch (key) {
+    case "autocompleteColour":
+    case "heredocPrompt":
+    case "promptFormat":
+    case "keyCompleteNext":
+    case "keyCompletePrevious":
+    case "keySuggestionOlder":
+    case "keySuggestionNewer":
+    case "keySuggestionAccept":
+    case "keySuggestionAcceptWord":
+    case "keySuggestionSuppress":
+    case "keyHistoryPrevious":
+    case "keyHistoryNext":
+    case "keyHistorySearchReverse":
+    case "keyHistorySearchForward":
+      prefs[key] = unquote(value);
+      return true;
+    default: return false;
+  }
+};
+
+const applyPreference = (prefs: ShellPrefs, key: string, value: string, unknown: Map<string, string>): void => {
+  // Decode before assignment so a rejected setting preserves its previous value.
+  if (applyBooleanPreference(prefs, key, value) || applyTextPreference(prefs, key, value)) return;
+  switch (key) {
+    case "historySize":
+      prefs.historySize = integerValue(key, value, 0, 1_000_000);
+      break;
+
+    case "completionListLimit":
+      prefs.completionListLimit = integerValue(key, value, 1, 100_000);
+      break;
+
+    case "historyIgnorePatterns":
+      prefs.historyIgnorePatterns = unquote(value).split(",").map(item => item.trim()).filter(Boolean);
+      break;
+
+    case "defaultScriptLang": {
+      const language = unquote(value);
+      if (language !== "thsh" && language !== "bash") {
+        throw new Error(`${key}: expected thsh or bash`);
+      }
+      prefs.defaultScriptLang = language;
+      break;
+    }
+    default: unknown.set(key, unquote(value));
+  }
+};
+
 // Validation precedes mutation so failures leave the current operation in a defined state.
 export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs()): ParsedPrefs => {
   // Invalid values preserve the initial setting and produce a line warning; unknown keys remain available for round trips.
@@ -153,65 +225,7 @@ export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs())
     const value = line.slice(at + 1).trim();
 
     try {
-      switch (key) {
-        case "autocomplete":
-        case "autocompleteCaseSensitive":
-        case "history":
-        case "historyDeduplicate":
-        case "historyIgnoreSpace":
-        case "historyTimestamps":
-        case "historyPrefixSearch":
-        case "reverseSearch":
-        case "ctrlSForwardSearch":
-        case "heredocSilent":
-        case "clearScrollback":
-        case "colour":
-        case "bell":
-        case "showWelcome":
-          prefs[key] = booleanValue(key, value);
-          break;
-
-        case "historySize":
-          prefs.historySize = integerValue(key, value, 0, 1_000_000);
-          break;
-
-        case "completionListLimit":
-          prefs.completionListLimit = integerValue(key, value, 1, 100_000);
-          break;
-
-        case "historyIgnorePatterns":
-          prefs.historyIgnorePatterns = unquote(value).split(",").map(item => item.trim()).filter(Boolean);
-          break;
-
-        case "defaultScriptLang": {
-          const language = unquote(value);
-          if (language !== "thsh" && language !== "bash") {
-            throw new Error(`${key}: expected thsh or bash`);
-          }
-          prefs.defaultScriptLang = language;
-          break;
-        }
-
-        case "autocompleteColour":
-        case "heredocPrompt":
-        case "promptFormat":
-        case "keyCompleteNext":
-        case "keyCompletePrevious":
-        case "keySuggestionOlder":
-        case "keySuggestionNewer":
-        case "keySuggestionAccept":
-        case "keySuggestionAcceptWord":
-        case "keySuggestionSuppress":
-        case "keyHistoryPrevious":
-        case "keyHistoryNext":
-        case "keyHistorySearchReverse":
-        case "keyHistorySearchForward":
-          prefs[key] = unquote(value);
-          break;
-
-        default:
-          unknown.set(key, unquote(value));
-      }
+      applyPreference(prefs, key, value, unknown);
     } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       warnings.push(`line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
     }

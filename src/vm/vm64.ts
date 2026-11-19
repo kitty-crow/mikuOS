@@ -86,23 +86,10 @@ export class Vm64 {
     return this.code & 0xff;
   }
 
-  // Integer conversion saturates at the selected signed or unsigned ABI limits.
-  private async step(): Promise<void> {
-    this.exec(this.pc, I64_SZ);
-    const raw = this.m.read(this.pc, I64_SZ), v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
-    const op = requireValue(raw[0] ?? null, "src/vm/vm64.ts:75") as Op64, d = requireValue(raw[1] ?? null, "src/vm/vm64.ts:75"), a = requireValue(raw[2] ?? null, "src/vm/vm64.ts:75"), b = requireValue(raw[3] ?? null, "src/vm/vm64.ts:75"), im = v.getBigInt64(8, true);
-    const ins = (BY64_OP.get(op) ?? null);
-    if (!ins) return bad("ENOEXEC", `bad thistle64 opcode ${op} at 0x${this.pc.toString(16)}`);
-    if (d > 31 || a > 31 || b > 31) bad("ENOEXEC", `bad thistle64 register at 0x${this.pc.toString(16)}`);
-    const badf = ["f", "ff", "fff", "fi", "fx", "fmemr", "fmemw"].includes(ins.form) && d > 15 || ["ff", "fff", "fcmp", "xf", "xff"].includes(ins.form) && a > 15 || ["fff", "fcmp", "xff"].includes(ins.form) && b > 15;
-    if (badf) bad("ENOEXEC", `bad floating register at 0x${this.pc.toString(16)}`);
-    this.pc += BigInt(I64_SZ);
-    const x = requireValue(this.r[a] ?? null, "src/vm/vm64.ts:82"), y = requireValue(this.r[b] ?? null, "src/vm/vm64.ts:82"), sh = (n: bigint): bigint => u64(n) & 63n;
+  private arithmetic(op: Op64, d: number, x: bigint, y: bigint, im: bigint): boolean {
+    // Integer arithmetic preserves 64-bit wrapping and checks divisors before mutation.
+    const sh = (n: bigint): bigint => u64(n) & 63n;
     switch (op) {
-      case Op64.Nop: break;
-      case Op64.Halt: this.exit(requireValue(this.r[0] ?? null, "src/vm/vm64.ts:85")); break;
-      case Op64.Mov: this.set(d, x); break;
-      case Op64.Li: this.set(d, im); break;
       case Op64.Add: this.set(d, x + y); break;
       case Op64.AddI: this.set(d, x + im); break;
       case Op64.Sub: this.set(d, x - y); break;
@@ -130,6 +117,17 @@ export class Vm64 {
       case Op64.Cmp: this.cmp(x, y); break;
       case Op64.CmpI: this.cmp(x, im); break;
       case Op64.Test: this.logic(x & y); break;
+      case Op64.Clz: { const q = u64(x); this.set(d, BigInt(q ? 64 - q.toString(2).length : 64)); break; }
+      case Op64.Ctz: { let q = u64(x), z = 0; if (!q) z = 64; else while (!(q & 1n)) { z++; q >>= 1n; } this.set(d, BigInt(z)); break; }
+      case Op64.Popcnt: { let q = u64(x), z = 0; while (q) { q &= q - 1n; z++; } this.set(d, BigInt(z)); break; }
+      default: return false;
+    }
+    return true;
+  }
+
+  private flow(op: Op64, d: number, im: bigint): boolean {
+    // The caller has advanced the PC, so calls save the next instruction address.
+    switch (op) {
       case Op64.Jmp: this.jump(im); break;
       case Op64.JmpR: this.pc = u64(requireValue(this.r[d] ?? null, "src/vm/vm64.ts:116")); break;
       case Op64.Je: if (this.z) this.jump(im); break;
@@ -149,35 +147,15 @@ export class Vm64 {
       case Op64.Pop: this.set(d, this.pop()); break;
       case Op64.Enter: { const z = this.nat(im, "frame size", this.s.k.lim.stack); this.push(requireValue(this.r[29] ?? null, "src/vm/vm64.ts:132")); this.r[29] = requireValue(this.r[30] ?? null, "src/vm/vm64.ts:132"); this.r[30] = s64(requireValue(this.r[30] ?? null, "src/vm/vm64.ts:132") - BigInt(z)); this.mem(u64(requireValue(this.r[30] ?? null, "src/vm/vm64.ts:132")), z, true); break; }
       case Op64.Leave: this.r[30] = requireValue(this.r[29] ?? null, "src/vm/vm64.ts:133"); this.r[29] = this.pop(); break;
-      case Op64.Ld8U: { const q = u64(x + im); this.mem(q, 1); this.set(d, BigInt(this.m.u8(q))); break; }
-      case Op64.Ld8S: { const q = u64(x + im); this.mem(q, 1); this.set(d, this.m.i8(q)); break; }
-      case Op64.Ld16U: { const q = u64(x + im); this.mem(q, 2); this.set(d, BigInt(this.m.u16(q))); break; }
-      case Op64.Ld16S: { const q = u64(x + im); this.mem(q, 2); this.set(d, this.m.i16(q)); break; }
-      case Op64.Ld32U: { const q = u64(x + im); this.mem(q, 4); this.set(d, BigInt(this.m.u32(q))); break; }
-      case Op64.Ld32S: { const q = u64(x + im); this.mem(q, 4); this.set(d, this.m.i32(q)); break; }
-      case Op64.Ld64: { const q = u64(x + im); this.mem(q, 8); this.set(d, this.m.i64(q)); break; }
-      case Op64.St8: this.wr(u64(x + im), 1); this.m.set8(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:141")); break;
-      case Op64.St16: this.wr(u64(x + im), 2); this.m.set16(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:142")); break;
-      case Op64.St32: this.wr(u64(x + im), 4); this.m.set32(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:143")); break;
-      case Op64.St64: this.wr(u64(x + im), 8); this.m.set64(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:144")); break;
-      case Op64.Sys: await this.sys(this.nat(im, "syscall", 65535)); break;
-      case Op64.Xchg: { const q = requireValue(this.r[d] ?? null, "src/vm/vm64.ts:146"); this.r[d] = x; this.r[a] = q; break; }
-      case Op64.Sex8: this.set(d, BigInt.asIntN(8, x)); break;
-      case Op64.Sex16: this.set(d, BigInt.asIntN(16, x)); break;
-      case Op64.Sex32: this.set(d, BigInt.asIntN(32, x)); break;
-      case Op64.SetE: this.set(d, this.z ? 1n : 0n); break;
-      case Op64.SetNe: this.set(d, this.z ? 0n : 1n); break;
-      case Op64.SetL: this.set(d, this.n !== this.o ? 1n : 0n); break;
-      case Op64.SetLe: this.set(d, this.z || this.n !== this.o ? 1n : 0n); break;
-      case Op64.SetG: this.set(d, !this.z && this.n === this.o ? 1n : 0n); break;
-      case Op64.SetGe: this.set(d, this.n === this.o ? 1n : 0n); break;
-      case Op64.SetB: this.set(d, this.c ? 0n : 1n); break;
-      case Op64.SetBe: this.set(d, !this.c || this.z ? 1n : 0n); break;
-      case Op64.SetA: this.set(d, this.c && !this.z ? 1n : 0n); break;
-      case Op64.SetAe: this.set(d, this.c ? 1n : 0n); break;
-      case Op64.Clz: { const q = u64(x); this.set(d, BigInt(q ? 64 - q.toString(2).length : 64)); break; }
-      case Op64.Ctz: { let q = u64(x), z = 0; if (!q) z = 64; else while (!(q & 1n)) { z++; q >>= 1n; } this.set(d, BigInt(z)); break; }
-      case Op64.Popcnt: { let q = u64(x), z = 0; while (q) { q &= q - 1n; z++; } this.set(d, BigInt(z)); break; }
+      default: return false;
+    }
+    return true;
+  }
+
+  private floating(op: Op64, d: number, a: number, b: number, v: DataView): boolean {
+    // Floating loads and stores use the same checked address calculation as integer memory operations.
+    const x = requireValue(this.r[a] ?? null, "floating address register"), im = v.getBigInt64(8, true);
+    switch (op) {
       case Op64.FMov: this.f[d] = requireValue(this.f[a] ?? null, "src/vm/vm64.ts:163"); break;
       case Op64.FLi: this.f[d] = v.getFloat64(8, true); break;
       case Op64.FAdd: this.f[d] = requireValue(this.f[a] ?? null, "src/vm/vm64.ts:165") + requireValue(this.f[b] ?? null, "src/vm/vm64.ts:165"); break;
@@ -202,6 +180,64 @@ export class Vm64 {
       case Op64.FLd64: { const q = u64(x + im); this.mem(q, 8); this.f[d] = this.m.f64(q); break; }
       case Op64.FSt32: { const q = u64(x + im); this.mem(q, 4, true); this.m.setF32(q, requireValue(this.f[d] ?? null, "src/vm/vm64.ts:185")); break; }
       case Op64.FSt64: { const q = u64(x + im); this.mem(q, 8, true); this.m.setF64(q, requireValue(this.f[d] ?? null, "src/vm/vm64.ts:186")); break; }
+      default: return false;
+    }
+    return true;
+  }
+
+  private condition(op: Op64, d: number): boolean {
+    // Set-on-condition instructions read the flags and store a normalised integer result.
+    switch (op) {
+      case Op64.SetE: this.set(d, this.z ? 1n : 0n); break;
+      case Op64.SetNe: this.set(d, this.z ? 0n : 1n); break;
+      case Op64.SetL: this.set(d, this.n !== this.o ? 1n : 0n); break;
+      case Op64.SetLe: this.set(d, this.z || this.n !== this.o ? 1n : 0n); break;
+      case Op64.SetG: this.set(d, !this.z && this.n === this.o ? 1n : 0n); break;
+      case Op64.SetGe: this.set(d, this.n === this.o ? 1n : 0n); break;
+      case Op64.SetB: this.set(d, this.c ? 0n : 1n); break;
+      case Op64.SetBe: this.set(d, !this.c || this.z ? 1n : 0n); break;
+      case Op64.SetA: this.set(d, this.c && !this.z ? 1n : 0n); break;
+      case Op64.SetAe: this.set(d, this.c ? 1n : 0n); break;
+      default: return false;
+    }
+    return true;
+  }
+
+  /** Decode and validate once before dispatching the selected instruction family. */
+  private async step(): Promise<void> {
+    // Advance the PC only after opcode and register checks; calls then save the next instruction address.
+    this.exec(this.pc, I64_SZ);
+    const raw = this.m.read(this.pc, I64_SZ), v = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
+    const op = requireValue(raw[0] ?? null, "src/vm/vm64.ts:75") as Op64, d = requireValue(raw[1] ?? null, "src/vm/vm64.ts:75"), a = requireValue(raw[2] ?? null, "src/vm/vm64.ts:75"), b = requireValue(raw[3] ?? null, "src/vm/vm64.ts:75"), im = v.getBigInt64(8, true);
+    const ins = (BY64_OP.get(op) ?? null);
+    if (!ins) return bad("ENOEXEC", `bad thistle64 opcode ${op} at 0x${this.pc.toString(16)}`);
+    if (d > 31 || a > 31 || b > 31) bad("ENOEXEC", `bad thistle64 register at 0x${this.pc.toString(16)}`);
+    const badf = ["f", "ff", "fff", "fi", "fx", "fmemr", "fmemw"].includes(ins.form) && d > 15 || ["ff", "fff", "fcmp", "xf", "xff"].includes(ins.form) && a > 15 || ["fff", "fcmp", "xff"].includes(ins.form) && b > 15;
+    if (badf) bad("ENOEXEC", `bad floating register at 0x${this.pc.toString(16)}`);
+    this.pc += BigInt(I64_SZ);
+    const x = requireValue(this.r[a] ?? null, "src/vm/vm64.ts:82"), y = requireValue(this.r[b] ?? null, "src/vm/vm64.ts:82");
+    if (this.arithmetic(op, d, x, y, im) || this.flow(op, d, im) || this.floating(op, d, a, b, v) || this.condition(op, d)) return;
+    switch (op) {
+      case Op64.Nop: break;
+      case Op64.Halt: this.exit(requireValue(this.r[0] ?? null, "src/vm/vm64.ts:85")); break;
+      case Op64.Mov: this.set(d, x); break;
+      case Op64.Li: this.set(d, im); break;
+      case Op64.Ld8U: { const q = u64(x + im); this.mem(q, 1); this.set(d, BigInt(this.m.u8(q))); break; }
+      case Op64.Ld8S: { const q = u64(x + im); this.mem(q, 1); this.set(d, this.m.i8(q)); break; }
+      case Op64.Ld16U: { const q = u64(x + im); this.mem(q, 2); this.set(d, BigInt(this.m.u16(q))); break; }
+      case Op64.Ld16S: { const q = u64(x + im); this.mem(q, 2); this.set(d, this.m.i16(q)); break; }
+      case Op64.Ld32U: { const q = u64(x + im); this.mem(q, 4); this.set(d, BigInt(this.m.u32(q))); break; }
+      case Op64.Ld32S: { const q = u64(x + im); this.mem(q, 4); this.set(d, this.m.i32(q)); break; }
+      case Op64.Ld64: { const q = u64(x + im); this.mem(q, 8); this.set(d, this.m.i64(q)); break; }
+      case Op64.St8: this.wr(u64(x + im), 1); this.m.set8(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:141")); break;
+      case Op64.St16: this.wr(u64(x + im), 2); this.m.set16(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:142")); break;
+      case Op64.St32: this.wr(u64(x + im), 4); this.m.set32(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:143")); break;
+      case Op64.St64: this.wr(u64(x + im), 8); this.m.set64(u64(x + im), requireValue(this.r[d] ?? null, "src/vm/vm64.ts:144")); break;
+      case Op64.Sys: await this.sys(this.nat(im, "syscall", 65535)); break;
+      case Op64.Xchg: { const q = requireValue(this.r[d] ?? null, "src/vm/vm64.ts:146"); this.r[d] = x; this.r[a] = q; break; }
+      case Op64.Sex8: this.set(d, BigInt.asIntN(8, x)); break;
+      case Op64.Sex16: this.set(d, BigInt.asIntN(16, x)); break;
+      case Op64.Sex32: this.set(d, BigInt.asIntN(32, x)); break;
     }
   }
 

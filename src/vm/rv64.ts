@@ -1700,6 +1700,7 @@ default: { this.fcsr = Number(wr & 255n); }
   }
 
   private async execve(path: string, av: bigint, ev: bigint): Promise<bigint> {
+    // Ordinary exec replaces this process; a vfork child instead starts the new image and restores the suspended parent.
     const argv = this.vec(av), env = new Map<string, string>();
 
     for (const q of this.vec(ev)) {
