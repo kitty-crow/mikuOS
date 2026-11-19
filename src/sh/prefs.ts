@@ -131,6 +131,7 @@ export interface ParsedPrefs {
 
 // Validation precedes mutation so failures leave the current operation in a defined state.
 export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs()): ParsedPrefs => {
+  // Invalid values preserve the initial setting and produce a line warning; unknown keys remain available for round trips.
   const prefs: ShellPrefs = {
     ...initial,
     historyIgnorePatterns: [...initial.historyIgnorePatterns],

@@ -100,6 +100,7 @@ export class Net {
   constructor(readonly dev: NetDev = new FetchDev()) {}
 
   async req(r: NReq, parent: AbortSignal | null = null): Promise<NRes> {
+    // Redirects share one timeout and abort signal; only redirect statuses that require it turn POST into GET.
     const method = (r.method ?? "GET").toUpperCase();
     if (!/^[A-Z]+$/.test(method)) bad("EINVAL", `bad HTTP method: ${method}`);
     const max = r.max ?? 12 * 1024 * 1024;

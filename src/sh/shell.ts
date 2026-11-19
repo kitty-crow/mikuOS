@@ -550,7 +550,6 @@ default: { io.serr = new FsOut(this.s, p, r.mode === "a"); }
   }
 
   // Command, job and here-document state remain scoped to their current execution phase.
-  //@cg-expect-warning
   private async bi(name: string, a: string[]): Promise<number> {
     switch (name) {
       case ":": return 0;

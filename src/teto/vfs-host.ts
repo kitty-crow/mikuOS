@@ -74,10 +74,9 @@ const fnv = (bytes: Uint8Array, from: number): number => {
   return hash >>> 0;
 };
 
-/** Deterministic, allocation-bounded root image consumed by the generated Teto kernel. */
-export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
-  const entries = [...source].sort((left, right) => left.p < right.p ? -1 : left.p > right.p ? 1 : 0);
-  const paths = new Map<string, TreeEnt>();
+/** Validate path ownership and hard-link identity before sizing the image. */
+const indexInodes = (entries: readonly TreeEnt[], paths: Map<string, TreeEnt>): InodeImage[] => {
+  // Every alias must agree on metadata and payload before a binary record is written.
   const links = new Map<number, number>();
   const inodes = new Map<number, InodeImage>();
 
@@ -104,44 +103,19 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
     links.set(entry.id, (links.get(entry.id) ?? 0) + 1);
   }
 
-  const root = (paths.get("/") ?? null);
-  if (!root || root.k !== "d") throw new Error("Teto VFS image requires one directory root");
-  if (inodes.size === 0 || inodes.size >= TETO_VFS_INODE_CAPACITY) throw new Error("Teto VFS inode table is full");
-  if (entries.length - 1 > TETO_VFS_DENTRY_CAPACITY) throw new Error("Teto VFS dentry table is full");
-
-  let imageSize = HEADER_SIZE;
-  let dataSize = 0;
-  const inodeImages = [...inodes.values()].sort((left, right) => left.entry.id - right.entry.id);
-  for (const inode of inodeImages) {
+  const result = [...inodes.values()].sort((left, right) => left.entry.id - right.entry.id);
+  for (const inode of result) {
     inode.nlink = links.get(inode.entry.id) ?? 0;
     if (inode.entry.k === "d" && inode.nlink !== 1) throw new Error(`Teto VFS directory has multiple parents at ${inode.entry.p}`);
-    imageSize += align4(INODE_RECORD_SIZE + inode.payload.length);
-    dataSize += align4(inode.payload.length);
   }
+  return result;
+};
 
-  const dentries = entries.filter(entry => entry.p !== "/").map(entry => {
-    const parent = (paths.get(parentPath(entry.p)) ?? null);
-    if (!parent || parent.k !== "d") throw new Error(`missing Teto VFS parent directory for ${entry.p}`);
-    const name = encoder.encode(entry.p.slice(entry.p.lastIndexOf("/") + 1));
-    if (name.length === 0 || name.length > 255 || name.some(value => value === 0 || value === 47)) {
-      throw new Error(`invalid Teto VFS name at ${entry.p}`);
-    }
-    imageSize += align4(DENTRY_RECORD_SIZE + name.length);
-    dataSize += align4(name.length);
-    return { entry, parent, name };
-  });
-  if (dataSize > TETO_VFS_DATA_CAPACITY || imageSize > 0xffffffff) throw new Error("Teto VFS image exceeds the kernel data arena");
-
-  const output = new Uint8Array(imageSize);
+/** Encode only inode records, leaving the caller at the dentry table. */
+const writeInodes = (output: Uint8Array, inodes: readonly InodeImage[]): number => {
   const view = new DataView(output.buffer);
-  view.setUint32(0, TETO_VFS_IMAGE_MAGIC, true);
-  view.setUint32(4, TETO_VFS_IMAGE_VERSION, true);
-  view.setUint32(8, inodeImages.length, true);
-  view.setUint32(12, dentries.length, true);
-  view.setUint32(16, root.id, true);
-  view.setUint32(20, output.length, true);
   let at = HEADER_SIZE;
-  for (const inode of inodeImages) {
+  for (const inode of inodes) {
     const entry = inode.entry;
     view.setUint32(at, entry.id, true);
     view.setUint32(at + 4, kind(entry), true);
@@ -156,6 +130,27 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
     output.set(inode.payload, at + INODE_RECORD_SIZE);
     at += align4(INODE_RECORD_SIZE + inode.payload.length);
   }
+  return at;
+};
+
+interface DentryImage { entry: TreeEnt; parent: TreeEnt; name: Uint8Array; }
+
+const indexDentries = (entries: readonly TreeEnt[], paths: Map<string, TreeEnt>): DentryImage[] => {
+  return entries.filter(entry => entry.p !== "/").map(entry => {
+    const parent = (paths.get(parentPath(entry.p)) ?? null);
+    if (!parent || parent.k !== "d") throw new Error(`missing Teto VFS parent directory for ${entry.p}`);
+    const name = encoder.encode(entry.p.slice(entry.p.lastIndexOf("/") + 1));
+    if (name.length === 0 || name.length > 255 || name.some(value => value === 0 || value === 47)) {
+      throw new Error(`invalid Teto VFS name at ${entry.p}`);
+    }
+    return { entry, parent, name };
+  });
+};
+
+/** Append directory records after the inode payload region. */
+const writeDentries = (output: Uint8Array, dentries: readonly DentryImage[], offset: number): number => {
+  const view = new DataView(output.buffer);
+  let at = offset;
   for (const dentry of dentries) {
     view.setUint32(at, dentry.parent.id, true);
     view.setUint32(at + 4, dentry.entry.id, true);
@@ -163,6 +158,45 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
     output.set(dentry.name, at + DENTRY_RECORD_SIZE);
     at += align4(DENTRY_RECORD_SIZE + dentry.name.length);
   }
+  return at;
+};
+
+/** Deterministic, allocation-bounded root image consumed by the generated Teto kernel. */
+export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
+  // Validate the complete topology before sizing or writing any native image records.
+  const entries = [...source].sort((left, right) => left.p < right.p ? -1 : left.p > right.p ? 1 : 0);
+  const paths = new Map<string, TreeEnt>();
+  const inodeImages = indexInodes(entries, paths);
+
+  const root = (paths.get("/") ?? null);
+  if (!root || root.k !== "d") throw new Error("Teto VFS image requires one directory root");
+  if (inodeImages.length === 0 || inodeImages.length >= TETO_VFS_INODE_CAPACITY) throw new Error("Teto VFS inode table is full");
+  if (entries.length - 1 > TETO_VFS_DENTRY_CAPACITY) throw new Error("Teto VFS dentry table is full");
+
+  let imageSize = HEADER_SIZE;
+  let dataSize = 0;
+  for (const inode of inodeImages) {
+    imageSize += align4(INODE_RECORD_SIZE + inode.payload.length);
+    dataSize += align4(inode.payload.length);
+  }
+
+  const dentries = indexDentries(entries, paths);
+  for (const { name } of dentries) {
+    imageSize += align4(DENTRY_RECORD_SIZE + name.length);
+    dataSize += align4(name.length);
+  }
+  if (dataSize > TETO_VFS_DATA_CAPACITY || imageSize > 0xffffffff) throw new Error("Teto VFS image exceeds the kernel data arena");
+
+  const output = new Uint8Array(imageSize);
+  const view = new DataView(output.buffer);
+  view.setUint32(0, TETO_VFS_IMAGE_MAGIC, true);
+  view.setUint32(4, TETO_VFS_IMAGE_VERSION, true);
+  view.setUint32(8, inodeImages.length, true);
+  view.setUint32(12, dentries.length, true);
+  view.setUint32(16, root.id, true);
+  view.setUint32(20, output.length, true);
+  let at = writeInodes(output, inodeImages);
+  at = writeDentries(output, dentries, at);
   if (at !== output.length) throw new Error("Teto VFS serializer size mismatch");
   view.setUint32(24, fnv(output, HEADER_SIZE), true);
   return output;

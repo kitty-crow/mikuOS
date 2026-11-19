@@ -86,87 +86,38 @@ const arithmeticNumber = (
   }
 };
 
-// Quote-mode checks consume delimiters and escapes exactly once before advancing offsets.
+/** Consume one numeric or identifier alphabet without advancing past its token. */
+const arithmeticWordEnd = (src: string, start: number, alphabet: RegExp): number => {
+  let at = start;
+  while (at < src.length && alphabet.test(src[at] ?? "")) at++;
+  return at;
+};
+
+const arithmeticAtom = (src: string, start: number): [ArithmeticToken, number] => {
+  const c = requireValue(src[start] ?? null, "arithmetic token start");
+  if (/[0-9]/.test(c)) {
+    const hex = c === "0" && /[xX]/.test(src[start + 1] ?? "");
+    const end = arithmeticWordEnd(src, start + (hex ? 2 : 0), hex ? /[0-9a-fA-F]/ : /[0-9]/);
+    return [{ kind: "number", value: src.slice(start, end) }, end];
+  }
+  if (/[A-Za-z_]/.test(c)) {
+    const end = arithmeticWordEnd(src, start + 1, /[A-Za-z0-9_]/);
+    return [{ kind: "name", value: src.slice(start, end) }, end];
+  }
+  const operator = arithmeticOperators.find(value => src.startsWith(value, start)) ?? null;
+  if (!operator) throw new Error(`invalid arithmetic token near ${JSON.stringify(src.slice(start))}`);
+  return [{ kind: "operator", value: operator }, start + operator.length];
+};
+
 const arithmeticTokens = (src: string): ArithmeticToken[] => {
   const tokens: ArithmeticToken[] = [];
-
-  for (let i = 0; i < src.length;) {
-    const c = requireValue(src[i] ?? null, "src/sh/lex.ts:90");
-
-    if (/\s/.test(c)) {
-      i++;
-      continue;
-    }
-
-    if (/[0-9]/.test(c)) {
-      const start = i;
-
-      // Quote-mode checks consume delimiters and escapes exactly once before advancing offsets.
-      //@cg-expect-warning
-      if (
-        c === "0" &&
-        ((src[i + 1] ?? null) === "x" || (src[i + 1] ?? null) === "X")
-      ) {
-        i += 2;
-
-        while (i < src.length && /[0-9a-fA-F]/.test(requireValue(src[i] ?? null, "src/sh/lex.ts:106"))) {
-          i++;
-        }
-      } else {
-        while (i < src.length && /[0-9]/.test(requireValue(src[i] ?? null, "src/sh/lex.ts:110"))) {
-          i++;
-        }
-      }
-
-      tokens.push({
-        kind: "number",
-        value: src.slice(start, i),
-      });
-
-      continue;
-    }
-
-    if (/[A-Za-z_]/.test(c)) {
-      const start = i++;
-
-      while (
-        i < src.length &&
-        /[A-Za-z0-9_]/.test(requireValue(src[i] ?? null, "src/sh/lex.ts:128"))
-      ) {
-        i++;
-      }
-
-      tokens.push({
-        kind: "name",
-        value: src.slice(start, i),
-      });
-
-      continue;
-    }
-
-    const operator = (arithmeticOperators.find(
-      value => src.startsWith(value, i),
-    ) ?? null);
-
-    if (!operator) {
-      throw new Error(
-        `invalid arithmetic token near ${JSON.stringify(src.slice(i))}`,
-      );
-    }
-
-    tokens.push({
-      kind: "operator",
-      value: operator,
-    });
-
-    i += operator.length;
+  for (let at = 0; at < src.length;) {
+    if (/\s/.test(src[at] ?? "")) { at++; continue; }
+    const [token, end] = arithmeticAtom(src, at);
+    tokens.push(token);
+    at = end;
   }
-
-  tokens.push({
-    kind: "end",
-    value: "",
-  });
-
+  tokens.push({ kind: "end", value: "" });
   return tokens;
 };
 
@@ -559,7 +510,6 @@ export const split = (src: string): Raw[] => {
 };
 
 // Quote-mode checks consume delimiters and escapes exactly once before advancing offsets.
-//@cg-expect-warning
 export const lex = (src: string, env: Map<string, string>, pid: number, last: number, bg: number): Tok[] => {
   const out: Tok[] = [];
   let v = "";
@@ -610,8 +560,20 @@ export const lex = (src: string, env: Map<string, string>, pid: number, last: nu
   return out;
 };
 
+/** Decode the target word only after the redirection operator has selected its mode. */
+const readRedirection = (token: Tok, target: Tok | null): Redir => {
+  const here = token.v === "<<" || token.v === "<<-";
+  ensure(target !== null && !target.op, () => bad("EINVAL", `${token.v}: missing ${here ? "delimiter" : "path"}`));
+  const path: Word = { v: target.v, q: target.q };
+  if (here) return { fd: 0, mode: "here", path, body: "", stripTabs: token.v === "<<-", expand: !target.q };
+  const fd = token.v.startsWith("2") ? 2 : token.v === "<" ? 0 : 1;
+  const mode = token.v === "<" ? "r" : token.v.endsWith(">>") ? "a" : "w";
+  return { fd, mode, path, body: null, stripTabs: null, expand: null };
+};
+
 // Quote-mode checks consume delimiters and escapes exactly once before advancing offsets.
 export const parse = (t: Tok[]): Unit[] => {
+  // Redirections bind the following word to the current command; flush pipelines before changing the gate or background state.
   const out: Unit[] = [];
   let pipe: Cmd[] = [];
   let cmd: Cmd = { words: [], redir: [] };
@@ -631,29 +593,8 @@ export const parse = (t: Tok[]): Unit[] => {
   for (let i = 0; i < t.length; i++) {
     const x = requireValue(t[i] ?? null, "src/sh/lex.ts:613");
     if (!x.op) { cmd.words.push({ v: x.v, q: x.q }); continue; }
-    if (x.v === "<<" || x.v === "<<-") {
-      const y = (t[++i] ?? null);
-
-      ensure(!(!y || y.op), () => bad("EINVAL", `${x.v}: missing delimiter`));
-
-      cmd.redir.push({
-        fd: 0,
-        mode: "here",
-        path: { v: y.v, q: y.q },
-        body: "",
-        stripTabs: x.v === "<<-",
-        expand: !y.q,
-      });
-
-      continue;
-    }
-
-    if (["<", ">", ">>", "2>", "2>>"].includes(x.v)) {
-      const y = (t[++i] ?? null);
-      ensure(!(!y || y.op), () => bad("EINVAL", `${x.v}: missing path`));
-      const fd = x.v.startsWith("2") ? 2 : x.v === "<" ? 0 : 1;
-      const mode = x.v === "<" ? "r" : x.v.endsWith(">>") ? "a" : "w";
-      cmd.redir.push({"body": null, "stripTabs": null, "expand": null, fd, mode, path: { v: y.v, q: y.q } });
+    if (["<<", "<<-", "<", ">", ">>", "2>", "2>>"].includes(x.v)) {
+      cmd.redir.push(readRedirection(x, t[++i] ?? null));
       continue;
     }
     if (x.v === "|") { pcmd(); continue; }

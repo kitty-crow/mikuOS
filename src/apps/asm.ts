@@ -87,6 +87,7 @@ default: { i++; }
 export class LdApp extends ToolApp {
   constructor() { super("ld", "Link Thistle objects into a native executable.", "ld [-e symbol] [-o file] [--Map file] [--image-base n] [--memory n] object ..."); }
   override async run(s: Sys, av: string[]): Promise<number> {
+    // Collect linker options before resolving input objects so missing option values fail before an executable is emitted.
     const a = [...av], files: string[] = [];
     let out = "a.txe", entry = "_start", map = "", base: number | null = null, mem: number | null = null;
     for (let i = 0; i < a.length;) {

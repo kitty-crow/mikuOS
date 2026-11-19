@@ -26,6 +26,16 @@ const MAX_IO = 64 * 1024 * 1024;
 const s64 = (n: bigint): bigint => BigInt.asIntN(64, n);
 const u64 = (n: bigint): bigint => BigInt.asUintN(64, n);
 
+/** Saturate floating-point conversions at the Thistle64 integer ABI limits. */
+function ftoi(n: number, uns: boolean): bigint {
+  if (Number.isNaN(n) || (uns && n <= 0)) return 0n;
+  if (uns && n >= 18446744073709551615) return MASK;
+  if (uns) return u64(BigInt(Math.trunc(n)));
+  if (n <= -9223372036854775808) return -(1n << 63n);
+  if (n >= 9223372036854775807) return (1n << 63n) - 1n;
+  return BigInt(Math.trunc(n));
+}
+
 export class Vm64 {
   readonly r = new BigInt64Array(32);
   readonly f = new Float64Array(16);
@@ -50,6 +60,7 @@ export class Vm64 {
   constructor(private readonly s: Sys) { this.io = new NativeIo(s); }
 
   async run(exe: Exe, argv: string[]): Promise<number> {
+    // Reject overlapping or unaligned sections before loading bytes, then reserve the heap and stack before execution.
     if (exe.machine !== "thistle64") bad("ENOEXEC", "thistle64 VM received another machine");
     this.exe = exe;
     this.m = new Mem64(BigInt(exe.mem), this.s.k.lim.mem);
@@ -185,8 +196,8 @@ export class Vm64 {
       case Op64.FSetGe: this.set(d, this.frel(requireValue(this.f[a] ?? null, "src/vm/vm64.ts:178"), requireValue(this.f[b] ?? null, "src/vm/vm64.ts:178"), "ge") ? 1n : 0n); break;
       case Op64.IToF: this.f[d] = Number(x); break;
       case Op64.UToF: this.f[d] = Number(u64(x)); break;
-      case Op64.FToI: this.set(d, this.ftoi(requireValue(this.f[a] ?? null, "src/vm/vm64.ts:181"), false)); break;
-      case Op64.FToU: this.set(d, this.ftoi(requireValue(this.f[a] ?? null, "src/vm/vm64.ts:182"), true)); break;
+      case Op64.FToI: this.set(d, ftoi(requireValue(this.f[a] ?? null, "src/vm/vm64.ts:181"), false)); break;
+      case Op64.FToU: this.set(d, ftoi(requireValue(this.f[a] ?? null, "src/vm/vm64.ts:182"), true)); break;
       case Op64.FLd32: { const q = u64(x + im); this.mem(q, 4); this.f[d] = this.m.f32(q); break; }
       case Op64.FLd64: { const q = u64(x + im); this.mem(q, 8); this.f[d] = this.m.f64(q); break; }
       case Op64.FSt32: { const q = u64(x + im); this.mem(q, 4, true); this.m.setF32(q, requireValue(this.f[d] ?? null, "src/vm/vm64.ts:185")); break; }
@@ -200,6 +211,7 @@ export class Vm64 {
   }
 
   private async call(n: number): Promise<bigint> {
+    // Convert the 64-bit ABI arguments at the host boundary and validate guest memory before performing host I/O.
     const a = this.r;
     switch (n) {
       case Sc.Exit: this.exit(requireValue(a[0] ?? null, "src/vm/vm64.ts:198")); return 0n;
@@ -340,22 +352,6 @@ export class Vm64 {
 
   private fd(n: bigint): number { return this.nat(n, "file descriptor", 0x7fffffff); }
   private align(n: bigint, a: bigint): bigint { return (n + a - 1n) & -a; }
-
-  private ftoi(n: number, uns: boolean): bigint {
-    if (Number.isNaN(n)) return 0n;
-    if (uns) {
-      // Integer conversion saturates at the selected signed or unsigned ABI limits.
-      //@cg-expect-warning
-      if (n <= 0) return 0n;
-      // Integer conversion saturates at the selected signed or unsigned ABI limits.
-      //@cg-expect-warning
-      if (n >= 18446744073709551615) return MASK;
-      return u64(BigInt(Math.trunc(n)));
-    }
-    if (n <= -9223372036854775808) return -(1n << 63n);
-    if (n >= 9223372036854775807) return (1n << 63n) - 1n;
-    return BigInt(Math.trunc(n));
-  }
 
   private frel(a: number, b: number, op: "eq" | "ne" | "lt" | "le" | "gt" | "ge"): boolean {
     if (op === "ne") return a !== b;

@@ -165,6 +165,7 @@ export class Vm {
   }
 
   private async call(n: number): Promise<number> {
+    // Guest registers carry ABI arguments; validate memory before host I/O and return the scalar syscall result.
     const a = this.r;
     switch (n) {
       case Sc.Exit: this.exit(requireValue(a[0] ?? null, "src/vm/vm.ts:161")); return 0;

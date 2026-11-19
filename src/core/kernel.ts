@@ -248,6 +248,7 @@ export class Kern {
   }
 
   start(name: string, argv: string[], par: Proc, opt: Start = {"io": null, "fds": null, "pgid": null, "cwd": null, "env": null}): Proc {
+    // Acquire inherited descriptor ownership and executable credentials before scheduling the child so its streams remain live.
     const path = this.which(name, par);
     const h = this.fs.at(path, par.cwd, procFsCred(par));
     const node = h.node instanceof Reg ? h.node : bad("ENOEXEC", path);

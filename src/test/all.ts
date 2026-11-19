@@ -808,7 +808,28 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
   const generated = await loadTeto(generatedBytes);
 
   // Validation precedes mutation so failures leave the current operation in a defined state.
-  const exercise = (core: ProtectionCore, memory: Uint8Array): string => {
+  // Exercise executable anonymous pages end-to-end: V8's dynamically
+  // generated code cannot reside in a THX image segment.
+  const allocate = words([
+    addi(10, 0, 0),
+    (1 << 12 | 11 << 7 | 0x37) >>> 0,
+    addi(13, 0, 0x22),
+    addi(14, 0, -1),
+    addi(15, 0, 0),
+    addi(17, 0, 222),
+    0x00000073,
+    addi(6, 10, 0),
+  ]);
+  const jitExit = words([addi(10, 0, 42), addi(17, 0, 93), 0x00000073]);
+  const startup = new Uint8Array(38);
+  const startupView = new DataView(startup.buffer);
+  startupView.setUint32(0, TETO_STARTUP_MAGIC, true);
+  startupView.setUint32(4, 1, true);
+  startupView.setUint32(32, 2, true);
+  startup.set(enc("/x"), 36);
+
+  const exerciseMappings = (core: ProtectionCore, memory: Uint8Array): Array<Array<string | number | bigint>> => {
+    // Segment permissions must agree between the canonical source core and generated WASM.
     const results: Array<Array<string | number | bigint>> = [];
     for (const item of cases) {
       assert.equal(core.tetoKernelInit(0, 1, 0), 0);
@@ -840,27 +861,12 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
       assert.equal(core.tetoHartGetX(0, 0, 3), item.value, `${item.name}: unexpected loaded value`);
       results.push([item.name, result, status, fault, core.tetoHartGetX(0, 0, 3)]);
     }
+    return results;
+  };
 
-    // Exercise executable anonymous pages end-to-end: V8's dynamically
-    // generated code cannot reside in a THX image segment.
-    const allocate = words([
-      addi(10, 0, 0),
-      (1 << 12 | 11 << 7 | 0x37) >>> 0,
-      addi(13, 0, 0x22),
-      addi(14, 0, -1),
-      addi(15, 0, 0),
-      addi(17, 0, 222),
-      0x00000073,
-      addi(6, 10, 0),
-    ]);
-    const jitExit = words([addi(10, 0, 42), addi(17, 0, 93), 0x00000073]);
-    const startup = new Uint8Array(38);
-    const startupView = new DataView(startup.buffer);
-    startupView.setUint32(0, TETO_STARTUP_MAGIC, true);
-    startupView.setUint32(4, 1, true);
-    startupView.setUint32(32, 2, true);
-    startup.set(enc("/x"), 36);
-
+  const exerciseAnonymous = (core: ProtectionCore, memory: Uint8Array): Array<Array<string | number | bigint>> => {
+    // Only executable anonymous mappings may run the injected guest exit programme.
+    const results: Array<Array<string | number | bigint>> = [];
     for (const protect of [7, 3]) {
       assert.equal(core.tetoKernelInit(0, 1, 0), 0);
       assert.equal(core.tetoHartInit(0, 0, virtualTop, pc), 0);
@@ -891,9 +897,11 @@ test("Teto enforces executable, readable and writable guest mappings", async () 
       else assert.equal(new DataView(memory.buffer).getInt32(TETO_HART_BASE + H_FAULT, true), TETO_FAULT_MEMORY);
       results.push(["anonymous-execute", protect, expected, executableAt]);
     }
-
-    return show(results);
+    return results;
   };
+
+  const exercise = (core: ProtectionCore, memory: Uint8Array): string =>
+    show([...exerciseMappings(core, memory), ...exerciseAnonymous(core, memory)]);
 
   const sourceResult = exercise(source, sourceMemory.bytes);
   const generatedResult = exercise(generated.exports, new Uint8Array(generated.memory.buffer));
@@ -1540,6 +1548,7 @@ test("Teto builds the initial RV64 process stack inside source and generated ker
 
   // Validation precedes mutation so failures leave the current operation in a defined state.
   const exercise = (core: StartupCore, bytes: Uint8Array): string => {
+    // Read virtual stack data through mapped pages; a rejected startup block must not increment the successful-load metric.
     assert.equal(core.tetoKernelInit(0, 1, 0), 0);
     assert.equal(core.tetoHartInit(0, 0, 0x0000ffffffffffffn, 0n), 0);
     assert.equal(core.tetoProcessInit(0, 0, 81, 1, 1000, 0, 0, 1000, 0, 0), 0);

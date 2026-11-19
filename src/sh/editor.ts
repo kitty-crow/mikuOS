@@ -608,6 +608,7 @@ const state = requireValue(this.reverse, "reverse search state");
   }
 
   private nextHistory(): void {
+    // Moving beyond the newest history entry restores the unfinished draft and clears the old completion selection.
 
       if (this.prefixHistoryNext()) return;
 

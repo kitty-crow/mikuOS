@@ -275,6 +275,7 @@ export class Rv64 {
   get f(): BigUint64Array<ArrayBufferLike> { return this.fState; }
 
   async run(exe: Exe, argv: string[], image: Uint8Array | null = null): Promise<number> {
+    // Strict Teto accepts only canonical source or WASM execution; direct interpretation validates mappings before entering its loop.
     const core = this.s.env("THISTLE_RV_CORE");
     if (this.s.env("THISTLE_TETO_STRICT") === "1" &&
         core !== "teto-source" && core !== "teto-wasm-core") {
@@ -815,6 +816,7 @@ break; }
   }
 
   private tetoCloneThread(flags: bigint, stack: bigint, parentTid: bigint, tls: bigint, childTid: bigint): bigint {
+    // Thread clones share the address space; validate TID pointers before copying hart state and publishing the child.
     const session = this.tetoThreads ?? bad("EPROTO", "no Teto thread runtime");
     const option = ux(flags);
     if ((option & 0x10000n) === 0n) return this.clone(flags, stack, tls);
@@ -997,6 +999,7 @@ break; }
   }
 
   private step(): void | Promise<void> {
+    // Advance the PC by the decoded instruction width before dispatch, keeping the original address for jumps and faults.
     const at = this.pc;
     if (this.trace) console.log(`${at.toString(16)} ${[...this.x].map(n => ux(n).toString(16)).join(" ")}`);
     this.exec(at, 2);
@@ -1402,6 +1405,7 @@ default: { this.badR(0, f); }
   }
 
   private atomic(d: number, f: number, i: number, at0: bigint, n: bigint): void {
+    // LR/SC consumes the hart reservation even on failure; AMOs write once and return the previous signed value.
     if (f !== 2 && f !== 3) this.bad(i);
     const at = ux(at0), z = f === 2 ? 4 : 8, fn = i >>> 27;
     this.mem(at, z, fn !== 2);
@@ -1829,6 +1833,7 @@ default: { this.fcsr = Number(wr & 255n); }
     type: number,
     protocol: number,
   ): number {
+    // Only local stream sockets are supported; reject unsupported protocols, types and flags before allocating a descriptor.
     if (domain !== AF_UNIX) return -97;
     if (protocol !== 0) return -93;
 
@@ -2171,6 +2176,7 @@ break; }
   }
 
   private utimens(fd0: bigint, p0: bigint, ts0: bigint, fl0: bigint): bigint {
+    // Empty-path flags select an existing descriptor; no-follow and UTIME_OMIT must preserve the selected inode and timestamps.
     const fl = this.nat(fl0, "utimensat flags", 0x7fffffff);
     if (fl & ~0x1100) bad("EINVAL", "unsupported utimensat flags");
     let p: string;
@@ -2386,6 +2392,7 @@ default: { q = [MASK, MASK]; }
   }
 
   private mmap(addr0: bigint, len0: bigint, prot0: bigint, flags0: bigint, fd0: bigint, off0: bigint): bigint {
+    // Fixed ranges cannot collide with the image; flexible mappings search free space and retain backing-file metadata for shared flushes.
     const z0 = this.nat(len0, "mapping length", Number.MAX_SAFE_INTEGER), z = al(BigInt(z0));
     if (!z) bad("EINVAL", "zero-length mapping");
     const prot = this.nat(prot0, "mapping protection", 7), flags = this.nat(flags0, "mapping flags", 0x7fffffff);

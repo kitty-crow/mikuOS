@@ -186,6 +186,7 @@ export class Sys {
   glob(p: string): string[] { return this.k.fs.glob(p, this.cwd, this.fcred); }
 
   open(path: string, flags = "r", mode = 0o666): number {
+    // Resolve permissions before allocating a descriptor; create missing paths only for write modes and preserve append position.
     const rd = flags.includes("r") || flags.includes("+");
     const wr = /[wa+]/.test(flags);
     const add = flags.startsWith("a");
