@@ -1,13 +1,15 @@
+import { ensure } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import type { TreeEnt } from "../fs/tree.js";
 import {
-  TETO_VFS_DATA_CAPACITY,
-  TETO_VFS_DENTRY_CAPACITY,
-  TETO_VFS_IMAGE_MAGIC,
-  TETO_VFS_IMAGE_VERSION,
-  TETO_VFS_INODE_CAPACITY,
-  TETO_VFS_KIND_DIRECTORY,
-  TETO_VFS_KIND_FILE,
-  TETO_VFS_KIND_LINK,
+  THISTLE_VFS_DATA_CAPACITY as TETO_VFS_DATA_CAPACITY,
+  THISTLE_VFS_DENTRY_CAPACITY as TETO_VFS_DENTRY_CAPACITY,
+  THISTLE_VFS_IMAGE_MAGIC as TETO_VFS_IMAGE_MAGIC,
+  THISTLE_VFS_IMAGE_VERSION as TETO_VFS_IMAGE_VERSION,
+  THISTLE_VFS_INODE_CAPACITY as TETO_VFS_INODE_CAPACITY,
+  THISTLE_VFS_KIND_DIRECTORY as TETO_VFS_KIND_DIRECTORY,
+  THISTLE_VFS_KIND_FILE as TETO_VFS_KIND_FILE,
+  THISTLE_VFS_KIND_LINK as TETO_VFS_KIND_LINK,
 } from "./abi.js";
 
 const HEADER_SIZE = 32;
@@ -34,7 +36,7 @@ const checkedTime = (value: number, label: string): number => {
 };
 
 const sameBytes = (left: Uint8Array, right: Uint8Array): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index]);
+  left.length === right.length && left.every((value, index) => value === (right[index] ?? null));
 
 const kind = (entry: TreeEnt): number => {
   if (entry.k === "f") return TETO_VFS_KIND_FILE;
@@ -45,11 +47,11 @@ const kind = (entry: TreeEnt): number => {
 
 const payload = (entry: TreeEnt): Uint8Array => {
   if (entry.k === "f") {
-    if (!(entry.data instanceof Uint8Array)) throw new Error(`missing Teto VFS file data at ${entry.p}`);
+    ensure((entry.data instanceof Uint8Array), () => { throw new Error(`missing Teto VFS file data at ${entry.p}`); });
     return entry.data;
   }
   if (entry.k === "l") {
-    if (typeof entry.to !== "string") throw new Error(`missing Teto VFS link target at ${entry.p}`);
+    ensure(!(typeof entry.to !== "string"), () => { throw new Error(`missing Teto VFS link target at ${entry.p}`); });
     return encoder.encode(entry.to);
   }
   return new Uint8Array();
@@ -68,7 +70,7 @@ const parentPath = (path: string): string => {
 
 const fnv = (bytes: Uint8Array, from: number): number => {
   let hash = 0x811c9dc5;
-  for (let index = from; index < bytes.length; index++) hash = Math.imul(hash ^ bytes[index]!, 0x01000193);
+  for (let index = from; index < bytes.length; index++) hash = Math.imul(hash ^ requireValue(bytes[index] ?? null, "src/teto/vfs-host.ts:71"), 0x01000193);
   return hash >>> 0;
 };
 
@@ -90,13 +92,11 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
     checkedTime(entry.mt, `mtime at ${entry.p}`);
     checkedTime(entry.ct, `ctime at ${entry.p}`);
     const bytes = payload(entry);
-    const previous = inodes.get(entry.id);
+    const previous = (inodes.get(entry.id) ?? null);
     if (previous) {
       const original = previous.entry;
-      if (original.k !== entry.k || original.mode !== entry.mode || original.uid !== entry.uid || original.gid !== entry.gid ||
-          original.at !== entry.at || original.mt !== entry.mt || original.ct !== entry.ct || !sameBytes(previous.payload, bytes)) {
-        throw new Error(`inconsistent Teto VFS hard-link metadata at ${entry.p}`);
-      }
+      ensure(!(original.k !== entry.k || original.mode !== entry.mode || original.uid !== entry.uid || original.gid !== entry.gid ||
+          original.at !== entry.at || original.mt !== entry.mt || original.ct !== entry.ct || !sameBytes(previous.payload, bytes)), () => { throw new Error(`inconsistent Teto VFS hard-link metadata at ${entry.p}`); });
     } else {
       inodes.set(entry.id, { entry, payload: bytes, nlink: 0 });
     }
@@ -104,7 +104,7 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
     links.set(entry.id, (links.get(entry.id) ?? 0) + 1);
   }
 
-  const root = paths.get("/");
+  const root = (paths.get("/") ?? null);
   if (!root || root.k !== "d") throw new Error("Teto VFS image requires one directory root");
   if (inodes.size === 0 || inodes.size >= TETO_VFS_INODE_CAPACITY) throw new Error("Teto VFS inode table is full");
   if (entries.length - 1 > TETO_VFS_DENTRY_CAPACITY) throw new Error("Teto VFS dentry table is full");
@@ -120,7 +120,7 @@ export const serializeTetoVfs = (source: readonly TreeEnt[]): Uint8Array => {
   }
 
   const dentries = entries.filter(entry => entry.p !== "/").map(entry => {
-    const parent = paths.get(parentPath(entry.p));
+    const parent = (paths.get(parentPath(entry.p)) ?? null);
     if (!parent || parent.k !== "d") throw new Error(`missing Teto VFS parent directory for ${entry.p}`);
     const name = encoder.encode(entry.p.slice(entry.p.lastIndexOf("/") + 1));
     if (name.length === 0 || name.length > 255 || name.some(value => value === 0 || value === 47)) {

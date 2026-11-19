@@ -1,28 +1,13 @@
+import { readTreeManifest } from "../../src/fs/tree-meta.js";
+import type { TreeMeta as Entry } from "../../src/fs/tree-meta.js";
+import { withValue } from "../../src/core/err.js";
+import { requireValue } from "../../src/core/err.js";
 import { readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-interface Entry {
-  p: string;
-  id: number;
-  k: "d" | "f" | "l";
-  mode: number;
-  uid: number;
-  gid: number;
-  at: number;
-  mt: number;
-  ct: number;
-  sum?: string;
-  to?: string;
-}
-interface Manifest {
-  ver: number;
-  image: number;
-  ent: Entry[];
-}
-
 const root = resolve(process.argv[2] ?? ".thistle.base");
 const manifestPath = join(root, ".thistle-meta.json");
-const data = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
+const data = readTreeManifest(await readFile(manifestPath, "utf8"));
 if (data.ver !== 1 || !Array.isArray(data.ent)) {
   throw new Error("Invalid mikuOS root metadata");
 }
@@ -63,27 +48,27 @@ for (const guestPath of [...directories, ...files]) {
   if ((kind === "d") !== directories.includes(guestPath)) {
     throw new Error("Unexpected guest filesystem node type: " + guestPath);
   }
-  const prior = entries.get(guestPath);
-  const sum = kind === "f" ? checksum(await readFile(hostPath)) : undefined;
-  const unchanged = prior?.k === kind && (kind !== "f" || prior.sum === sum);
-  entries.set(guestPath, {
-    p: guestPath,
-    id: prior?.id ?? ++lastId,
+  const prior = (entries.get(guestPath) ?? null);
+  const sum = kind === "f" ? checksum(await readFile(hostPath, null)) : null;
+  const unchanged = prior !== null && prior.k === kind && (kind !== "f" || prior.sum === sum);
+  entries.set(guestPath, {"to": null, p: guestPath,
+    id: withValue(prior ?? null, value => value.id) ?? ++lastId,
     k: kind,
     mode: unchanged ? prior.mode : (info.mode & 0o7777),
-    uid: prior?.uid ?? 0,
-    gid: prior?.gid ?? 0,
+    uid: withValue(prior ?? null, value => value.uid) ?? 0,
+    gid: withValue(prior ?? null, value => value.gid) ?? 0,
     at: unchanged ? prior.at : Math.trunc(info.atimeMs),
     mt: unchanged ? prior.mt : Math.trunc(info.mtimeMs),
     ct: unchanged ? prior.ct : Math.trunc(info.ctimeMs),
-    ...(kind === "f" ? { sum } : {}),
+    size: kind === "f" ? info.size : null,
+    sum,
   });
 }
 
 entries.delete("/usr/libexec/mikuos/builtin/head");
 
 const ordered = data.ent.filter(entry => entries.has(entry.p))
-  .map(entry => entries.get(entry.p)!);
+  .map(entry => requireValue(entries.get(entry.p) ?? null, "scripts/userland/sync-gnu-prebuilt-meta.mts:86"));
 const already = new Set(ordered.map(entry => entry.p));
 for (const [path, entry] of entries) {
   if (!already.has(path)) ordered.push(entry);
@@ -93,7 +78,7 @@ const updated = JSON.stringify(data, null, 2) + "\n";
 const original = await readFile(manifestPath, "utf8");
 if (original !== updated) {
   const temporary = manifestPath + ".gnu-tmp-" + process.pid;
-  await writeFile(temporary, updated);
+  await writeFile(temporary, updated, null);
   await rename(temporary, manifestPath);
 }
 console.log("[mikuOS] Registered four native GNU executables and licence files in root metadata.");

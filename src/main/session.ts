@@ -3,7 +3,7 @@ import type { AccountConfig, LocalSessionConfig, SystemConfig } from "../core/co
 export interface LocalSessionPlan {
   kind: "direct" | "login";
   account: AccountConfig;
-  command?: string;
+  command: string | null;
 }
 
 export interface Supervisor {
@@ -15,7 +15,7 @@ export interface Supervisor {
 const shellSafeAccount = (name: string): boolean =>
   /^[A-Za-z_][A-Za-z0-9_.-]*\$?$/.test(name);
 
-const accountByName = (config: SystemConfig, name?: string): AccountConfig => {
+const accountByName = (config: SystemConfig, name: string | null = null): AccountConfig => {
   if (name === config.accounts.web.name) return config.accounts.web;
   if (name === config.accounts.cli.name) return config.accounts.cli;
   return { ...config.accounts.web, name: name ?? config.accounts.web.name };
@@ -24,7 +24,7 @@ const accountByName = (config: SystemConfig, name?: string): AccountConfig => {
 export const localSessionPlan = (config: SystemConfig): LocalSessionPlan => {
   const session: LocalSessionConfig = config.sessions.local;
   if (session.mode !== "login") {
-    return { kind: "direct", account: config.accounts.cli };
+    return {"command": null, kind: "direct", account: config.accounts.cli };
   }
   if ((config.accounts.cli.cred.euid ?? config.accounts.cli.cred.uid ?? 0) !== 0) {
     throw new Error("local login mode requires the CLI supervisor to run with UID 0");

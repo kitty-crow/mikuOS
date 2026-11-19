@@ -1,3 +1,10 @@
+// This module composes kernel, toolchain or integration-test boundaries and intentionally imports their contracts.
+//@cg-expect-warning
+import { hostNumber, randomFill, readString } from "./mem64.js";
+import { ensure } from "../core/err.js";
+import type { TerminalState } from "../io/stream.js";
+import { withValue } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import { rv64Branch } from "../core/rv64-branch.js";
 import { rv64RegisterWordValid, rv64RegisterWordValue, rv64ImmediateWordValid, rv64ImmediateWordValue } from "../core/rv64-word.js";
 import { rv64ImmediateOpValid, rv64ImmediateOpValue } from "../core/rv64-immediate-op.js";
@@ -33,72 +40,72 @@ import { Fd } from "../core/proc.js";
 import { RvLinuxEvents } from "./linux-events.js";
 import type { Io } from "../core/proc.js";
 import { directMemory, loadI32, loadU32, wasmMemory } from "../teto/memory.js";
-import type { TetoMemory } from "../teto/memory.js";
+import type { ThistleMemory as TetoMemory } from "../teto/memory.js";
 import { TetoMem64 } from "../teto/mem64.js";
 import { loadTeto } from "../teto/loader.js";
 import type { TetoExports } from "../teto/loader.js";
 import {
-  tetoHartInit,
-  tetoHartMetric,
-  tetoHartPc,
-  tetoHartSetPc,
-  tetoHartExitCode,
-  tetoHartImageFloor,
-  tetoHartStackBottom,
-  tetoHartStackPointer,
-  tetoHartBreak,
-  tetoHartVirtualTop,
-  tetoGuestPage,
-  tetoHostAddress,
-  tetoHostDescriptor,
-  tetoHostLength,
-  tetoHostOperation,
-  tetoKernelInit,
-  tetoImageRelease,
-  tetoImageReserve,
-  tetoImageBegin,
-  tetoImageSegment,
-  tetoImageFinish,
-  tetoProcessInit,
-  tetoProcessCount,
-  tetoProcessSegmentCount,
-  tetoProcessMapCount,
-  tetoProcessMapAddress,
-  tetoProcessMapEnd,
-  tetoProcessMapProtection,
-  tetoProcessSetGroup,
-  tetoResolvePath,
-  tetoAccessInode,
-  tetoOpenPath,
-  tetoReadDescriptor,
-  tetoSeekDescriptor,
-  tetoCloseDescriptor,
-  tetoDescriptorKind,
-  tetoDescriptorInode,
-  tetoDescriptorOffset,
-  tetoResumeHost,
-  tetoResumeSyscall,
-  tetoRunRv64Batch,
-  tetoRunSchedulerBatch,
-  tetoWorkerMetric,
+  thistleHartInit as tetoHartInit,
+  thistleHartMetric as tetoHartMetric,
+  thistleHartPc as tetoHartPc,
+  thistleHartSetPc as tetoHartSetPc,
+  thistleHartExitCode as tetoHartExitCode,
+  thistleHartImageFloor as tetoHartImageFloor,
+  thistleHartStackBottom as tetoHartStackBottom,
+  thistleHartStackPointer as tetoHartStackPointer,
+  thistleHartBreak as tetoHartBreak,
+  thistleHartVirtualTop as tetoHartVirtualTop,
+  thistleGuestPage as tetoGuestPage,
+  thistleHostAddress as tetoHostAddress,
+  thistleHostDescriptor as tetoHostDescriptor,
+  thistleHostLength as tetoHostLength,
+  thistleHostOperation as tetoHostOperation,
+  thistleKernelInit as tetoKernelInit,
+  thistleImageRelease as tetoImageRelease,
+  thistleImageReserve as tetoImageReserve,
+  thistleImageBegin as tetoImageBegin,
+  thistleImageSegment as tetoImageSegment,
+  thistleImageFinish as tetoImageFinish,
+  thistleProcessInit as tetoProcessInit,
+  thistleProcessCount as tetoProcessCount,
+  thistleProcessSegmentCount as tetoProcessSegmentCount,
+  thistleProcessMapCount as tetoProcessMapCount,
+  thistleProcessMapAddress as tetoProcessMapAddress,
+  thistleProcessMapEnd as tetoProcessMapEnd,
+  thistleProcessMapProtection as tetoProcessMapProtection,
+  thistleProcessSetGroup as tetoProcessSetGroup,
+  thistleResolvePath as tetoResolvePath,
+  thistleAccessInode as tetoAccessInode,
+  thistleOpenPath as tetoOpenPath,
+  thistleReadDescriptor as tetoReadDescriptor,
+  thistleSeekDescriptor as tetoSeekDescriptor,
+  thistleCloseDescriptor as tetoCloseDescriptor,
+  thistleDescriptorKind as tetoDescriptorKind,
+  thistleDescriptorInode as tetoDescriptorInode,
+  thistleDescriptorOffset as tetoDescriptorOffset,
+  thistleResumeHost as tetoResumeHost,
+  thistleResumeSyscall as tetoResumeSyscall,
+  thistleRunRv64Batch as tetoRunRv64Batch,
+  thistleRunSchedulerBatch as tetoRunSchedulerBatch,
+  thistleWorkerMetric as tetoWorkerMetric,
 } from "../teto/kernel.js";
-import { tetoLoadThx } from "../teto/thx.js";
-import { tetoBuildInitialStack } from "../teto/start.js";
+import { thistleLoadThx as tetoLoadThx } from "../teto/thx.js";
+import { thistleBuildInitialStack as tetoBuildInitialStack } from "../teto/start.js";
 import { serializeTetoVfs } from "../teto/vfs-host.js";
 import {
-  tetoLoadVfs,
-  tetoVfsDentryCount,
-  tetoVfsFileSize,
-  tetoVfsGid,
-  tetoVfsInodeCount,
-  tetoVfsKind,
-  tetoVfsLoaded,
-  tetoVfsLookup,
-  tetoVfsMode,
-  tetoVfsNlink,
-  tetoVfsReadData,
-  tetoVfsRoot,
-  tetoVfsUid,
+  thistleLoadVfs as tetoLoadVfs,
+  thistleVfsDentryCount as tetoVfsDentryCount,
+  thistleVfsFileSize as tetoVfsFileSize,
+  thistleVfsGid as tetoVfsGid,
+  thistleVfsInodeCount as tetoVfsInodeCount,
+  thistleVfsKind as tetoVfsKind,
+  thistleVfsLoaded as tetoVfsLoaded,
+  thistleVfsLookup as tetoVfsLookup,
+  thistleVfsMode as tetoVfsMode,
+  thistleVfsNlink as tetoVfsNlink,
+  thistleVfsReadData as tetoVfsReadData,
+  thistleVfsRoot as tetoVfsRoot,
+  thistleVfsUid as tetoVfsUid,
 } from "../teto/vfs.js";
 import {
   C_PROCESS_TABLE_BASE,
@@ -124,28 +131,28 @@ import {
   P_RUID,
   P_SGID,
   P_SUID,
-  TETO_BATCH_BUSY,
-  TETO_BATCH_CONTENDED,
-  TETO_BATCH_EXITED,
-  TETO_BATCH_FAULT,
-  TETO_BATCH_HOST,
-  TETO_BATCH_SYSCALL,
-  TETO_FAULT_BREAKPOINT,
-  TETO_HART_BASE,
-  TETO_HART_RUNNABLE,
-  TETO_HART_WAITING,
-  TETO_HART_EXITED,
-  TETO_HART_FAULTED,
-  TETO_EVENT_NONE,
-  TETO_HART_STRIDE,
-  TETO_HOST_WRITE,
-  TETO_CONTROL_BASE,
-  TETO_GROUP_CAPACITY,
-  TETO_PROCESS_STRIDE,
-  TETO_STARTUP_MAGIC,
-  TETO_START_OK,
-  TETO_THX_OK,
-  TETO_VFS_OK,
+  THISTLE_BATCH_BUSY as TETO_BATCH_BUSY,
+  THISTLE_BATCH_CONTENDED as TETO_BATCH_CONTENDED,
+  THISTLE_BATCH_EXITED as TETO_BATCH_EXITED,
+  THISTLE_BATCH_FAULT as TETO_BATCH_FAULT,
+  THISTLE_BATCH_HOST as TETO_BATCH_HOST,
+  THISTLE_BATCH_SYSCALL as TETO_BATCH_SYSCALL,
+  THISTLE_FAULT_BREAKPOINT as TETO_FAULT_BREAKPOINT,
+  THISTLE_HART_BASE as TETO_HART_BASE,
+  THISTLE_HART_RUNNABLE as TETO_HART_RUNNABLE,
+  THISTLE_HART_WAITING as TETO_HART_WAITING,
+  THISTLE_HART_EXITED as TETO_HART_EXITED,
+  THISTLE_HART_FAULTED as TETO_HART_FAULTED,
+  THISTLE_EVENT_NONE as TETO_EVENT_NONE,
+  THISTLE_HART_STRIDE as TETO_HART_STRIDE,
+  THISTLE_HOST_WRITE as TETO_HOST_WRITE,
+  THISTLE_CONTROL_BASE as TETO_CONTROL_BASE,
+  THISTLE_GROUP_CAPACITY as TETO_GROUP_CAPACITY,
+  THISTLE_PROCESS_STRIDE as TETO_PROCESS_STRIDE,
+  THISTLE_STARTUP_MAGIC as TETO_STARTUP_MAGIC,
+  THISTLE_START_OK as TETO_START_OK,
+  THISTLE_THX_OK as TETO_THX_OK,
+  THISTLE_VFS_OK as TETO_VFS_OK,
 } from "../teto/abi.js";
 
 const MAX_IO = 64 * 1024 * 1024;
@@ -171,48 +178,11 @@ const TIOCSWINSZ = 0x5414;
 const LINUX_TERMIOS_SIZE = 36;
 const LINUX_WINSIZE_SIZE = 8;
 
-interface TerminalIo {
-  termios(): Uint8Array;
-  setTermios(
-    raw: Uint8Array,
-    flush: boolean,
-  ): void;
-  size(): {
-    rows: number;
-    cols: number;
-  };
-  resize(
-    rows: number,
-    cols: number,
-  ): void;
-}
-
-const terminalIo = (
-  value: unknown,
-): TerminalIo | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const candidate = value as Partial<TerminalIo>;
-
-  if (
-    typeof candidate.termios !== "function" ||
-    typeof candidate.setTermios !== "function" ||
-    typeof candidate.size !== "function" ||
-    typeof candidate.resize !== "function"
-  ) {
-    return undefined;
-  }
-
-  return candidate as TerminalIo;
-};
-
 const terminalFromFd = (
   fd: Fd,
-): TerminalIo | undefined =>
-  terminalIo(fd.input?.tty) ??
-  terminalIo(fd.output?.tty);
+): TerminalState | null =>
+  withValue(fd.input, value => value.tty) ??
+  withValue(fd.output, value => value.tty);
 
 interface Vf {
   x: BigInt64Array;
@@ -224,7 +194,7 @@ interface Vf {
 }
 
 interface Seg { name: string; at: bigint; end: bigint; flg: string; }
-interface MapEnt { at: bigint; end: bigint; prot: number; shared: boolean; path?: string; off?: number; }
+interface MapEnt { at: bigint; end: bigint; prot: number; shared: boolean; path: string | null; off: number | null; }
 
 interface TetoCore {
   memory: TetoMemory;
@@ -242,7 +212,7 @@ interface TetoThreadRuntime {
   tids: Map<number, number>;
   clearTid: Map<number, bigint>;
   nextTid: number;
-  failure?: unknown;
+  failure: Error | null;
 }
 
 const eno: Record<Errno, number> = {
@@ -267,8 +237,12 @@ const b64 = (n: number): bigint => { fpv.setFloat64(0, n, true); return fpv.getB
 export class Rv64 {
   private xState: BigInt64Array<ArrayBufferLike> = new BigInt64Array(32);
   private fState: BigUint64Array<ArrayBufferLike> = new BigUint64Array(32);
-  private m!: RvMemory;
-  private exe!: Exe;
+  private memoryState: RvMemory | null = null;
+  private get m(): RvMemory { return requireValue(this.memoryState, "m before VM initialisation"); }
+  private set m(value: RvMemory) { this.memoryState = value; }
+  private executableState: Exe | null = null;
+  private get exe(): Exe { return requireValue(this.executableState, "exe before VM initialisation"); }
+  private set exe(value: Exe) { this.executableState = value; }
   private pc = 0n;
   private floor = 0n;
   private brk = 0n;
@@ -279,7 +253,7 @@ export class Rv64 {
   private readonly maps: MapEnt[] = [];
   private readonly miss = new Set<number>();
   private readonly localSockets = new Set<number>();
-  private tetoThreads: TetoThreadRuntime | undefined;
+  private tetoThreads: TetoThreadRuntime | null = null;
   private tetoActiveHart = 0;
   private readonly tetoFutexWaiters = new Map<bigint, Set<FutexWake>>();
   private readonly events: RvLinuxEvents;
@@ -287,11 +261,11 @@ export class Rv64 {
   private done = false;
   private code = 0;
   private trace = false;
-  private readonly ins = new Map<number, { b: Uint8Array; at: number }>();
+  private readonly ins = new Map<number, { b: Uint8Array; at: number }>(null);
   private readonly seg: Seg[] = [];
   private eat = 0n;
   private eend = 0n;
-  private vf: Vf | undefined;
+  private vf: Vf | null = null;
 
   constructor(private readonly s: Sys) {
     this.events = new RvLinuxEvents(s, () => this.m, (at, size, wr) => this.mem(at, size, wr));
@@ -300,7 +274,7 @@ export class Rv64 {
   get x(): BigInt64Array<ArrayBufferLike> { return this.xState; }
   get f(): BigUint64Array<ArrayBufferLike> { return this.fState; }
 
-  async run(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
+  async run(exe: Exe, argv: string[], image: Uint8Array | null = null): Promise<number> {
     const core = this.s.env("THISTLE_RV_CORE");
     if (this.s.env("THISTLE_TETO_STRICT") === "1" &&
         core !== "teto-source" && core !== "teto-wasm-core") {
@@ -339,13 +313,15 @@ export class Rv64 {
   }
 
   /** Development parity path: the shared Thistle source core owns instruction execution. */
-  private async runTetoSource(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
+  private async runTetoSource(exe: Exe, argv: string[], image: Uint8Array | null = null): Promise<number> {
     const physicalBytes = (this.s.env("THISTLE_PORTABLE_PROBE") === "1" ? 512 : 64) * 1024 * 1024;
     const memory = directMemory(physicalBytes);
     const exports: TetoExports = {
       tetoKernelInit: (_memory, maxHarts, threaded) => tetoKernelInit(memory, maxHarts, threaded !== 0),
       tetoKernelValid: () => 1,
       tetoHartInit: (_memory, hart, virtualTop, pc) => tetoHartInit(memory, hart, virtualTop, pc),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       tetoProcessInit: (_memory, hart, pid, ppid, ruid, euid, suid, rgid, egid, sgid) =>
         tetoProcessInit(memory, hart, pid, ppid, ruid, euid, suid, rgid, egid, sgid),
       tetoProcessSetGroup: (_memory, hart, index, gid) => tetoProcessSetGroup(memory, hart, index, gid),
@@ -379,7 +355,11 @@ export class Rv64 {
       tetoProcessMapProtection: (_memory, hart, index) => tetoProcessMapProtection(memory, hart, index),
       tetoImageReserve: (_memory, size) => tetoImageReserve(memory, size),
       tetoImageRelease: (_memory, at, size) => tetoImageRelease(memory, at, size),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       tetoImageBegin: (_memory, hart, virtualTop, entry, phdr, phent, phnum) => tetoImageBegin(memory, hart, virtualTop, entry, phdr, phent, phnum),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       tetoImageSegment: (_memory, hart, nameHash, nameLength, address, size, flags, at, length) =>
         tetoImageSegment(memory, hart, nameHash, nameLength, address, size, flags, at, length),
       tetoImageFinish: (_memory, hart, size) => tetoImageFinish(memory, hart, size),
@@ -415,18 +395,18 @@ export class Rv64 {
   }
 
   /** Development parity path: generated WebAssembly owns the RV64GC instruction batch. */
-  private async runTetoWasm(exe: Exe, argv: string[], image?: Uint8Array): Promise<number> {
+  private async runTetoWasm(exe: Exe, argv: string[], image: Uint8Array | null = null): Promise<number> {
     const provider = this.s.k.teto;
     if (!provider) return bad("ENOEXEC", "the experimental Teto WebAssembly core is unavailable from this host");
     const bytes = await provider.load("baseline");
-    const runtime = await loadTeto(bytes, { initialPages: 8192, maximumPages: 32768 });
+    const runtime = await loadTeto(bytes, {"threaded": null, "memory": null,  initialPages: 8192, maximumPages: 32768 });
     const memory = wasmMemory(runtime.memory, false);
     return this.runTetoCore(exe, argv, image, { memory, exports: runtime.exports, label: "Teto WebAssembly core" }, memory.bytes.length);
   }
 
   private tetoRegister(memory: TetoMemory, hart: number, offset: number, register: number): bigint {
     if (register < 0 || register >= 32) return 0n;
-    return new BigInt64Array(memory.buffer, TETO_HART_BASE + hart * TETO_HART_STRIDE + offset, 32)[register]!;
+    return requireValue(new BigInt64Array(memory.buffer, TETO_HART_BASE + hart * TETO_HART_STRIDE + offset, 32)[register] ?? null, "src/vm/rv64.ts:429");
   }
 
   private tetoSetRegister(memory: TetoMemory, hart: number, offset: number, register: number, value: bigint): number {
@@ -437,7 +417,7 @@ export class Rv64 {
 
   /** Thin-host packaging for strings and the random capability consumed by Teto. */
   private startup(argv: string[]): Uint8Array {
-    const env = [...(this.s.env() as Map<string, string>)].map(([key, value]) => enc(`${key}=${value}`));
+    const env = [...(this.s.env(null) as Map<string, string>)].map(([key, value]) => enc(`${key}=${value}`));
     const args = argv.map(value => enc(value));
     let size = 32;
     for (const value of env) size += 4 + value.length;
@@ -459,7 +439,7 @@ export class Rv64 {
     return output;
   }
 
-  private async runTetoCore(exe: Exe, argv: string[], image: Uint8Array | undefined, core: TetoCore, physicalBytes: number): Promise<number> {
+  private async runTetoCore(exe: Exe, argv: string[], image: Uint8Array | null, core: TetoCore, physicalBytes: number): Promise<number> {
     if (exe.machine !== "thistle64" || exe.isa !== "rv64gc") bad("ENOEXEC", "RV64 VM received another instruction profile");
     const raw = image ?? bad("ENOEXEC", `${core.label} needs the original THX image`);
     const { memory, exports } = core;
@@ -471,7 +451,7 @@ export class Rv64 {
       bad("EPROTO", `${core.label} process initialisation failed`);
     }
     for (let index = 0; index < this.s.groups.length; index++) {
-      if (exports.tetoProcessSetGroup(0, 0, index, this.s.groups[index]!) !== 0) {
+      if (exports.tetoProcessSetGroup(0, 0, index, requireValue(this.s.groups[index] ?? null, "src/vm/rv64.ts:474")) !== 0) {
         bad("EPROTO", `${core.label} supplementary-group initialisation failed`);
       }
     }
@@ -491,7 +471,7 @@ export class Rv64 {
       const rootReleased = exports.tetoImageRelease(0, rootAt, rootImage.length);
       if (rootReleased !== TETO_THX_OK) throw new Error(`${core.label} root release failed (${rootReleased})`);
       if (rootLoaded !== TETO_VFS_OK) throw new Error(`${core.label} rejected root image (${rootLoaded})`);
-    } catch (error) {
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       this.s.k.log(`teto: VFS mirror skipped; compatibility filesystem remains active: ${error instanceof Error ? error.message : String(error)}`);
     }
     const imageAt = exports.tetoImageReserve(0, raw.length) >>> 0;
@@ -537,18 +517,19 @@ export class Rv64 {
     this.trace = false;
     if (maxHarts > 1) return this.runTetoCooperative(core);
     let fuel = this.s.k.lim.fuel;
-    while (!this.done) {
+    selectionExit1: while (!this.done) {
       this.s.chk();
       const before = exports.tetoHartMetric(0, 0, H_INSTRUCTIONS);
       const result = exports.tetoRunRv64Batch(0, 0, 16384, BigInt(Date.now()) * 1000n, 0);
       const after = exports.tetoHartMetric(0, 0, H_INSTRUCTIONS);
       if (fuel) {
         fuel -= Number(after - before);
-        if (fuel < 0) bad("ELOOP", "RV64 instruction limit reached");
+        ensure(!(fuel < 0), () => bad("ELOOP", "RV64 instruction limit reached"));
       }
       this.pc = exports.tetoHartPc(0, 0);
       this.brk = exports.tetoHartBreak(0, 0);
-      if (result === TETO_BATCH_SYSCALL) {
+      switch (true) {
+case !!(result === TETO_BATCH_SYSCALL): {
         // A guest syscall is an explicit Teto-to-host service boundary, not a
         // return to the direct TypeScript RV64 interpreter. Guest instructions
         // continue exclusively in the selected generated Teto execution core.
@@ -558,50 +539,60 @@ export class Rv64 {
         this.syncTetoMemoryState(exports);
 
         await this.sys();
-        if (this.done) break;
-        if (exports.tetoHartSetPc(0, 0, ux(this.pc)) !== 0 || exports.tetoResumeSyscall(0, 0, this.x[10]!) !== 0) {
-          bad("EPROTO", `${core.label} syscall resume failed`);
-        }
-      } else if (result === TETO_BATCH_HOST) {
+        if (this.done) break selectionExit1;
+        ensure(!(exports.tetoHartSetPc(0, 0, ux(this.pc)) !== 0 || exports.tetoResumeSyscall(0, 0, requireValue(this.x[10] ?? null, "src/vm/rv64.ts:562")) !== 0), () => bad("EPROTO", `${core.label} syscall resume failed`));
+
+break; }
+case !!(result === TETO_BATCH_HOST): {
         const operation = exports.tetoHostOperation(0, 0);
-        if (operation !== TETO_HOST_WRITE) bad("ENOSYS", `${core.label} requested unsupported host operation ${operation}`);
+        ensure(!(operation !== TETO_HOST_WRITE), () => bad("ENOSYS", `${core.label} requested unsupported host operation ${operation}`));
         const descriptor = exports.tetoHostDescriptor(0, 0);
         const address = exports.tetoHostAddress(0, 0);
         const length = exports.tetoHostLength(0, 0);
         let hostResult: bigint;
         try {
           hostResult = BigInt(await this.write(descriptor, this.m.read(address, length)));
-        } catch (error) {
+        } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
           if (!(error instanceof KErr)) throw error;
           hostResult = -BigInt(eno[error.code] ?? 5);
         }
-        if (exports.tetoResumeHost(0, 0, hostResult) !== 0) bad("EPROTO", `${core.label} host-operation resume failed`);
-      } else if (result === TETO_BATCH_EXITED) {
+        ensure(!(exports.tetoResumeHost(0, 0, hostResult) !== 0), () => bad("EPROTO", `${core.label} host-operation resume failed`));
+
+break; }
+case !!(result === TETO_BATCH_EXITED): {
         this.exit(BigInt(exports.tetoHartExitCode(0, 0)));
-        break;
-      } else if (result === TETO_BATCH_FAULT) {
+        break selectionExit1;
+       }
+default: { switch (true) {
+case !!(result === TETO_BATCH_FAULT): {
         const fault = loadI32(memory, TETO_HART_BASE + H_FAULT);
         const instruction = loadU32(memory, TETO_HART_BASE + H_LAST_INSTRUCTION);
         if (fault === TETO_FAULT_BREAKPOINT) bad("EINTR", `RV64 breakpoint at 0x${this.pc.toString(16)}`);
         bad("ENOEXEC", `${core.label} fault ${fault} on instruction 0x${instruction.toString(16).padStart(8, "0")} at 0x${this.pc.toString(16)}`);
-      } else if (result === TETO_BATCH_BUSY || result === TETO_BATCH_CONTENDED) {
+
+break; }
+case !!(result === TETO_BATCH_BUSY || result === TETO_BATCH_CONTENDED): {
         await this.s.yield();
         continue;
-      }
+       }
+} }
+}
       await this.s.yield();
     }
     return this.code & 0xff;
   }
 
   /** Schedule RV64 harts cooperatively with shared guest memory and individual registers. */
+  // Guest state updates stay inside the selected instruction or syscall path.
+  //@cg-expect-warning
   private async runTetoCooperative(core: TetoCore): Promise<number> {
     const { memory, exports } = core;
-    const session: TetoThreadRuntime = {
+    const session: TetoThreadRuntime = {"failure": null,
       core,
       active: new Set([0]),
-      pending: new Map(),
+      pending: new Map<number, Promise<void>>(),
       tids: new Map([[0, this.s.pid]]),
-      clearTid: new Map(),
+      clearTid: new Map<number, bigint>(),
       nextTid: this.s.pid + 100000,
     };
     this.tetoThreads = session;
@@ -615,6 +606,8 @@ export class Rv64 {
           if (session.pending.has(hart)) continue;
           const status = exports.tetoHartStatus(0, hart);
           if (status === TETO_HART_EXITED) {
+            // Guest state updates stay inside the selected instruction or syscall path.
+            //@cg-expect-warning
             if (hart === 0) this.exit(BigInt(exports.tetoHartExitCode(0, 0)));
             else session.active.delete(hart);
             continue;
@@ -632,19 +625,26 @@ export class Rv64 {
           progressed = true;
           if (fuel) {
             fuel -= Number(executed);
-            if (fuel < 0) bad("ELOOP", "RV64 instruction limit reached");
+            ensure(!(fuel < 0), () => bad("ELOOP", "RV64 instruction limit reached"));
           }
-          if (result === TETO_BATCH_SYSCALL) this.tetoScheduleSyscall(session, hart);
-          else if (result === TETO_BATCH_HOST) this.tetoScheduleHost(session, hart);
-          else if (result === TETO_BATCH_EXITED) {
+          switch (true) {
+case !!(result === TETO_BATCH_SYSCALL): { this.tetoScheduleSyscall(session, hart);
+break; }
+case !!(result === TETO_BATCH_HOST): { this.tetoScheduleHost(session, hart);
+break; }
+case !!(result === TETO_BATCH_EXITED): {
             if (hart === 0) this.exit(BigInt(exports.tetoHartExitCode(0, 0)));
             else this.tetoThreadExit(hart, exports.tetoHartExitCode(0, hart));
-          } else if (result === TETO_BATCH_FAULT) {
+
+break; }
+case !!(result === TETO_BATCH_FAULT): {
             const base = TETO_HART_BASE + hart * TETO_HART_STRIDE;
             const fault = loadI32(memory, base + H_FAULT);
             const instruction = loadU32(memory, base + H_LAST_INSTRUCTION);
             this.tetoReportFault(session, hart, fault, instruction);
-          }
+
+break; }
+}
         }
         if (this.done) break;
         if (session.failure) throw session.failure;
@@ -660,7 +660,7 @@ export class Rv64 {
       }
       return this.code & 255;
     } finally {
-      this.tetoThreads = undefined;
+      this.tetoThreads = null;
     }
   }
 
@@ -687,7 +687,7 @@ export class Rv64 {
     }
     const ra = ux(this.tetoRegister(memory, hart, H_X, 1));
     const sp = ux(this.tetoRegister(memory, hart, H_X, 2));
-    const imageSegment = this.seg.find(segment => pc >= segment.at && pc < segment.end);
+    const imageSegment = (this.seg.find(segment => pc >= segment.at && pc < segment.end) ?? null);
     const image = imageSegment
       ? `${imageSegment.name} flags=${imageSegment.flg}`
       : "none";
@@ -700,18 +700,20 @@ export class Rv64 {
       const destination = 8 + (instruction >>> 2 & 7);
       const offset = (instruction << 1 & 0xc0) | (instruction >>> 7 & 0x38);
       const address = ux(this.tetoRegister(memory, hart, H_X, source) + BigInt(offset));
-      const region = this.seg.find(segment => address >= segment.at && address + 8n <= segment.end);
+      const region = (this.seg.find(segment => address >= segment.at && address + 8n <= segment.end) ?? null);
       let anonymous = "unmapped";
       for (let index = 0; index < count; index++) {
         const at = exports.tetoProcessMapAddress(0, hart, index);
         const end = exports.tetoProcessMapEnd(0, hart, index);
+        // Guest state updates stay inside the selected instruction or syscall path.
+        //@cg-expect-warning
         if (address >= at && address + 8n <= end) {
           anonymous = `[0x${at.toString(16)},0x${end.toString(16)}) prot=${exports.tetoProcessMapProtection(0, hart, index)}`;
           break;
         }
       }
       const frame = exports.tetoGuestPage(0, hart, address, 0) >>> 0;
-      access = `C.LD x${destination},${offset}(x${source}) address=0x${address.toString(16)} frame=0x${frame.toString(16)} anon=${anonymous} segment=${region?.name ?? "none"}`;
+      access = `C.LD x${destination},${offset}(x${source}) address=0x${address.toString(16)} frame=0x${frame.toString(16)} anon=${anonymous} segment=${withValue(region ?? null, value => value.name) ?? "none"}`;
     }
     const traceView = new DataView(memory.buffer);
     // The faulting C.LD follows an earlier "ld a4, 0(a1)". Inspect the
@@ -727,7 +729,7 @@ export class Rv64 {
       `x${reg}=0x${ux(this.tetoRegister(memory, hart, H_X, reg)).toString(16)}`
     ).join(",");
     const hostMappings = this.maps
-      .filter(region => region.path !== undefined && (
+      .filter(region => region.path !== null && (
         a1 >= region.at && a1 < region.end ||
         ux(this.tetoRegister(memory, hart, H_X, 14)) >= region.at &&
         ux(this.tetoRegister(memory, hart, H_X, 14)) < region.end
@@ -749,6 +751,8 @@ export class Rv64 {
       const at = traceView.getBigUint64(slot + 32, true);
       if (operation === 0x53544f52) {
         const event = `pc=0x${at.toString(16)} addr=0x${address.toString(16)} size=${size} value=0x${ux(result).toString(16)}`;
+        // Guest state updates stay inside the selected instruction or syscall path.
+        //@cg-expect-warning
         if (address < a1 + 8n && address + length > a1) cellWrites.push(event);
         else otherSmiWrites.push(event);
       } else {
@@ -759,7 +763,7 @@ export class Rv64 {
   }
 
   private tetoTrack(session: TetoThreadRuntime, hart: number, work: Promise<void>): void {
-    const tracked = work.catch(error => { session.failure = error; })
+    const tracked = work.catch(<T>(caughtValue: T) => { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  session.failure = error;  })
       .finally(() => { session.pending.delete(hart); });
     session.pending.set(hart, tracked);
   }
@@ -781,10 +785,10 @@ export class Rv64 {
     const work = this.sys().then(() => {
       if (exports.tetoHartStatus(0, hart) !== TETO_HART_WAITING) return;
       if (exports.tetoHartSetPc(0, hart, ux(pc)) !== 0 ||
-          exports.tetoResumeSyscall(0, hart, registers[10]!) !== 0) {
+          exports.tetoResumeSyscall(0, hart, requireValue(registers[10] ?? null, "src/vm/rv64.ts:784")) !== 0) {
         bad("EPROTO", `Teto hart ${hart} syscall resume failed`);
       }
-    });
+    }, null);
     this.tetoTrack(session, hart, work);
   }
 
@@ -799,7 +803,7 @@ export class Rv64 {
       let value: bigint;
       try {
         value = BigInt(await this.write(descriptor, this.m.read(address, length)));
-      } catch (error) {
+      } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
         if (!(error instanceof KErr)) throw error;
         value = -BigInt(eno[error.code] ?? 5);
       }
@@ -859,7 +863,7 @@ export class Rv64 {
 
   private tetoThreadExit(hart: number, code: number): void {
     const state = this.tetoThreads ?? bad("EPROTO", "no Teto thread runtime");
-    const clear = state.clearTid.get(hart);
+    const clear = (state.clearTid.get(hart) ?? null);
     if (clear) {
       this.mem(clear, 4, true);
       this.m.set32(clear, 0);
@@ -871,7 +875,7 @@ export class Rv64 {
   }
 
   private tetoWakeFutex(at: bigint, count: number): number {
-    const queue = this.tetoFutexWaiters.get(at);
+    const queue = (this.tetoFutexWaiters.get(at) ?? null);
     if (!queue) return 0;
     let woken = 0;
     for (const wake of [...queue]) {
@@ -891,25 +895,27 @@ export class Rv64 {
     }
     if (operation !== 0 && operation !== 9) return -38n;
     if (this.m.u32(address) !== Number(ux(value) & 0xffffffffn)) return -11n;
-    let millis: number | undefined;
+    let millis: number | null = null;
     if (timeoutAt) {
       const timeout = this.readTs(ux(timeoutAt));
       millis = operation === 9 ? Math.max(0, timeout - this.clockMs((op0 & 0x100n) ? 0 : 1)) : timeout;
+      // Guest state updates stay inside the selected instruction or syscall path.
+      //@cg-expect-warning
       if (millis <= 0) return -110n;
     }
     return new Promise<bigint>(resolve => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let queue = this.tetoFutexWaiters.get(address);
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      let queue = (this.tetoFutexWaiters.get(address) ?? null);
       if (!queue) { queue = new Set(); this.tetoFutexWaiters.set(address, queue); }
       const listeners = queue;
       const wake: FutexWake = result => {
         listeners.delete(wake);
         if (listeners.size === 0) this.tetoFutexWaiters.delete(address);
-        if (timer !== undefined) clearTimeout(timer);
+        if (timer !== null) clearTimeout(timer);
         resolve(result);
       };
       listeners.add(wake);
-      if (millis !== undefined) timer = setTimeout(() => wake(-110n), millis);
+      if (millis !== null) timer = setTimeout(() => wake(-110n), millis);
     });
   }
 
@@ -967,7 +973,7 @@ export class Rv64 {
 
     // Retain file-backed mappings maintained by the compatibility bridge.
     const hostOwned = this.maps.filter(
-      mapping => mapping.path !== undefined,
+      mapping => mapping.path !== null,
     );
 
     this.maps.length = 0;
@@ -981,8 +987,7 @@ export class Rv64 {
       const prot = exports.tetoProcessMapProtection(0, 0, index);
 
       if (end > at) {
-        this.maps.push({
-          at,
+        this.maps.push({"path": null, "off": null, at,
           end,
           prot,
           shared: false,
@@ -1001,112 +1006,195 @@ export class Rv64 {
     const i = this.m.u32(at);
     this.pc = ux(at + 4n);
     const op = i & 0x7f, d = i >>> 7 & 31, f3 = i >>> 12 & 7, a = i >>> 15 & 31, b = i >>> 20 & 31, f7 = i >>> 25;
-    const xv = this.x[a]!, yv = this.x[b]!;
+    const xv = requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1004"), yv = requireValue(this.x[b] ?? null, "src/vm/rv64.ts:1004");
     const put = (n: bigint): void => { if (d) this.x[d] = sx(n, 64); };
     switch (op) {
-      case 0x03: this.load(d, f3, xv + this.immI(i)); break;
-      case 0x07: this.fload(d, f3, xv + this.immI(i)); break;
+      case 0x03: this.load(d, f3, xv + immI(i)); break;
+      case 0x07: this.fload(d, f3, xv + immI(i)); break;
       case 0x0f: break;
       case 0x13: this.opI(d, f3, i, xv); break;
-      case 0x17: put(at + this.immU(i)); break;
+      case 0x17: put(at + immU(i)); break;
       case 0x1b: this.opIW(d, f3, i, xv); break;
-      case 0x23: this.store(f3, xv + this.immS(i), yv); break;
-      case 0x27: this.fstore(b, f3, xv + this.immS(i)); break;
+      case 0x23: this.store(f3, xv + immS(i), yv); break;
+      case 0x27: this.fstore(b, f3, xv + immS(i)); break;
       case 0x2f: this.atomic(d, f3, i, xv, yv); break;
       case 0x33: this.opR(d, f3, f7, xv, yv); break;
-      case 0x37: put(this.immU(i)); break;
+      case 0x37: put(immU(i)); break;
       case 0x3b: this.opRW(d, f3, f7, xv, yv); break;
       case 0x43: case 0x47: case 0x4b: case 0x4f: this.fma(op, d, i, a, b); break;
       case 0x53: this.fop(d, f3, f7, a, b, i); break;
-      case 0x63: if (this.branch(f3, xv, yv)) this.pc = ux(at + this.immB(i)); break;
-      case 0x67: if (f3) this.bad(i, at); else { const q = ux(xv + this.immI(i)) & ~1n; put(at + 4n); this.pc = q; } break;
-      case 0x6f: put(at + 4n); this.pc = ux(at + this.immJ(i)); break;
+      case 0x63: if (this.branch(f3, xv, yv)) this.pc = ux(at + immB(i)); break;
+      case 0x67: if (f3) this.bad(i, at); else { const q = ux(xv + immI(i)) & ~1n; put(at + 4n); this.pc = q; } break;
+      case 0x6f: put(at + 4n); this.pc = ux(at + immJ(i)); break;
       case 0x73:
-        if (i === 0x00000073) return this.sys();
-        else if (i === 0x00100073) bad("EINTR", `RV64 breakpoint at 0x${at.toString(16)}`);
-        else this.csr(d, f3, i, xv, a);
+        switch (true) {
+case !!(i === 0x00000073): { return this.sys(); }
+case !!(i === 0x00100073): { bad("EINTR", `RV64 breakpoint at 0x${at.toString(16)}`);
+break; }
+default: { this.csr(d, f3, i, xv, a); }
+}
         break;
       default: this.bad(i, at);
     }
   }
 
+  // Guest state updates stay inside the selected instruction or syscall path.
+  //@cg-expect-warning
   private cstep(i: number, at: bigint): void {
     const q = i & 3, f = i >>> 13, rd = i >>> 7 & 31, rs = i >>> 2 & 31;
     const rp = 8 + (i >>> 7 & 7), sp = 8 + (i >>> 2 & 7), ci = sx(BigInt((i >>> 7 & 0x20) | (i >>> 2 & 0x1f)), 6);
     if (q === 0) {
-      if (f === 0) {
+      switch (true) {
+case !!(f === 0): {
         const n = (i >>> 1 & 0x3c0) | (i >>> 7 & 0x30) | (i >>> 2 & 8) | (i >>> 4 & 4);
-        if (!n) this.bad(i, at); this.set(sp, this.x[2]! + BigInt(n));
-      } else if (f === 1) {
-        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.fload(sp, 3, this.x[rp]! + BigInt(n));
-      } else if (f === 2) {
-        const n = (i << 1 & 0x40) | (i >>> 7 & 0x38) | (i >>> 4 & 4); this.load(sp, 2, this.x[rp]! + BigInt(n));
-      } else if (f === 3) {
-        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.load(sp, 3, this.x[rp]! + BigInt(n));
-      } else if (f === 5) {
-        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.fstore(sp, 3, this.x[rp]! + BigInt(n));
-      } else if (f === 6) {
-        const n = (i << 1 & 0x40) | (i >>> 7 & 0x38) | (i >>> 4 & 4); this.store(2, this.x[rp]! + BigInt(n), this.x[sp]!);
-      } else if (f === 7) {
-        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.store(3, this.x[rp]! + BigInt(n), this.x[sp]!);
-      } else this.bad(i, at);
+        // Guest state updates stay inside the selected instruction or syscall path.
+        //@cg-expect-warning
+        if (!n) this.bad(i, at); this.set(sp, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1039") + BigInt(n));
+
+break; }
+case !!(f === 1): {
+        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.fload(sp, 3, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1041") + BigInt(n));
+
+break; }
+case !!(f === 2): {
+        const n = (i << 1 & 0x40) | (i >>> 7 & 0x38) | (i >>> 4 & 4); this.load(sp, 2, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1043") + BigInt(n));
+
+break; }
+case !!(f === 3): {
+        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.load(sp, 3, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1045") + BigInt(n));
+
+break; }
+case !!(f === 5): {
+        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.fstore(sp, 3, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1047") + BigInt(n));
+
+break; }
+case !!(f === 6): {
+        const n = (i << 1 & 0x40) | (i >>> 7 & 0x38) | (i >>> 4 & 4); this.store(2, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1049") + BigInt(n), requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1049"));
+
+break; }
+case !!(f === 7): {
+        const n = (i << 1 & 0xc0) | (i >>> 7 & 0x38); this.store(3, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1051") + BigInt(n), requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1051"));
+
+break; }
+default: { this.bad(i, at); }
+}
       return;
     }
     if (q === 1) {
-      if (f === 0) this.set(rd, this.x[rd]! + ci);
-      else if (f === 1) { if (!rd) this.bad(i, at); this.set(rd, sx(this.x[rd]! + ci, 32)); }
-      else if (f === 2) this.set(rd, ci);
-      else if (f === 3) {
+      switch (true) {
+case !!(f === 0): { this.set(rd, requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1056") + ci);
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(f === 1): {  if (!rd) this.bad(i, at); this.set(rd, sx(requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1057") + ci, 32));
+break; }
+case !!(f === 2): { this.set(rd, ci);
+break; }
+case !!(f === 3): {
+        // Guest state updates stay inside the selected instruction or syscall path.
+        //@cg-expect-warning
         if (rd === 2) {
           const n = (i >>> 3 & 0x200) | (i >>> 2 & 0x10) | (i << 1 & 0x40) | (i << 4 & 0x180) | (i << 3 & 0x20);
-          const z = sx(BigInt(n), 10); if (!z) this.bad(i, at); this.set(2, this.x[2]! + z);
-        } else { const z = sx(BigInt((i << 5 & 0x20000) | (i << 10 & 0x1f000)), 18); if (!rd || !z) this.bad(i, at); this.set(rd, z); }
-      } else if (f === 4) {
+          const z = sx(BigInt(n), 10); ensure(z, () => this.bad(i, at)); this.set(2, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1062") + z);
+        } else { const z = sx(BigInt((i << 5 & 0x20000) | (i << 10 & 0x1f000)), 18); ensure(!(!rd || !z), () => this.bad(i, at)); this.set(rd, z); }
+
+break; }
+case !!(f === 4): {
         const f2 = i >>> 10 & 3, sh = BigInt((i >>> 7 & 0x20) | (i >>> 2 & 0x1f));
-        if (f2 === 0) this.set(rp, ux(this.x[rp]!) >> sh);
-        else if (f2 === 1) this.set(rp, this.x[rp]! >> sh);
-        else if (f2 === 2) this.set(rp, this.x[rp]! & ci);
-        else {
+        switch (true) {
+case !!(f2 === 0): { this.set(rp, ux(requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1066")) >> sh);
+break; }
+case !!(f2 === 1): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1067") >> sh);
+break; }
+case !!(f2 === 2): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1068") & ci);
+break; }
+default: {
           const hi = i >>> 12 & 1, lo = i >>> 5 & 3;
-          if (!hi && lo === 0) this.set(rp, this.x[rp]! - this.x[sp]!);
-          else if (!hi && lo === 1) this.set(rp, this.x[rp]! ^ this.x[sp]!);
-          else if (!hi && lo === 2) this.set(rp, this.x[rp]! | this.x[sp]!);
-          else if (!hi && lo === 3) this.set(rp, this.x[rp]! & this.x[sp]!);
-          else if (hi && lo === 0) this.set(rp, sx(this.x[rp]! - this.x[sp]!, 32));
-          else if (hi && lo === 1) this.set(rp, sx(this.x[rp]! + this.x[sp]!, 32));
-          else this.bad(i, at);
-        }
-      } else if (f === 5) this.pc = ux(at + this.cj(i));
-      else if (f === 6 || f === 7) {
+          switch (true) {
+case !!(!hi && lo === 0): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1071") - requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1071"));
+break; }
+case !!(!hi && lo === 1): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1072") ^ requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1072"));
+break; }
+case !!(!hi && lo === 2): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1073") | requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1073"));
+break; }
+case !!(!hi && lo === 3): { this.set(rp, requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1074") & requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1074"));
+break; }
+case !!(hi && lo === 0): { this.set(rp, sx(requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1075") - requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1075"), 32));
+break; }
+case !!(hi && lo === 1): { this.set(rp, sx(requireValue(this.x[rp] ?? null, "src/vm/rv64.ts:1076") + requireValue(this.x[sp] ?? null, "src/vm/rv64.ts:1076"), 32));
+break; }
+default: { this.bad(i, at); }
+}
+         }
+}
+
+break; }
+case !!(f === 5): { this.pc = ux(at + cj(i));
+break; }
+case !!(f === 6 || f === 7): {
         const n = (i >>> 4 & 0x100) | (i << 1 & 0xc0) | (i << 3 & 0x20) | (i >>> 7 & 0x18) | (i >>> 2 & 6);
-        if ((f === 6 ? this.x[rp] === 0n : this.x[rp] !== 0n)) this.pc = ux(at + sx(BigInt(n), 9));
-      } else this.bad(i, at);
+        // Guest state updates stay inside the selected instruction or syscall path.
+        //@cg-expect-warning
+        if ((f === 6 ? (this.x[rp] ?? null) === 0n : (this.x[rp] ?? null) !== 0n)) this.pc = ux(at + sx(BigInt(n), 9));
+
+break; }
+default: { this.bad(i, at); }
+}
       return;
     }
     if (q === 2) {
-      if (f === 0) { const sh = BigInt((i >>> 7 & 0x20) | (i >>> 2 & 0x1f)); if (!rd) this.bad(i, at); this.set(rd, ux(this.x[rd]!) << sh); }
-      else if (f === 1) { const n = (i << 4 & 0x1c0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x18); if (!rd) this.bad(i, at); this.fload(rd, 3, this.x[2]! + BigInt(n)); }
-      else if (f === 2) { const n = (i << 4 & 0xc0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x1c); if (!rd) this.bad(i, at); this.load(rd, 2, this.x[2]! + BigInt(n)); }
-      else if (f === 3) { const n = (i << 4 & 0x1c0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x18); if (!rd) this.bad(i, at); this.load(rd, 3, this.x[2]! + BigInt(n)); }
-      else if (f === 4) {
+      switch (true) {
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(f === 0): {  const sh = BigInt((i >>> 7 & 0x20) | (i >>> 2 & 0x1f)); if (!rd) this.bad(i, at); this.set(rd, ux(requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1087")) << sh);
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(f === 1): {  const n = (i << 4 & 0x1c0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x18); if (!rd) this.bad(i, at); this.fload(rd, 3, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1088") + BigInt(n));
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(f === 2): {  const n = (i << 4 & 0xc0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x1c); if (!rd) this.bad(i, at); this.load(rd, 2, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1089") + BigInt(n));
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(f === 3): {  const n = (i << 4 & 0x1c0) | (i >>> 7 & 0x20) | (i >>> 2 & 0x18); if (!rd) this.bad(i, at); this.load(rd, 3, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1090") + BigInt(n));
+break; }
+case !!(f === 4): {
         const hi = i >>> 12 & 1;
-        if (!hi && !rs) { if (!rd) this.bad(i, at); this.pc = ux(this.x[rd]!); }
-        else if (!hi) { if (!rd) this.bad(i, at); this.set(rd, this.x[rs]!); }
-        else if (!rs && !rd) bad("EINTR", `RV64 breakpoint at 0x${at.toString(16)}`);
-        else if (!rs) { const to = ux(this.x[rd]!); this.set(1, at + 2n); this.pc = to; }
-        else { if (!rd) this.bad(i, at); this.set(rd, this.x[rd]! + this.x[rs]!); }
-      } else if (f === 5) { const n = (i >>> 1 & 0x1c0) | (i >>> 7 & 0x38); this.fstore(rs, 3, this.x[2]! + BigInt(n)); }
-      else if (f === 6) { const n = (i >>> 1 & 0xc0) | (i >>> 7 & 0x3c); this.store(2, this.x[2]! + BigInt(n), this.x[rs]!); }
-      else if (f === 7) { const n = (i >>> 1 & 0x1c0) | (i >>> 7 & 0x38); this.store(3, this.x[2]! + BigInt(n), this.x[rs]!); }
-      else this.bad(i, at);
+        switch (true) {
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(!hi && !rs): {  if (!rd) this.bad(i, at); this.pc = ux(requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1093"));
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+case !!(!hi): {  if (!rd) this.bad(i, at); this.set(rd, requireValue(this.x[rs] ?? null, "src/vm/rv64.ts:1094"));
+break; }
+case !!(!rs && !rd): { bad("EINTR", `RV64 breakpoint at 0x${at.toString(16)}`);
+break; }
+case !!(!rs): {  const to = ux(requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1096")); this.set(1, at + 2n); this.pc = to;
+break; }
+// Guest state updates stay inside the selected instruction or syscall path.
+//@cg-expect-warning
+default: {  if (!rd) this.bad(i, at); this.set(rd, requireValue(this.x[rd] ?? null, "src/vm/rv64.ts:1097") + requireValue(this.x[rs] ?? null, "src/vm/rv64.ts:1097"));  }
+}
+
+break; }
+case !!(f === 5): {  const n = (i >>> 1 & 0x1c0) | (i >>> 7 & 0x38); this.fstore(rs, 3, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1098") + BigInt(n));
+break; }
+case !!(f === 6): {  const n = (i >>> 1 & 0xc0) | (i >>> 7 & 0x3c); this.store(2, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1099") + BigInt(n), requireValue(this.x[rs] ?? null, "src/vm/rv64.ts:1099"));
+break; }
+case !!(f === 7): {  const n = (i >>> 1 & 0x1c0) | (i >>> 7 & 0x38); this.store(3, requireValue(this.x[2] ?? null, "src/vm/rv64.ts:1100") + BigInt(n), requireValue(this.x[rs] ?? null, "src/vm/rv64.ts:1100"));
+break; }
+default: { this.bad(i, at); }
+}
       return;
     }
     this.bad(i, at);
   }
 
-  private cj(i: number): bigint {
-    return BigInt(rv64CompressedJump(i));
-  }
+
 
   private opI(d: number, f: number, i: number, a: bigint): void {
     if (rv64ImmediateOpValid(f, i) === 0) this.bad(i);
@@ -1137,6 +1225,7 @@ export class Rv64 {
     this.fp(d, n, single);
   }
 
+  // Guest state updates stay inside the selected instruction or syscall path.
   private fop(d: number, f3: number, top: number, a: number, b: number, i: number): void {
     const single = !(top & 1), x = (): number => this.fr(a, single), y = (): number => this.fr(b, single);
     if (top === 0x00 || top === 0x01) { this.rm(f3); this.fp(d, x() + y(), single); return; }
@@ -1144,64 +1233,80 @@ export class Rv64 {
     if (top === 0x08 || top === 0x09) { this.rm(f3); this.fp(d, x() * y(), single); return; }
     if (top === 0x0c || top === 0x0d) {
       this.rm(f3); const q = x(), z = y();
-      if (!z && q) this.fcsr |= 8; else if (!z && !q) this.fcsr |= 16;
+      switch (true) {
+case !!(!z && q): { this.fcsr |= 8;
+break; }
+case !!(!z && !q): { this.fcsr |= 16;
+break; }
+}
       this.fp(d, q / z, single); return;
     }
     if (top === 0x10 || top === 0x11) {
-      if (f3 > 2) this.bad(i);
+      ensure(!(f3 > 2), () => this.bad(i));
       const sign = single ? 0x80000000n : 0x8000000000000000n, mag = this.fraw(a, single) & ~sign;
       const sa = this.fraw(a, single) & sign, sb = this.fraw(b, single) & sign;
       this.fbits(d, mag | (f3 === 0 ? sb : f3 === 1 ? sb ^ sign : sa ^ sb), single); return;
     }
     if (top === 0x14 || top === 0x15) {
-      if (f3 > 1) this.bad(i);
+      ensure(!(f3 > 1), () => this.bad(i));
       const q = x(), z = y();
-      if (Number.isNaN(q) && Number.isNaN(z)) this.fbits(d, single ? 0x7fc00000n : 0x7ff8000000000000n, single);
-      else if (Number.isNaN(q)) this.fbits(d, this.fraw(b, single), single);
-      else if (Number.isNaN(z)) this.fbits(d, this.fraw(a, single), single);
-      else this.fp(d, f3 ? Math.max(q, z) : Math.min(q, z), single);
+      switch (true) {
+case !!(Number.isNaN(q) && Number.isNaN(z)): { this.fbits(d, single ? 0x7fc00000n : 0x7ff8000000000000n, single);
+break; }
+case !!(Number.isNaN(q)): { this.fbits(d, this.fraw(b, single), single);
+break; }
+case !!(Number.isNaN(z)): { this.fbits(d, this.fraw(a, single), single);
+break; }
+default: { this.fp(d, f3 ? Math.max(q, z) : Math.min(q, z), single); }
+}
       return;
     }
-    if (top === 0x20) { if (b !== 1) this.bad(i); this.rm(f3); this.fp(d, this.fr(a, false), true); return; }
-    if (top === 0x21) { if (b !== 0) this.bad(i); this.rm(f3); this.fp(d, this.fr(a, true), false); return; }
-    if (top === 0x2c || top === 0x2d) { if (b) this.bad(i); this.rm(f3); this.fp(d, Math.sqrt(x()), single); return; }
+    if (top === 0x20) { ensure(!(b !== 1), () => this.bad(i)); this.rm(f3); this.fp(d, this.fr(a, false), true); return; }
+    if (top === 0x21) { ensure(!(b !== 0), () => this.bad(i)); this.rm(f3); this.fp(d, this.fr(a, true), false); return; }
+    if (top === 0x2c || top === 0x2d) { ensure(!(b), () => this.bad(i)); this.rm(f3); this.fp(d, Math.sqrt(x()), single); return; }
     if (top === 0x50 || top === 0x51) {
-      const q = x(), z = y(); if (f3 > 2) this.bad(i);
-      if (Number.isNaN(q) || Number.isNaN(z)) { if (f3 !== 2) this.fcsr |= 16; this.set(d, 0n); }
+      const q = x(), z = y(); ensure(!(f3 > 2), () => this.bad(i));
+      // Guest state updates stay inside the selected instruction or syscall path.
+      //@cg-expect-warning
+      if (Number.isNaN(q) || Number.isNaN(z)) { (f3 !== 2) && (this.fcsr |= 16); this.set(d, 0n); }
       else this.set(d, f3 === 0 ? q <= z ? 1n : 0n : f3 === 1 ? q < z ? 1n : 0n : q === z ? 1n : 0n);
       return;
     }
     if (top === 0x60 || top === 0x61) {
-      if (b > 3) this.bad(i); const bits = b < 2 ? 32 : 64, uns = !!(b & 1), q = this.toInt(x(), bits, uns, this.rm(f3));
+      ensure(!(b > 3), () => this.bad(i)); const bits = b < 2 ? 32 : 64, uns = !!(b & 1), q = this.toInt(x(), bits, uns, this.rm(f3));
       this.set(d, bits === 32 ? sx(q, 32) : q); return;
     }
     if (top === 0x68 || top === 0x69) {
-      if (b > 3) this.bad(i); this.rm(f3);
-      const q = b === 0 ? sx(this.x[a]!, 32) : b === 1 ? BigInt.asUintN(32, this.x[a]!) : b === 2 ? this.x[a]! : ux(this.x[a]!);
+      ensure(!(b > 3), () => this.bad(i)); this.rm(f3);
+      const q = b === 0 ? sx(requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1180"), 32) : b === 1 ? BigInt.asUintN(32, requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1180")) : b === 2 ? requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1180") : ux(requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1180"));
       this.fp(d, Number(q), single); return;
     }
     if (top === 0x70 || top === 0x71) {
-      if (b) this.bad(i);
-      if (f3 === 0) this.set(d, single ? sx(this.fraw(a, true), 32) : this.fraw(a, false));
-      else if (f3 === 1) this.set(d, this.fclass(a, single));
-      else this.bad(i);
+      ensure(!(b), () => this.bad(i));
+      switch (true) {
+case !!(f3 === 0): { this.set(d, single ? sx(this.fraw(a, true), 32) : this.fraw(a, false));
+break; }
+case !!(f3 === 1): { this.set(d, this.fclass(a, single));
+break; }
+default: { this.bad(i); }
+}
       return;
     }
     if (top === 0x78 || top === 0x79) {
-      if (b || f3) this.bad(i);
-      this.fbits(d, single ? BigInt.asUintN(32, this.x[a]!) : ux(this.x[a]!), single); return;
+      ensure(!(b || f3), () => this.bad(i));
+      this.fbits(d, single ? BigInt.asUintN(32, requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1192")) : ux(requireValue(this.x[a] ?? null, "src/vm/rv64.ts:1192")), single); return;
     }
     this.bad(i);
   }
 
   private fr(n: number, single: boolean): number {
-    if (!single) return f64(this.f[n]!);
-    return this.f[n]! >> 32n === 0xffffffffn ? f32(this.f[n]!) : NaN;
+    if (!single) return f64(requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1198"));
+    return requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1199") >> 32n === 0xffffffffn ? f32(requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1199")) : NaN;
   }
 
   private fraw(n: number, single: boolean): bigint {
-    if (!single) return this.f[n]!;
-    return this.f[n]! >> 32n === 0xffffffffn ? this.f[n]! & 0xffffffffn : 0x7fc00000n;
+    if (!single) return requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1203");
+    return requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1204") >> 32n === 0xffffffffn ? requireValue(this.f[n] ?? null, "src/vm/rv64.ts:1204") & 0xffffffffn : 0x7fc00000n;
   }
 
   private fp(d: number, n: number, single: boolean): void { this.fbits(d, single ? b32(n) : b64(n), single); }
@@ -1219,53 +1324,81 @@ export class Rv64 {
 
   private toInt(n: number, bits: number, uns: boolean, rm: number): bigint {
     let q: number;
-    if (rm === 1) q = Math.trunc(n);
-    else if (rm === 2) q = Math.floor(n);
-    else if (rm === 3) q = Math.ceil(n);
-    else {
+    switch (true) {
+case !!(rm === 1): { q = Math.trunc(n);
+break; }
+case !!(rm === 2): { q = Math.floor(n);
+break; }
+case !!(rm === 3): { q = Math.ceil(n);
+break; }
+default: {
       const lo = Math.floor(n), f = n - lo;
       q = f < 0.5 ? lo : f > 0.5 ? lo + 1 : rm === 4 ? n < 0 ? lo : lo + 1 : lo % 2 ? lo + 1 : lo;
-    }
+     }
+}
     const min = uns ? 0n : -(1n << BigInt(bits - 1)), max = uns ? (1n << BigInt(bits)) - 1n : (1n << BigInt(bits - 1)) - 1n;
     if (Number.isNaN(q)) { this.fcsr |= 16; return max; }
-    if (q <= Number(min)) { if (q < Number(min)) this.fcsr |= 16; return min; }
-    if (q >= Number(max)) { if (q > Number(max)) this.fcsr |= 16; return max; }
+    if (q <= Number(min)) { (q < Number(min)) && (this.fcsr |= 16); return min; }
+    if (q >= Number(max)) { (q > Number(max)) && (this.fcsr |= 16); return max; }
     return BigInt(q);
   }
 
   private load(d: number, f: number, at0: bigint): void {
     const at = ux(at0);
-    if (f === 0) { this.mem(at, 1); this.set(d, this.m.i8(at)); }
-    else if (f === 1) { this.mem(at, 2); this.set(d, this.m.i16(at)); }
-    else if (f === 2) { this.mem(at, 4); this.set(d, this.m.i32(at)); }
-    else if (f === 3) { this.mem(at, 8); this.set(d, this.m.i64(at)); }
-    else if (f === 4) { this.mem(at, 1); this.set(d, BigInt(this.m.u8(at))); }
-    else if (f === 5) { this.mem(at, 2); this.set(d, BigInt(this.m.u16(at))); }
-    else if (f === 6) { this.mem(at, 4); this.set(d, BigInt(this.m.u32(at))); }
-    else this.badR(0, f);
+    switch (true) {
+case !!(f === 0): {  this.mem(at, 1); this.set(d, this.m.i8(at));
+break; }
+case !!(f === 1): {  this.mem(at, 2); this.set(d, this.m.i16(at));
+break; }
+case !!(f === 2): {  this.mem(at, 4); this.set(d, this.m.i32(at));
+break; }
+case !!(f === 3): {  this.mem(at, 8); this.set(d, this.m.i64(at));
+break; }
+case !!(f === 4): {  this.mem(at, 1); this.set(d, BigInt(this.m.u8(at)));
+break; }
+case !!(f === 5): {  this.mem(at, 2); this.set(d, BigInt(this.m.u16(at)));
+break; }
+case !!(f === 6): {  this.mem(at, 4); this.set(d, BigInt(this.m.u32(at)));
+break; }
+default: { this.badR(0, f); }
+}
   }
 
   private store(f: number, at0: bigint, n: bigint): void {
     const at = ux(at0);
-    if (f === 0) { this.mem(at, 1, true); this.m.set8(at, n); }
-    else if (f === 1) { this.mem(at, 2, true); this.m.set16(at, n); }
-    else if (f === 2) { this.mem(at, 4, true); this.m.set32(at, n); }
-    else if (f === 3) { this.mem(at, 8, true); this.m.set64(at, n); }
-    else this.badR(0, f);
+    switch (true) {
+case !!(f === 0): {  this.mem(at, 1, true); this.m.set8(at, n);
+break; }
+case !!(f === 1): {  this.mem(at, 2, true); this.m.set16(at, n);
+break; }
+case !!(f === 2): {  this.mem(at, 4, true); this.m.set32(at, n);
+break; }
+case !!(f === 3): {  this.mem(at, 8, true); this.m.set64(at, n);
+break; }
+default: { this.badR(0, f); }
+}
   }
 
   private fload(d: number, f: number, at0: bigint): void {
     const at = ux(at0);
-    if (f === 2) { this.mem(at, 4); this.f[d] = 0xffffffff00000000n | BigInt(this.m.u32(at)); }
-    else if (f === 3) { this.mem(at, 8); this.f[d] = this.m.u64(at); }
-    else this.badR(0, f);
+    switch (true) {
+case !!(f === 2): {  this.mem(at, 4); this.f[d] = 0xffffffff00000000n | BigInt(this.m.u32(at));
+break; }
+case !!(f === 3): {  this.mem(at, 8); this.f[d] = this.m.u64(at);
+break; }
+default: { this.badR(0, f); }
+}
   }
 
   private fstore(s: number, f: number, at0: bigint): void {
     const at = ux(at0);
-    if (f === 2) { this.mem(at, 4, true); this.m.set32(at, this.f[s]!); }
-    else if (f === 3) { this.mem(at, 8, true); this.m.set64(at, this.f[s]!); }
-    else this.badR(0, f);
+    switch (true) {
+case !!(f === 2): {  this.mem(at, 4, true); this.m.set32(at, requireValue(this.f[s] ?? null, "src/vm/rv64.ts:1266"));
+break; }
+case !!(f === 3): {  this.mem(at, 8, true); this.m.set64(at, requireValue(this.f[s] ?? null, "src/vm/rv64.ts:1267"));
+break; }
+default: { this.badR(0, f); }
+}
   }
 
   private atomic(d: number, f: number, i: number, at0: bigint, n: bigint): void {
@@ -1273,25 +1406,36 @@ export class Rv64 {
     const at = ux(at0), z = f === 2 ? 4 : 8, fn = i >>> 27;
     this.mem(at, z, fn !== 2);
     const old = f === 2 ? this.m.i32(at) : this.m.i64(at);
-    if (fn === 2) { if ((i >>> 20 & 31) !== 0) this.bad(i); this.res = at; this.set(d, old); return; }
+    if (fn === 2) { ensure(!((i >>> 20 & 31) !== 0), () => this.bad(i)); this.res = at; this.set(d, old); return; }
     if (fn === 3) {
       const ok = this.res === at; this.res = -1n;
-      if (ok) f === 2 ? this.m.set32(at, n) : this.m.set64(at, n);
+      (ok) && (f === 2 ? this.m.set32(at, n) : this.m.set64(at, n));
       this.set(d, ok ? 0n : 1n); return;
     }
     const a = f === 2 ? sx(old, 32) : old, b = f === 2 ? sx(n, 32) : n;
     const au = f === 2 ? BigInt.asUintN(32, old) : ux(old), bu = f === 2 ? BigInt.asUintN(32, n) : ux(n);
     let out: bigint;
-    if (fn === 0) out = a + b;
-    else if (fn === 1) out = b;
-    else if (fn === 4) out = a ^ b;
-    else if (fn === 8) out = a | b;
-    else if (fn === 12) out = a & b;
-    else if (fn === 16) out = a < b ? a : b;
-    else if (fn === 20) out = a > b ? a : b;
-    else if (fn === 24) out = au < bu ? au : bu;
-    else if (fn === 28) out = au > bu ? au : bu;
-    else return this.bad(i);
+    switch (true) {
+case !!(fn === 0): { out = a + b;
+break; }
+case !!(fn === 1): { out = b;
+break; }
+case !!(fn === 4): { out = a ^ b;
+break; }
+case !!(fn === 8): { out = a | b;
+break; }
+case !!(fn === 12): { out = a & b;
+break; }
+case !!(fn === 16): { out = a < b ? a : b;
+break; }
+case !!(fn === 20): { out = a > b ? a : b;
+break; }
+case !!(fn === 24): { out = au < bu ? au : bu;
+break; }
+case !!(fn === 28): { out = au > bu ? au : bu;
+break; }
+default: { return this.bad(i); }
+}
     if (f === 2) this.m.set32(at, out); else this.m.set64(at, out);
     this.res = -1n; this.set(d, old);
   }
@@ -1309,9 +1453,13 @@ export class Rv64 {
     const hit = f === 1 || f === 5 || n !== 0n;
     if (hit && !rw) this.bad(i);
     if (hit) {
-      if (id === 1) this.fcsr = this.fcsr & ~31 | Number(wr & 31n);
-      else if (id === 2) this.fcsr = this.fcsr & 31 | Number(wr & 7n) << 5;
-      else this.fcsr = Number(wr & 255n);
+      switch (true) {
+case !!(id === 1): { this.fcsr = this.fcsr & ~31 | Number(wr & 31n);
+break; }
+case !!(id === 2): { this.fcsr = this.fcsr & 31 | Number(wr & 7n) << 5;
+break; }
+default: { this.fcsr = Number(wr & 255n); }
+}
     }
     this.set(d, old);
   }
@@ -1319,8 +1467,8 @@ export class Rv64 {
   private async sys(): Promise<void> {
     // Capture the originating hart: another hart may run while this syscall awaits.
     const registers = this.x;
-    try { registers[10] = sx(await this.call(Number(ux(registers[17]!))), 64); }
-    catch (e) {
+    try { registers[10] = sx(await this.call(Number(ux(requireValue(registers[17] ?? null, "src/vm/rv64.ts:1322")))), 64); }
+    catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (!(e instanceof KErr)) throw e;
       registers[10] = sx(-BigInt(eno[e.code] ?? 5), 64);
     }
@@ -1329,195 +1477,197 @@ export class Rv64 {
   private async call(n: number): Promise<bigint> {
     const a = this.x;
     switch (n) {
-      case 17: { const b = enc(this.s.cwd + "\0"); return BigInt(this.copy(b, this.addr(a[10]!), this.nat(a[11]!, "getcwd length", MAX_IO))); }
+      case 17: { const b = enc(this.s.cwd + "\0"); return BigInt(this.copy(b, ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1332")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1332"), "getcwd length", MAX_IO))); }
       case 19: return BigInt(this.events.createEventfd(
-        this.nat(a[10]!, "eventfd initial value", 0xffffffff),
-        this.nat(a[11]!, "eventfd flags", 0xffffffff),
+        this.nat(requireValue(a[10] ?? null, "src/vm/rv64.ts:1334"), "eventfd initial value", 0xffffffff),
+        this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1335"), "eventfd flags", 0xffffffff),
       ));
       case 20: return BigInt(this.events.createEpoll(
-        this.nat(a[10]!, "epoll flags", 0xffffffff),
+        this.nat(requireValue(a[10] ?? null, "src/vm/rv64.ts:1338"), "epoll flags", 0xffffffff),
       ));
       case 21: return BigInt(this.events.ctl(
-        this.fd(a[10]!), this.nat(a[11]!, "epoll operation", 3),
-        this.fd(a[12]!), this.addr(a[13]!),
+        this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1341")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1341"), "epoll operation", 3),
+        this.fd(requireValue(a[12] ?? null, "src/vm/rv64.ts:1342")), ux(requireValue(a[13] ?? null, "src/vm/rv64.ts:1342")),
       ));
       case 22: return BigInt(await this.events.wait(
-        this.fd(a[10]!), this.addr(a[11]!),
-        this.nat(a[12]!, "epoll maximum events", 4096),
-        Number(BigInt.asIntN(32, a[13]!)),
+        this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1345")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1345")),
+        this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1346"), "epoll maximum events", 4096),
+        Number(BigInt.asIntN(32, requireValue(a[13] ?? null, "src/vm/rv64.ts:1347"))),
       ));
       case 23: {
-        const original = this.fd(a[10]!);
-        const duplicate = this.s.dup(original);
+        const original = this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1350"));
+        const duplicate = this.s.dup(original, null);
         this.events.duplicate(original, duplicate);
         return BigInt(duplicate);
       }
-      case 24: return BigInt(this.dup3(a[10]!, a[11]!, a[12]!));
-      case 25: return BigInt(this.fcntl(this.fd(a[10]!), this.nat(a[11]!, "fcntl command", 0x7fffffff), a[12]!));
-      case 29: return this.ioctl(this.fd(a[10]!), this.nat(a[11]!, "ioctl request", 0xffffffff), this.addr(a[12]!));
-      case 34: this.s.mkdir(this.path(a[10]!, this.str(a[11]!)), this.nat(a[12]!, "mode", 0xffff)); return 0n;
-      case 35: { const p = this.path(a[10]!, this.str(a[11]!)); this.s.rm(p, !!(this.nat(a[12]!, "unlink flags", 0xffff) & 0x200)); return 0n; }
-      case 36: this.s.symlink(this.str(a[10]!), this.path(a[11]!, this.str(a[12]!))); return 0n;
-      case 37: this.s.link(this.path(a[10]!, this.str(a[11]!)), this.path(a[12]!, this.str(a[13]!))); return 0n;
-      case 38: this.s.mv(this.path(a[10]!, this.str(a[11]!)), this.path(a[12]!, this.str(a[13]!))); return 0n;
+      case 24: return BigInt(this.dup3(requireValue(a[10] ?? null, "src/vm/rv64.ts:1355"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1355"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1355")));
+      case 25: return BigInt(this.fcntl(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1356")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1356"), "fcntl command", 0x7fffffff), requireValue(a[12] ?? null, "src/vm/rv64.ts:1356")));
+      case 29: return this.ioctl(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1357")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1357"), "ioctl request", 0xffffffff), ux(requireValue(a[12] ?? null, "src/vm/rv64.ts:1357")));
+      case 34: this.s.mkdir(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1358"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1358"))), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1358"), "mode", 0xffff)); return 0n;
+      case 35: { const p = this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1359"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1359"))); this.s.rm(p, !!(this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1359"), "unlink flags", 0xffff) & 0x200)); return 0n; }
+      case 36: this.s.symlink(this.str(requireValue(a[10] ?? null, "src/vm/rv64.ts:1360")), this.path(requireValue(a[11] ?? null, "src/vm/rv64.ts:1360"), this.str(requireValue(a[12] ?? null, "src/vm/rv64.ts:1360")))); return 0n;
+      case 37: this.s.link(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1361"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1361"))), this.path(requireValue(a[12] ?? null, "src/vm/rv64.ts:1361"), this.str(requireValue(a[13] ?? null, "src/vm/rv64.ts:1361")))); return 0n;
+      case 38: this.s.mv(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1362"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1362"))), this.path(requireValue(a[12] ?? null, "src/vm/rv64.ts:1362"), this.str(requireValue(a[13] ?? null, "src/vm/rv64.ts:1362")))); return 0n;
       case 276: {
-        const flags = this.nat(a[14]!, "renameat2 flags", 0xffffffff);
+        const flags = this.nat(requireValue(a[14] ?? null, "src/vm/rv64.ts:1364"), "renameat2 flags", 0xffffffff);
 
         // Linux RENAME_NOREPLACE is useful to musl and account-management
-        // transactions. Exchange and whiteout semantics are not implemented.
+        // transactions. Exchange and whiteout flags are explicitly unsupported.
         if (flags & ~1) {
           bad("EINVAL", "unsupported renameat2 flags");
         }
 
-        const from = this.path(a[10]!, this.str(a[11]!));
-        const to = this.path(a[12]!, this.str(a[13]!));
+        const from = this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1372"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1372")));
+        const to = this.path(requireValue(a[12] ?? null, "src/vm/rv64.ts:1373"), this.str(requireValue(a[13] ?? null, "src/vm/rv64.ts:1373")));
 
         if (flags & 1) {
           let exists = true;
 
           try {
             this.s.stat(to, false);
-          } catch (error) {
+          } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+            // Guest state updates stay inside the selected instruction or syscall path.
+            //@cg-expect-warning
             if (!(error instanceof KErr) || error.code !== "ENOENT") {
               throw error;
             }
             exists = false;
           }
 
-          if (exists) bad("EEXIST", to);
+          ensure(!(exists), () => bad("EEXIST", to));
         }
 
         this.s.mv(from, to);
         return 0n;
       }
-      case 43: this.s.stat(this.str(a[10]!)); return this.statfs(this.addr(a[11]!));
-      case 44: { const fd = this.fd(a[10]!), f = this.s.p.fds.get(fd) ?? bad("EBADF", String(a[10])); if (fd >= 3) this.s.stat(f.path ?? bad("EBADF", String(fd))); return this.statfs(this.addr(a[11]!)); }
-      case 45: this.trunc(this.str(a[10]!), this.nat(a[11]!, "file length", this.s.k.fs.cap)); return 0n;
-      case 46: { const f = this.s.p.fds.get(this.fd(a[10]!)) ?? bad("EBADF", String(a[10])); this.trunc(f.path ?? bad("EBADF", String(a[10])), this.nat(a[11]!, "file length", this.s.k.fs.cap)); return 0n; }
-      case 48: this.s.stat(this.path(a[10]!, this.str(a[11]!))); return 0n;
-      case 49: this.s.cd(this.str(a[10]!)); return 0n;
-      case 50: { const f = this.s.p.fds.get(this.fd(a[10]!)) ?? bad("EBADF", String(a[10])); this.s.cd(f.path ?? bad("EBADF", String(a[10]))); return 0n; }
-      case 52: { const f = this.s.p.fds.get(this.fd(a[10]!)) ?? bad("EBADF", String(a[10])); this.s.chmod(f.path ?? bad("EBADF", String(a[10])), this.nat(a[11]!, "mode", 0xffff)); return 0n; }
-      case 53: this.s.chmod(this.path(a[10]!, this.str(a[11]!)), this.nat(a[12]!, "mode", 0xffff)); return 0n;
-      case 54: this.s.chown(this.path(a[10]!, this.str(a[11]!)), this.owner(a[12]!, "uid"), this.owner(a[13]!, "gid")); return 0n;
-      case 55: { const f = this.s.p.fds.get(this.fd(a[10]!)) ?? bad("EBADF", String(a[10])); this.s.chown(f.path ?? bad("EBADF", String(a[10])), this.owner(a[11]!, "uid"), this.owner(a[12]!, "gid")); return 0n; }
-      case 56: return BigInt(await this.openat(a[10]!, this.str(a[11]!), this.nat(a[12]!, "open flags", 0xffffffff), this.nat(a[13]!, "open mode", 0xffff)));
+      case 43: this.s.stat(this.str(requireValue(a[10] ?? null, "src/vm/rv64.ts:1393"))); return this.statfs(ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1393")));
+      case 44: { const fd = this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1394")), f = this.s.p.fds.get(fd) ?? bad("EBADF", String((a[10] ?? null))); if (fd >= 3) this.s.stat(f.path ?? bad("EBADF", String(fd))); return this.statfs(ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1394"))); }
+      case 45: this.trunc(this.str(requireValue(a[10] ?? null, "src/vm/rv64.ts:1395")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1395"), "file length", this.s.k.fs.cap)); return 0n;
+      case 46: { const f = this.s.p.fds.get(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1396"))) ?? bad("EBADF", String((a[10] ?? null))); this.trunc(f.path ?? bad("EBADF", String((a[10] ?? null))), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1396"), "file length", this.s.k.fs.cap)); return 0n; }
+      case 48: this.s.stat(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1397"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1397")))); return 0n;
+      case 49: this.s.cd(this.str(requireValue(a[10] ?? null, "src/vm/rv64.ts:1398"))); return 0n;
+      case 50: { const f = this.s.p.fds.get(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1399"))) ?? bad("EBADF", String((a[10] ?? null))); this.s.cd(f.path ?? bad("EBADF", String((a[10] ?? null)))); return 0n; }
+      case 52: { const f = this.s.p.fds.get(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1400"))) ?? bad("EBADF", String((a[10] ?? null))); this.s.chmod(f.path ?? bad("EBADF", String((a[10] ?? null))), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1400"), "mode", 0xffff)); return 0n; }
+      case 53: this.s.chmod(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1401"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1401"))), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1401"), "mode", 0xffff)); return 0n;
+      case 54: this.s.chown(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1402"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1402"))), this.owner(requireValue(a[12] ?? null, "src/vm/rv64.ts:1402"), "uid"), this.owner(requireValue(a[13] ?? null, "src/vm/rv64.ts:1402"), "gid")); return 0n;
+      case 55: { const f = this.s.p.fds.get(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1403"))) ?? bad("EBADF", String((a[10] ?? null))); this.s.chown(f.path ?? bad("EBADF", String((a[10] ?? null))), this.owner(requireValue(a[11] ?? null, "src/vm/rv64.ts:1403"), "uid"), this.owner(requireValue(a[12] ?? null, "src/vm/rv64.ts:1403"), "gid")); return 0n; }
+      case 56: return BigInt(await this.openat(requireValue(a[10] ?? null, "src/vm/rv64.ts:1404"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1404")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1404"), "open flags", 0xffffffff), this.nat(requireValue(a[13] ?? null, "src/vm/rv64.ts:1404"), "open mode", 0xffff)));
       case 57: {
-        const fd = this.fd(a[10]!);
+        const fd = this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1406"));
         this.localSockets.delete(fd);
         this.events.close(fd);
         this.s.close(fd);
         return 0n;
       }
       case 59: {
-        const at = this.addr(a[10]!), fl = this.nat(a[11]!, "pipe flags", 0xffffffff); this.mem(at, 8, true);
+        const at = ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1413")), fl = this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1413"), "pipe flags", 0xffffffff); this.mem(at, 8, true);
         if (fl & ~(O_CLOEXEC | O_NONBLOCK)) bad("EINVAL", "unsupported pipe flags");
         const [rd, wr] = this.s.pipe();
-        if (fl & O_CLOEXEC) { this.s.p.fds.get(rd)!.clo = true; this.s.p.fds.get(wr)!.clo = true; }
+        if (fl & O_CLOEXEC) { requireValue(this.s.p.fds.get(rd) ?? null, "src/vm/rv64.ts:1416").clo = true; requireValue(this.s.p.fds.get(wr) ?? null, "src/vm/rv64.ts:1416").clo = true; }
         this.m.set32(at, rd); this.m.set32(at + 4n, wr); return 0n;
       }
-      case 61: return BigInt(this.getdents(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "directory buffer length", MAX_IO)));
-      case 62: return BigInt(this.s.seek(this.fd(a[10]!), this.num(a[11]!, "seek offset"), this.nat(a[12]!, "seek whence", 2)));
+      case 61: return BigInt(this.getdents(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1419")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1419")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1419"), "directory buffer length", MAX_IO)));
+      case 62: return BigInt(this.s.seek(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1420")), hostNumber(requireValue(a[11] ?? null, "src/vm/rv64.ts:1420"), "seek offset"), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1420"), "seek whence", 2)));
       case 63: {
-        const fd = this.fd(a[10]!), at = this.addr(a[11]!), z = this.nat(a[12]!, "read length", MAX_IO);
+        const fd = this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1422")), at = ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1422")), z = this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1422"), "read length", MAX_IO);
         const result = await this.events.read(fd, at, z);
-        if (result !== undefined) return result;
+        if (result !== null) return result;
         this.mem(at, z, true);
         const b = await this.read(fd, z);
         this.m.write(at, b);
         return BigInt(b.length);
       }
       case 64: {
-        const fd = this.fd(a[10]!), at = this.addr(a[11]!), z = this.nat(a[12]!, "write length", MAX_IO);
+        const fd = this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1431")), at = ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1431")), z = this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1431"), "write length", MAX_IO);
         const result = await this.events.write(fd, at, z);
-        if (result !== undefined) return result;
+        if (result !== null) return result;
         this.mem(at, z);
         return BigInt(await this.write(fd, this.m.read(at, z)));
       }
-      case 65: return BigInt(await this.readv(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "iovec count", 1024)));
-      case 66: return BigInt(await this.writev(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "iovec count", 1024)));
-      case 67: return BigInt(this.pread(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "read length", MAX_IO), this.num(a[13]!, "read offset")));
-      case 68: return BigInt(this.pwrite(this.fd(a[10]!), this.addr(a[11]!), this.nat(a[12]!, "write length", MAX_IO), this.num(a[13]!, "write offset")));
-      case 73: return BigInt(this.ppoll(this.addr(a[10]!), this.nat(a[11]!, "poll descriptor count", 1024)));
-      case 78: { const b = enc(this.s.readlink(this.path(a[10]!, this.str(a[11]!)))); return BigInt(this.copy(b, this.addr(a[12]!), this.nat(a[13]!, "readlink length", MAX_IO), true)); }
-      case 79: { const p = this.str(a[11]!), fl = this.nat(a[13]!, "stat flags", 0xffff); return this.stat(this.path(a[10]!, p), this.addr(a[12]!), !(fl & 0x100)); }
-      case 80: return this.fstat(this.fd(a[10]!), this.addr(a[11]!));
+      case 65: return BigInt(await this.readv(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1437")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1437")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1437"), "iovec count", 1024)));
+      case 66: return BigInt(await this.writev(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1438")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1438")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1438"), "iovec count", 1024)));
+      case 67: return BigInt(this.pread(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1439")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1439")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1439"), "read length", MAX_IO), hostNumber(requireValue(a[13] ?? null, "src/vm/rv64.ts:1439"), "read offset")));
+      case 68: return BigInt(this.pwrite(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1440")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1440")), this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1440"), "write length", MAX_IO), hostNumber(requireValue(a[13] ?? null, "src/vm/rv64.ts:1440"), "write offset")));
+      case 73: return BigInt(this.ppoll(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1441")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1441"), "poll descriptor count", 1024)));
+      case 78: { const b = enc(this.s.readlink(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1442"), this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1442"))))); return BigInt(this.copy(b, ux(requireValue(a[12] ?? null, "src/vm/rv64.ts:1442")), this.nat(requireValue(a[13] ?? null, "src/vm/rv64.ts:1442"), "readlink length", MAX_IO), true)); }
+      case 79: { const p = this.str(requireValue(a[11] ?? null, "src/vm/rv64.ts:1443")), fl = this.nat(requireValue(a[13] ?? null, "src/vm/rv64.ts:1443"), "stat flags", 0xffff); return this.stat(this.path(requireValue(a[10] ?? null, "src/vm/rv64.ts:1443"), p), ux(requireValue(a[12] ?? null, "src/vm/rv64.ts:1443")), !(fl & 0x100)); }
+      case 80: return this.fstat(this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1444")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1444")));
       case 81: case 82: case 83: return 0n;
-      case 88: return this.utimens(a[10]!, a[11]!, a[12]!, a[13]!);
+      case 88: return this.utimens(requireValue(a[10] ?? null, "src/vm/rv64.ts:1446"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1446"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1446"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1446"));
       case 93:
         if (this.tetoThreads && this.tetoActiveHart !== 0) {
-          this.tetoThreadExit(this.tetoActiveHart, Number(ux(a[10]!) & 255n));
+          this.tetoThreadExit(this.tetoActiveHart, Number(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1449")) & 255n));
           return 0n;
         }
-        return this.vf ? this.vfExit(a[10]!) : (this.exit(a[10]!), 0n);
-      case 94: return this.vf ? this.vfExit(a[10]!) : (this.exit(a[10]!), 0n);
+        return this.vf ? this.vfExit(requireValue(a[10] ?? null, "src/vm/rv64.ts:1452")) : (this.exit(requireValue(a[10] ?? null, "src/vm/rv64.ts:1452")), 0n);
+      case 94: return this.vf ? this.vfExit(requireValue(a[10] ?? null, "src/vm/rv64.ts:1453")) : (this.exit(requireValue(a[10] ?? null, "src/vm/rv64.ts:1453")), 0n);
       case 96: return this.tetoThreads
-        ? this.tetoSetClearTid(a[10]!) : BigInt(this.s.pid);
+        ? this.tetoSetClearTid(requireValue(a[10] ?? null, "src/vm/rv64.ts:1455")) : BigInt(this.s.pid);
       case 98: return this.tetoThreads
-        ? this.tetoFutex(a[10]!, a[11]!, a[12]!, a[13]!)
-        : this.futex(a[10]!, a[11]!, a[12]!, a[13]!);
+        ? this.tetoFutex(requireValue(a[10] ?? null, "src/vm/rv64.ts:1457"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1457"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1457"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1457"))
+        : this.futex(requireValue(a[10] ?? null, "src/vm/rv64.ts:1458"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1458"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1458"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1458"));
       case 99: return 0n;
-      case 101: await this.sleepTs(this.addr(a[10]!)); return 0n;
-      case 113: return this.clock(this.num(a[10]!, "clock id"), this.addr(a[11]!));
-      case 114: return this.clockRes(this.num(a[10]!, "clock id"), this.addr(a[11]!));
-      case 115: return this.clockSleep(a[10]!, a[11]!, a[12]!);
-      case 122: return this.setAffinity(a[10]!, a[11]!, a[12]!);
-      case 123: return this.getAffinity(a[10]!, a[11]!, a[12]!);
+      case 101: await this.sleepTs(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1460"))); return 0n;
+      case 113: return this.clock(hostNumber(requireValue(a[10] ?? null, "src/vm/rv64.ts:1461"), "clock id"), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1461")));
+      case 114: return this.clockRes(hostNumber(requireValue(a[10] ?? null, "src/vm/rv64.ts:1462"), "clock id"), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1462")));
+      case 115: return this.clockSleep(requireValue(a[10] ?? null, "src/vm/rv64.ts:1463"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1463"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1463"));
+      case 122: return this.setAffinity(requireValue(a[10] ?? null, "src/vm/rv64.ts:1464"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1464"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1464"));
+      case 123: return this.getAffinity(requireValue(a[10] ?? null, "src/vm/rv64.ts:1465"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1465"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1465"));
       case 124: await this.s.yield(); return 0n;
-      case 129: case 130: case 131: return BigInt(this.s.kill(this.num(n === 129 ? a[10]! : a[11]!, "pid"), this.nat(n === 129 ? a[11]! : a[12]!, "signal", 64) as 0 | 1 | 2 | 9 | 13 | 15));
+      case 129: case 130: case 131: return BigInt(this.s.kill(hostNumber(n === 129 ? requireValue(a[10] ?? null, "src/vm/rv64.ts:1467") : requireValue(a[11] ?? null, "src/vm/rv64.ts:1467"), "pid"), this.nat(n === 129 ? requireValue(a[11] ?? null, "src/vm/rv64.ts:1467") : requireValue(a[12] ?? null, "src/vm/rv64.ts:1467"), "signal", 64) as 0 | 1 | 2 | 9 | 13 | 15));
       case 132: case 134: case 135: return 0n;
-      case 160: return this.uname(this.addr(a[10]!));
-      case 153: return this.times(this.addr(a[10]!));
-      case 163: return this.limit(0n, a[10]!, 0n, a[11]!);
-      case 164: return this.limit(0n, a[10]!, a[11]!, 0n);
-      case 165: return this.usage(a[10]!, this.addr(a[11]!));
-      case 166: { const old = this.s.umask; this.s.umask = this.nat(a[10]!, "umask", 0o777); return BigInt(old); }
-      case 168: return this.getcpu(a[10]!, a[11]!);
-      case 169: return this.timeval(this.addr(a[10]!));
-      case 143: this.s.setRegid(this.idOrKeep(a[10]!), this.idOrKeep(a[11]!)); return 0n;
-      case 144: this.s.setGid(this.owner(a[10]!, "gid")); return 0n;
-      case 145: this.s.setReuid(this.idOrKeep(a[10]!), this.idOrKeep(a[11]!)); return 0n;
-      case 146: this.s.setUid(this.owner(a[10]!, "uid")); return 0n;
-      case 147: this.s.setResuid(this.idOrKeep(a[10]!), this.idOrKeep(a[11]!), this.idOrKeep(a[12]!)); return 0n;
-      case 148: return this.getres(this.addrPtr(a[10]!), this.addrPtr(a[11]!), this.addrPtr(a[12]!), false);
-      case 149: this.s.setResgid(this.idOrKeep(a[10]!), this.idOrKeep(a[11]!), this.idOrKeep(a[12]!)); return 0n;
-      case 150: return this.getres(this.addrPtr(a[10]!), this.addrPtr(a[11]!), this.addrPtr(a[12]!), true);
-      case 151: return BigInt(this.s.setFsuid(this.owner(a[10]!, "uid")));
-      case 152: return BigInt(this.s.setFsgid(this.owner(a[10]!, "gid")));
-      case 158: return BigInt(this.getgroups(a[10]!, a[11]!));
-      case 159: this.setgroups(a[10]!, a[11]!); return 0n;
+      case 160: return this.uname(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1469")));
+      case 153: return this.times(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1470")));
+      case 163: return this.limit(0n, requireValue(a[10] ?? null, "src/vm/rv64.ts:1471"), 0n, requireValue(a[11] ?? null, "src/vm/rv64.ts:1471"));
+      case 164: return this.limit(0n, requireValue(a[10] ?? null, "src/vm/rv64.ts:1472"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1472"), 0n);
+      case 165: return this.usage(requireValue(a[10] ?? null, "src/vm/rv64.ts:1473"), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1473")));
+      case 166: { const old = this.s.umask; this.s.umask = this.nat(requireValue(a[10] ?? null, "src/vm/rv64.ts:1474"), "umask", 0o777); return BigInt(old); }
+      case 168: return this.getcpu(requireValue(a[10] ?? null, "src/vm/rv64.ts:1475"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1475"));
+      case 169: return this.timeval(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1476")));
+      case 143: this.s.setRegid(this.idOrKeep(requireValue(a[10] ?? null, "src/vm/rv64.ts:1477")), this.idOrKeep(requireValue(a[11] ?? null, "src/vm/rv64.ts:1477"))); return 0n;
+      case 144: this.s.setGid(this.owner(requireValue(a[10] ?? null, "src/vm/rv64.ts:1478"), "gid")); return 0n;
+      case 145: this.s.setReuid(this.idOrKeep(requireValue(a[10] ?? null, "src/vm/rv64.ts:1479")), this.idOrKeep(requireValue(a[11] ?? null, "src/vm/rv64.ts:1479"))); return 0n;
+      case 146: this.s.setUid(this.owner(requireValue(a[10] ?? null, "src/vm/rv64.ts:1480"), "uid")); return 0n;
+      case 147: this.s.setResuid(this.idOrKeep(requireValue(a[10] ?? null, "src/vm/rv64.ts:1481")), this.idOrKeep(requireValue(a[11] ?? null, "src/vm/rv64.ts:1481")), this.idOrKeep(requireValue(a[12] ?? null, "src/vm/rv64.ts:1481"))); return 0n;
+      case 148: return this.getres(this.addrPtr(requireValue(a[10] ?? null, "src/vm/rv64.ts:1482")), this.addrPtr(requireValue(a[11] ?? null, "src/vm/rv64.ts:1482")), this.addrPtr(requireValue(a[12] ?? null, "src/vm/rv64.ts:1482")), false);
+      case 149: this.s.setResgid(this.idOrKeep(requireValue(a[10] ?? null, "src/vm/rv64.ts:1483")), this.idOrKeep(requireValue(a[11] ?? null, "src/vm/rv64.ts:1483")), this.idOrKeep(requireValue(a[12] ?? null, "src/vm/rv64.ts:1483"))); return 0n;
+      case 150: return this.getres(this.addrPtr(requireValue(a[10] ?? null, "src/vm/rv64.ts:1484")), this.addrPtr(requireValue(a[11] ?? null, "src/vm/rv64.ts:1484")), this.addrPtr(requireValue(a[12] ?? null, "src/vm/rv64.ts:1484")), true);
+      case 151: return BigInt(this.s.setFsuid(this.owner(requireValue(a[10] ?? null, "src/vm/rv64.ts:1485"), "uid")));
+      case 152: return BigInt(this.s.setFsgid(this.owner(requireValue(a[10] ?? null, "src/vm/rv64.ts:1486"), "gid")));
+      case 158: return BigInt(this.getgroups(requireValue(a[10] ?? null, "src/vm/rv64.ts:1487"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1487")));
+      case 159: this.setgroups(requireValue(a[10] ?? null, "src/vm/rv64.ts:1488"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1488")); return 0n;
       case 172: return BigInt(this.s.pid);
       case 173: return BigInt(this.s.ppid);
       case 174: return BigInt(this.s.uid);
       case 175: return BigInt(this.s.euid);
       case 176: return BigInt(this.s.gid);
       case 177: return BigInt(this.s.egid);
-      case 178: return BigInt(this.tetoThreads?.tids.get(this.tetoActiveHart) ?? this.s.pid);
-      case 179: return this.sysinfo(this.addr(a[10]!));
+      case 178: return BigInt(requireValue(withValue(this.tetoThreads ?? null, value => value.tids) ?? null, "src/vm/rv64.ts:1460").get(this.tetoActiveHart) ?? this.s.pid);
+      case 179: return this.sysinfo(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1496")));
       case 198: return BigInt(this.socket(
-        this.nat(a[10]!, "socket domain", 0x7fffffff),
-        this.nat(a[11]!, "socket type", 0xffffffff),
-        this.nat(a[12]!, "socket protocol", 0x7fffffff),
+        this.nat(requireValue(a[10] ?? null, "src/vm/rv64.ts:1498"), "socket domain", 0x7fffffff),
+        this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1499"), "socket type", 0xffffffff),
+        this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1500"), "socket protocol", 0x7fffffff),
       ));
       case 203: return this.connect(
-        this.fd(a[10]!),
-        this.addr(a[11]!),
-        this.nat(a[12]!, "socket address length", 4096),
+        this.fd(requireValue(a[10] ?? null, "src/vm/rv64.ts:1503")),
+        ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1504")),
+        this.nat(requireValue(a[12] ?? null, "src/vm/rv64.ts:1505"), "socket address length", 4096),
       );
-      case 214: return this.doBrk(this.addr(a[10]!));
-      case 215: this.unmap(this.addr(a[10]!), this.nat(a[11]!, "mapping length", Number.MAX_SAFE_INTEGER)); return 0n;
-      case 216: return this.remap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!);
+      case 214: return this.doBrk(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1507")));
+      case 215: this.unmap(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1508")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1508"), "mapping length", Number.MAX_SAFE_INTEGER)); return 0n;
+      case 216: return this.remap(requireValue(a[10] ?? null, "src/vm/rv64.ts:1509"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1509"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1509"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1509"), requireValue(a[14] ?? null, "src/vm/rv64.ts:1509"));
       case 220: return this.tetoThreads
-        ? this.tetoCloneThread(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!)
-        : this.clone(a[10]!, a[11]!, a[13]!);
-      case 221: return this.execve(this.str(a[10]!), this.addr(a[11]!), this.addr(a[12]!));
-      case 222: return this.mmap(a[10]!, a[11]!, a[12]!, a[13]!, a[14]!, a[15]!);
-      case 227: this.flushShared(this.addr(a[10]!), this.nat(a[11]!, "sync length", Number.MAX_SAFE_INTEGER)); return 0n;
+        ? this.tetoCloneThread(requireValue(a[10] ?? null, "src/vm/rv64.ts:1511"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1511"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1511"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1511"), requireValue(a[14] ?? null, "src/vm/rv64.ts:1511"))
+        : this.clone(requireValue(a[10] ?? null, "src/vm/rv64.ts:1512"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1512"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1512"));
+      case 221: return this.execve(this.str(requireValue(a[10] ?? null, "src/vm/rv64.ts:1513")), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1513")), ux(requireValue(a[12] ?? null, "src/vm/rv64.ts:1513")));
+      case 222: return this.mmap(requireValue(a[10] ?? null, "src/vm/rv64.ts:1514"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1514"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1514"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1514"), requireValue(a[14] ?? null, "src/vm/rv64.ts:1514"), requireValue(a[15] ?? null, "src/vm/rv64.ts:1514"));
+      case 227: this.flushShared(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1515")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1515"), "sync length", Number.MAX_SAFE_INTEGER)); return 0n;
       case 226: return 0n;
       case 233: return 0n;
-      case 261: return this.limit(a[10]!, a[11]!, a[12]!, a[13]!);
-      case 278: return BigInt(this.random(this.addr(a[10]!), this.nat(a[11]!, "random length", MAX_IO)));
-      case 260: return this.wait4(a[10]!, this.addr(a[11]!), a[12]!, this.addr(a[13]!));
+      case 261: return this.limit(requireValue(a[10] ?? null, "src/vm/rv64.ts:1518"), requireValue(a[11] ?? null, "src/vm/rv64.ts:1518"), requireValue(a[12] ?? null, "src/vm/rv64.ts:1518"), requireValue(a[13] ?? null, "src/vm/rv64.ts:1518"));
+      case 278: return BigInt(this.random(ux(requireValue(a[10] ?? null, "src/vm/rv64.ts:1519")), this.nat(requireValue(a[11] ?? null, "src/vm/rv64.ts:1519"), "random length", MAX_IO)));
+      case 260: return this.wait4(requireValue(a[10] ?? null, "src/vm/rv64.ts:1520"), ux(requireValue(a[11] ?? null, "src/vm/rv64.ts:1520")), requireValue(a[12] ?? null, "src/vm/rv64.ts:1520"), ux(requireValue(a[13] ?? null, "src/vm/rv64.ts:1520")));
       default: if (!this.miss.has(n)) { this.miss.add(n); this.s.k.log(`rv64: unsupported syscall ${n}`); } return -38n;
     }
   }
@@ -1525,7 +1675,7 @@ export class Rv64 {
   private async read(fd: number, n: number): Promise<Uint8Array> {
     const f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd));
     if (!f.input) return this.s.fdr(fd, n);
-    let q = this.ins.get(fd);
+    let q = (this.ins.get(fd) ?? null);
     if (!q || q.at >= q.b.length) { q = { b: await f.input.rd(), at: 0 }; this.ins.set(fd, q); }
     const b = q.b.slice(q.at, q.at + n); q.at += b.length; return b;
   }
@@ -1561,13 +1711,13 @@ export class Rv64 {
       await this.s.exec(path, argv.length ? argv : [path], env);
     }
 
-    const io: Partial<Io> = {}, f0 = this.s.p.fds.get(0), f1 = this.s.p.fds.get(1), f2 = this.s.p.fds.get(2);
-    if (f0?.input) io.sin = f0.input;
-    if (f1?.output) io.sout = f1.output;
-    if (f2?.output) io.serr = f2.output;
+    const io: Partial<Io> = {}, f0 = (this.s.p.fds.get(0) ?? null), f1 = (this.s.p.fds.get(1) ?? null), f2 = (this.s.p.fds.get(2) ?? null);
+    if (f0 && f0.input) io.sin = f0.input;
+    if (f1 && f1.output) io.sout = f1.output;
+    if (f2 && f2.output) io.serr = f2.output;
     const cwd = this.s.p.cwd, kid = [...this.s.p.fds.values()];
     const pass = new Map([...this.s.p.fds].filter(([, f]) => !f.clo));
-    const p = this.s.start(path, (argv.length ? argv : [path]).slice(1), { io, fds: pass, cwd, env });
+    const p = this.s.start(path, (argv.length ? argv : [path]).slice(1), {"pgid": null,  io, fds: pass, cwd, env });
     this.restoreVf();
     this.dropFds(kid);
     return BigInt(p.pid);
@@ -1575,15 +1725,15 @@ export class Rv64 {
 
   private vfExit(code: bigint): bigint {
     const kid = [...this.s.p.fds.values()], n = Number(ux(code) & 255n);
-    const p = this.s.start("thsh", ["-c", `exit ${n}`], { cwd: this.s.p.cwd, env: new Map(this.s.p.env) });
+    const p = this.s.start("thsh", ["-c", `exit ${n}`], {"io": null, "fds": null, "pgid": null,  cwd: this.s.p.cwd, env: new Map(this.s.p.env) });
     this.restoreVf();
     this.dropFds(kid);
     return BigInt(p.pid);
   }
 
   private async wait4(pid0: bigint, st: bigint, fl0: bigint, ru: bigint): Promise<bigint> {
-    const pid = this.num(pid0, "wait pid"), fl = this.nat(fl0, "wait flags", 0x7fffffff);
-    const p = (pid > 0 ? this.s.k.procs.get(pid) : [...this.s.p.kids].map(n => this.s.k.procs.get(n)).find(q => q !== undefined)) ?? bad("ECHILD", String(pid));
+    const pid = hostNumber(pid0, "wait pid"), fl = this.nat(fl0, "wait flags", 0x7fffffff);
+    const p = (pid > 0 ? (this.s.k.procs.get(pid) ?? null) : ([...this.s.p.kids].map(n => (this.s.k.procs.get(n) ?? null)).find(q => q !== null) ?? null)) ?? bad("ECHILD", String(pid));
     if (p.ppid !== this.s.pid) bad("ECHILD", String(pid));
     if ((fl & 1) && p.code === null) return 0n;
     const code = await p.done, sig = p.sig;
@@ -1597,23 +1747,23 @@ export class Rv64 {
     this.x.set(q.x); this.f.set(q.f); this.pc = q.pc;
     this.s.p.cwd = q.cwd; this.s.p.env = new Map(q.env);
     this.s.p.fds.clear(); for (const [n, f] of q.fds) this.s.p.fds.set(n, f);
-    this.vf = undefined;
+    this.vf = null;
   }
 
   private copyFds(src: Map<number, Fd>, hold = false): Map<number, Fd> {
     const out = new Map<number, Fd>();
     for (const [n, f] of src) {
-      if (hold) { f.input?.holdR?.(); f.output?.hold?.(); }
+      if (hold) { withValue(withValue(f.input ?? null, value => value.holdR) ?? null, callable => callable.call(f.input)); withValue(withValue(f.output ?? null, value => value.hold) ?? null, callable => callable.call(f.output)); }
       const q = new Fd(f.input, f.output, f.path, f.rd, f.wr, f.add, f.clo); q.pos = f.pos; out.set(n, q);
     }
     return out;
   }
 
-  private dropFds(a: Fd[]): void { for (const f of a) { f.input?.releaseR?.(); f.output?.close?.(); } }
+  private dropFds(a: Fd[]): void { for (const f of a) { withValue(withValue(f.input ?? null, value => value.releaseR) ?? null, callable => callable.call(f.input)); withValue(withValue(f.output ?? null, value => value.close) ?? null, callable => callable.call(f.output)); } }
 
   private vec(at0: bigint): string[] {
     if (!at0) return [];
-    const out: string[] = [], at = this.addr(at0);
+    const out: string[] = [], at = ux(at0);
     for (let i = 0; i < 4096; i++) { this.mem(at + BigInt(i * 8), 8); const p = this.m.u64(at + BigInt(i * 8)); if (!p) return out; out.push(this.str(p)); }
     return bad("EFBIG", "RV64 argument vector");
   }
@@ -1633,17 +1783,17 @@ export class Rv64 {
        * directory descriptor for openat(), fstat() and getdents().
        */
       if (st.kind === "dir") {
-        if (ac !== 0 || fl & (O_CREAT | O_TRUNC)) bad("EISDIR", path);
+        ensure(!(ac !== 0 || fl & (O_CREAT | O_TRUNC)), () => bad("EISDIR", path));
 
         const n = this.s.openDir(path);
-        this.s.p.fds.get(n)!.clo = !!(fl & O_CLOEXEC);
+        requireValue(this.s.p.fds.get(n) ?? null, "src/vm/rv64.ts:1639").clo = !!(fl & O_CLOEXEC);
         return n;
       }
 
       if (fl & O_DIRECTORY) bad("ENOTDIR", path);
       if (fl & O_CREAT && fl & O_EXCL) bad("EEXIST", path);
       await this.s.materialise(path);
-    } catch (e) {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (!(e instanceof KErr) || e.code !== "ENOENT" || !(fl & O_CREAT)) {
         throw e;
       }
@@ -1670,7 +1820,7 @@ export class Rv64 {
           : "r";
 
     const n = this.s.open(path, kind, mode || 0o666);
-    this.s.p.fds.get(n)!.clo = !!(fl & O_CLOEXEC);
+    requireValue(this.s.p.fds.get(n) ?? null, "src/vm/rv64.ts:1673").clo = !!(fl & O_CLOEXEC);
     return n;
   }
 
@@ -1693,9 +1843,9 @@ export class Rv64 {
     this.s.p.fds.set(
       fd,
       new Fd(
-        undefined,
-        undefined,
-        undefined,
+        null,
+        null,
+        null,
         true,
         true,
         false,
@@ -1735,7 +1885,7 @@ export class Rv64 {
      * This lets musl probe /var/run/nscd/socket and then fall back to
      * the local passwd and group databases.
      */
-    if (name.length === 0 || name[0] === 0) {
+    if (name.length === 0 || (name[0] ?? null) === 0) {
       return -111n;
     }
 
@@ -1746,7 +1896,7 @@ export class Rv64 {
     const old = this.fd(old0), nu = this.fd(nu0), fl = this.nat(fl0, "dup flags", 0xffffffff);
     if (old === nu || fl & ~O_CLOEXEC) bad("EINVAL", "invalid dup3 arguments");
     const n = this.s.dup(old, nu);
-    this.s.p.fds.get(n)!.clo = !!(fl & O_CLOEXEC);
+    requireValue(this.s.p.fds.get(n) ?? null, "src/vm/rv64.ts:1749").clo = !!(fl & O_CLOEXEC);
     if (this.localSockets.has(old)) this.localSockets.add(n);
     this.events.duplicate(old, n);
     return n;
@@ -1754,7 +1904,7 @@ export class Rv64 {
 
   private path(fd0: bigint, p: string): string {
     if (p.startsWith("/")) return norm(p);
-    const fd = this.num(fd0, "directory descriptor");
+    const fd = hostNumber(fd0, "directory descriptor");
     if (fd === AT_FDCWD) return norm(p, this.s.cwd);
     const f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd)), base = f.path ?? bad("EBADF", String(fd));
     if (this.s.stat(base).kind !== "dir") bad("ENOTDIR", base);
@@ -1765,10 +1915,12 @@ export class Rv64 {
     const f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd));
     if (cmd === 0 || cmd === 1030) {
       const min = this.nat(arg, "descriptor minimum", 255);
+      // Guest state updates stay inside the selected instruction or syscall path.
+      //@cg-expect-warning
       for (let n = Math.max(3, min); n < 256; n++) if (!this.s.p.fds.has(n)) {
         const q = this.s.dup(fd, n);
-        this.s.p.fds.get(q)!.clo = cmd === 1030;
-        if (this.localSockets.has(fd)) this.localSockets.add(q);
+        requireValue(this.s.p.fds.get(q) ?? null, "src/vm/rv64.ts:1770").clo = cmd === 1030;
+        (this.localSockets.has(fd)) && (this.localSockets.add(q));
         this.events.duplicate(fd, q);
         return q;
       }
@@ -1779,12 +1931,14 @@ export class Rv64 {
     if (cmd === 3) return this.events.flags(fd) ?? (f.rd && f.wr ? O_RDWR : f.wr ? O_WRONLY : 0);
     if (cmd === 4) {
       const flags = this.nat(arg, "descriptor flags", 0x7fffffff);
-      if (!this.events.setStatusFlags(fd, flags)) f.add = !!(flags & O_APPEND);
+      (!this.events.setStatusFlags(fd, flags)) && (f.add = !!(flags & O_APPEND));
       return 0;
     }
     return -22;
   }
 
+  // Guest state updates stay inside the selected instruction or syscall path.
+  //@cg-expect-warning
   private ioctl(
     fd: number,
     req: number,
@@ -1803,6 +1957,8 @@ export class Rv64 {
     if (req === TCGETS) {
       const raw = tty.termios();
 
+      // Guest state updates stay inside the selected instruction or syscall path.
+      //@cg-expect-warning
       if (raw.byteLength < LINUX_TERMIOS_SIZE) {
         return -22n;
       }
@@ -1897,8 +2053,8 @@ export class Rv64 {
     const f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd)), p = f.path ?? bad("EBADF", String(fd));
     const a = this.s.list(p), out = new Uint8Array(n), v = new DataView(out.buffer); let pos = 0;
     while (f.pos < a.length) {
-      const [name, q] = a[f.pos]!, b = enc(name + "\0"), z = (19 + b.length + 7) & -8;
-      if (pos + z > n) { if (!pos) bad("EINVAL", "directory buffer is too small"); break; }
+      const [name, q] = requireValue(a[f.pos] ?? null, "src/vm/rv64.ts:1900"), b = enc(name + "\0"), z = (19 + b.length + 7) & -8;
+      if (pos + z > n) { ensure(pos, () => bad("EINVAL", "directory buffer is too small")); break; }
       v.setBigUint64(pos, BigInt(q.ino), true); v.setBigUint64(pos + 8, BigInt(f.pos + 1), true); v.setUint16(pos + 16, z, true);
       out[pos + 18] = q.kind === "dir" ? 4 : q.kind === "file" ? 8 : q.kind === "link" ? 10 : 2; out.set(b, pos + 19);
       pos += z; f.pos++;
@@ -1925,11 +2081,16 @@ export class Rv64 {
     for (let i = 0; i < n; i++) {
       const p = at + BigInt(i * 8), fd = Number(this.m.i32(p));
       let revents = 0;
-      if (fd >= 0 && !this.s.p.fds.has(fd)) {
+      switch (true) {
+case !!(fd >= 0 && !this.s.p.fds.has(fd)): {
         revents = 0x20; // POLLNVAL
-      } else if (fd >= 0) {
+
+break; }
+case !!(fd >= 0): {
         revents = this.events.readiness(fd, this.m.u16(p + 4n)) ?? 0;
-      }
+
+break; }
+}
       if (revents !== 0) hit++;
       this.m.set16(p + 6n, revents);
     }
@@ -1955,7 +2116,7 @@ export class Rv64 {
 
   private addrPtr(n: bigint): bigint {
     if (!n) bad("EFAULT", "null pointer");
-    return this.addr(n);
+    return ux(n);
   }
 
   private getres(a: bigint, b: bigint, c: bigint, group: boolean): bigint {
@@ -2018,16 +2179,20 @@ export class Rv64 {
       p = f.path ?? bad("EBADF", String(fd));
     } else {
       const raw = this.str(p0);
-      if (!raw && fl & 0x1000) {
+      switch (true) {
+case !!(!raw && fl & 0x1000): {
         const fd = this.fd(fd0), f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd));
         p = f.path ?? bad("EBADF", String(fd));
-      } else if (!raw) return bad("ENOENT", "empty utimensat path");
-      else p = this.path(fd0, raw);
+
+break; }
+case !!(!raw): { return bad("ENOENT", "empty utimensat path"); }
+default: { p = this.path(fd0, raw); }
+}
     }
     const follow = !(fl & 0x100), q = this.s.stat(p, follow), now = Date.now();
     let at = now, mt = now;
     if (ts0) {
-      const ts = this.addr(ts0); this.mem(ts, 32);
+      const ts = ux(ts0); this.mem(ts, 32);
       at = this.fileTs(ts, q.at, now); mt = this.fileTs(ts + 16n, q.mt, now);
     }
     this.s.utime(p, at, mt, follow); return 0n;
@@ -2038,18 +2203,18 @@ export class Rv64 {
     if (ns === 0x3ffffffen) return old;
     if (ns === 0x3fffffffn) return now;
     if (ns < 0n || ns >= 1_000_000_000n) bad("EINVAL", "invalid file timestamp");
-    return this.num(this.m.i64(at), "timestamp seconds") * 1000 + Number(ns / 1_000_000n);
+    return hostNumber(this.m.i64(at), "timestamp seconds") * 1000 + Number(ns / 1_000_000n);
   }
 
   private async futex(at0: bigint, op0: bigint, val0: bigint, to0: bigint): Promise<bigint> {
-    const at = this.addr(at0), op = this.nat(op0, "futex operation", 0x7fffffff) & 0x7f;
+    const at = ux(at0), op = this.nat(op0, "futex operation", 0x7fffffff) & 0x7f;
     this.mem(at, 4, op === 1 || op === 10);
     if (op === 1 || op === 10 || op === 3 || op === 4) return 0n;
     if (op !== 0 && op !== 9) return -38n;
-    if (op === 9 && !ux(this.x[15]!)) bad("EINVAL", "empty futex bitset");
+    if (op === 9 && !ux(requireValue(this.x[15] ?? null, "src/vm/rv64.ts:2049"))) bad("EINVAL", "empty futex bitset");
     if (this.m.u32(at) !== Number(ux(val0) & 0xffffffffn)) return -11n;
     if (!to0) { await this.s.yield(); return 0n; } // A lone task may wake spuriously; POSIX permits that dance.
-    const to = this.addr(to0), ms = this.readTs(to);
+    const to = ux(to0), ms = this.readTs(to);
     const wait = op === 9 ? ms - this.clockMs(op0 & 0x100n ? 0 : 1) : ms;
     if (wait > 0) await this.s.sleep(Math.min(wait, 0x7fffffff));
     return -110n;
@@ -2072,7 +2237,7 @@ export class Rv64 {
   }
 
   private readTs(at: bigint): number {
-    this.mem(at, 16); const sec = this.num(this.m.i64(at), "timespec seconds"), ns = this.m.i64(at + 8n);
+    this.mem(at, 16); const sec = hostNumber(this.m.i64(at), "timespec seconds"), ns = this.m.i64(at + 8n);
     if (sec < 0 || ns < 0n || ns >= 1_000_000_000n) bad("EINVAL", "invalid timespec");
     const ms = sec * 1000 + Number(ns) / 1e6;
     if (!Number.isSafeInteger(Math.floor(ms))) bad("ERANGE", "timespec is too large");
@@ -2082,14 +2247,14 @@ export class Rv64 {
   private async sleepTs(at: bigint): Promise<void> { const ms = this.readTs(at); if (ms) await this.s.sleep(Math.min(ms, 0x7fffffff)); }
 
   private async clockSleep(id0: bigint, fl0: bigint, at0: bigint): Promise<bigint> {
-    const id = this.num(id0, "clock id"), fl = this.nat(fl0, "clock sleep flags", 1);
-    const ms = this.readTs(this.addr(at0)), wait = fl ? ms - this.clockMs(id) : ms;
+    const id = hostNumber(id0, "clock id"), fl = this.nat(fl0, "clock sleep flags", 1);
+    const ms = this.readTs(ux(at0)), wait = fl ? ms - this.clockMs(id) : ms;
     if (wait > 0) await this.s.sleep(Math.min(wait, 0x7fffffff));
     return 0n;
   }
 
   private setAffinity(pid0: bigint, z0: bigint, at0: bigint): bigint {
-    const pid = this.num(pid0, "affinity pid"), z = this.nat(z0, "affinity size", MAX_IO), at = this.addr(at0);
+    const pid = hostNumber(pid0, "affinity pid"), z = this.nat(z0, "affinity size", MAX_IO), at = ux(at0);
     if (pid && pid !== this.s.pid) bad("ESRCH", String(pid));
     if (!z) bad("EINVAL", "empty CPU set");
     this.mem(at, z); if (!(this.m.u8(at) & 1)) bad("EINVAL", "Thistle has one schedulable CPU");
@@ -2097,7 +2262,7 @@ export class Rv64 {
   }
 
   private getAffinity(pid0: bigint, z0: bigint, at0: bigint): bigint {
-    const pid = this.num(pid0, "affinity pid"), z = this.nat(z0, "affinity size", MAX_IO), at = this.addr(at0);
+    const pid = hostNumber(pid0, "affinity pid"), z = this.nat(z0, "affinity size", MAX_IO), at = ux(at0);
     if (pid && pid !== this.s.pid) bad("ESRCH", String(pid));
     if (z < 8) bad("EINVAL", "CPU set is shorter than one kernel word");
     this.mem(at, z, true); this.m.write(at, new Uint8Array(z)); this.m.set8(at, 1); return 8n;
@@ -2112,7 +2277,7 @@ export class Rv64 {
   }
 
   private usage(who0: bigint, at: bigint): bigint {
-    const who = this.num(who0, "rusage target");
+    const who = hostNumber(who0, "rusage target");
     if (who !== -1 && who !== 0 && who !== 1) bad("EINVAL", String(who));
     this.putUsage(at, who === -1 ? 0 : this.s.p.ms()); return 0n;
   }
@@ -2124,8 +2289,8 @@ export class Rv64 {
   }
 
   private getcpu(cpu0: bigint, node0: bigint): bigint {
-    if (cpu0) { const at = this.addr(cpu0); this.mem(at, 4, true); this.m.set32(at, 0); }
-    if (node0) { const at = this.addr(node0); this.mem(at, 4, true); this.m.set32(at, 0); }
+    if (cpu0) { const at = ux(cpu0); this.mem(at, 4, true); this.m.set32(at, 0); }
+    if (node0) { const at = ux(node0); this.mem(at, 4, true); this.m.set32(at, 0); }
     return 0n;
   }
 
@@ -2147,31 +2312,40 @@ export class Rv64 {
   }
 
   private limit(pid0: bigint, res0: bigint, nu0: bigint, old0: bigint): bigint {
-    const pid = this.num(pid0, "limit pid"), res = this.nat(res0, "limit resource", 15);
+    const pid = hostNumber(pid0, "limit pid"), res = this.nat(res0, "limit resource", 15);
     if (pid && pid !== this.s.pid) bad("ESRCH", String(pid));
     const old = this.getLimit(res);
-    if (old0) { const at = this.addr(old0); this.mem(at, 16, true); this.m.set64(at, old[0]); this.m.set64(at + 8n, old[1]); }
+    if (old0) { const at = ux(old0); this.mem(at, 16, true); this.m.set64(at, old[0]); this.m.set64(at + 8n, old[1]); }
     if (nu0) {
-      const at = this.addr(nu0); this.mem(at, 16); const cur = this.m.u64(at), max = this.m.u64(at + 8n);
-      if (max !== MASK && cur > max) bad("EINVAL", "soft limit exceeds hard limit");
-      if (this.s.uid && old[1] !== MASK && (max === MASK || max > old[1])) bad("EPERM", "hard limit increase");
+      const at = ux(nu0); this.mem(at, 16); const cur = this.m.u64(at), max = this.m.u64(at + 8n);
+      ensure(!(max !== MASK && cur > max), () => bad("EINVAL", "soft limit exceeds hard limit"));
+      ensure(!(this.s.uid && old[1] !== MASK && (max === MASK || max > old[1])), () => bad("EPERM", "hard limit increase"));
       this.rlim.set(res, [cur, max]);
     }
     return 0n;
   }
 
   private getLimit(res: number): [bigint, bigint] {
-    const hit = this.rlim.get(res); if (hit) return hit;
+    const hit = (this.rlim.get(res) ?? null); if (hit) return hit;
     const mem = BigInt(this.s.k.lim.mem), fs = BigInt(this.s.k.fs.cap), stack = BigInt(this.s.k.lim.stack);
     let q: [bigint, bigint];
-    if (res === 1) q = [fs, fs];
-    else if (res === 2 || res === 5 || res === 8 || res === 9 || res === 12) q = [mem, mem];
-    else if (res === 3) q = [stack, mem];
-    else if (res === 4 || res === 13 || res === 14) q = [0n, 0n];
-    else if (res === 6) q = [1024n, 1024n];
-    else if (res === 7) q = [256n, 256n];
-    else if (res === 11) q = [256n, 256n];
-    else q = [MASK, MASK];
+    switch (true) {
+case !!(res === 1): { q = [fs, fs];
+break; }
+case !!(res === 2 || res === 5 || res === 8 || res === 9 || res === 12): { q = [mem, mem];
+break; }
+case !!(res === 3): { q = [stack, mem];
+break; }
+case !!(res === 4 || res === 13 || res === 14): { q = [0n, 0n];
+break; }
+case !!(res === 6): { q = [1024n, 1024n];
+break; }
+case !!(res === 7): { q = [256n, 256n];
+break; }
+case !!(res === 11): { q = [256n, 256n];
+break; }
+default: { q = [MASK, MASK]; }
+}
     this.rlim.set(res, q); return q;
   }
 
@@ -2183,11 +2357,7 @@ export class Rv64 {
 
   private trunc(p: string, z: number): void { const b = this.s.readb(p), q = new Uint8Array(z); q.set(b.subarray(0, z)); this.s.writeb(p, q); }
 
-  private str(at0: bigint): string {
-    const b: number[] = []; let at = this.addr(at0);
-    for (; b.length < 65536; at++) { this.mem(at, 1); const x = this.m.u8(at); if (!x) return new TextDecoder().decode(Uint8Array.from(b)); b.push(x); }
-    return bad("ENAMETOOLONG", "RV64 string");
-  }
+  private str(at0: bigint): string { return readString(this.m, this.mem.bind(this), at0, "RV64 string"); }
 
   private async readv(fd: number, at: bigint, n: number): Promise<number> {
     this.mem(at, n * 16); let done = 0;
@@ -2219,14 +2389,14 @@ export class Rv64 {
     const z0 = this.nat(len0, "mapping length", Number.MAX_SAFE_INTEGER), z = al(BigInt(z0));
     if (!z) bad("EINVAL", "zero-length mapping");
     const prot = this.nat(prot0, "mapping protection", 7), flags = this.nat(flags0, "mapping flags", 0x7fffffff);
-    let at = flags & 0x10 ? this.addr(addr0) : addr0 ? al(this.addr(addr0)) : this.mapAt;
+    let at = flags & 0x10 ? ux(addr0) : addr0 ? al(ux(addr0)) : this.mapAt;
     if (at < al(this.floor) || at + z + 1024n * 1024n >= this.stackAt || this.maps.some(q => at < q.end && at + z > q.at)) {
-      if (flags & 0x10) bad("ENOMEM", "fixed mapping collides with the process image");
+      ensure(!(flags & 0x10), () => bad("ENOMEM", "fixed mapping collides with the process image"));
       at = this.mapAt;
       while (this.maps.some(q => at < q.end && at + z > q.at)) at = al(at + 16n * 1024n * 1024n);
-      if (at + z + 1024n * 1024n >= this.stackAt) bad("ENOMEM", "RV64 mapping space exhausted");
+      ensure(!(at + z + 1024n * 1024n >= this.stackAt), () => bad("ENOMEM", "RV64 mapping space exhausted"));
     }
-    let path: string | undefined;
+    let path: string | null = null;
     let off = 0;
     if (!(flags & 0x20) && fd0 >= 0n) {
       const fd = this.fd(fd0), f = this.s.p.fds.get(fd) ?? bad("EBADF", String(fd));
@@ -2235,8 +2405,8 @@ export class Rv64 {
       const b = this.s.readb(path).slice(off, off + z0);
       this.m.write(at, b);
     }
-    const ent: MapEnt = { at, end: at + z, prot, shared: !!(flags & 1) };
-    if (path !== undefined) {
+    const ent: MapEnt = {"path": null, "off": null, at, end: at + z, prot, shared: !!(flags & 1) };
+    if (path !== null) {
       ent.path = path;
       ent.off = off;
     }
@@ -2246,7 +2416,7 @@ export class Rv64 {
   }
 
   private remap(old0: bigint, oz0: bigint, nz0: bigint, fl0: bigint, fixed0: bigint): bigint {
-    const old = this.addr(old0), on = this.nat(oz0, "old mapping length", Number.MAX_SAFE_INTEGER), nn = this.nat(nz0, "new mapping length", Number.MAX_SAFE_INTEGER);
+    const old = ux(old0), on = this.nat(oz0, "old mapping length", Number.MAX_SAFE_INTEGER), nn = this.nat(nz0, "new mapping length", Number.MAX_SAFE_INTEGER);
     const oz = al(BigInt(on)), nz = al(BigInt(nn)), fl = this.nat(fl0, "remap flags", 3);
     if (!on || !nn || old & (PAGE - 1n) || fl & ~3 || fl & 2) bad("EINVAL", "invalid mremap arguments");
     if (fixed0) bad("EINVAL", "fixed mremap is not supported");
@@ -2255,7 +2425,7 @@ export class Rv64 {
     if (nz < oz) { this.flushShared(old + nz, this.nat(oz - nz, "released mapping range", Number.MAX_SAFE_INTEGER)); this.m.drop(old + nz, this.nat(oz - nz, "released mapping range", Number.MAX_SAFE_INTEGER)); q.end = old + nz; return old; }
 
     const end = old + nz, hit = this.maps.some(x => x !== q && old < x.end && end > x.at);
-    if (!hit && end + 1024n * 1024n < this.stackAt) { q.end = end; if (end > this.mapAt) this.mapAt = al(end); return old; }
+    if (!hit && end + 1024n * 1024n < this.stackAt) { q.end = end; (end > this.mapAt) && (this.mapAt = al(end)); return old; }
     if (!(fl & 1)) bad("ENOMEM", "mapping cannot grow in place");
 
     const to = this.mmap(0n, nz, BigInt(q.prot), 0x22n, -1n, 0n), copy = on < nn ? on : nn;
@@ -2263,7 +2433,7 @@ export class Rv64 {
       for (let n = 0; n < copy; n += 65536) {
         const z = Math.min(65536, copy - n); this.m.write(to + BigInt(n), this.m.read(old + BigInt(n), z));
       }
-    } catch (e) { this.unmap(to, nn); throw e; }
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  this.unmap(to, nn); throw e; }
     this.unmap(old, on); return to;
   }
 
@@ -2271,23 +2441,29 @@ export class Rv64 {
     const at = at0 & -PAGE, end = al(at0 + BigInt(len));
     this.flushShared(at, this.nat(end - at, "unmapped range", Number.MAX_SAFE_INTEGER));
     for (let i = this.maps.length - 1; i >= 0; i--) {
-      const q = this.maps[i]!;
+      const q = requireValue(this.maps[i] ?? null, "src/vm/rv64.ts:2274");
       const lo = at > q.at ? at : q.at, hi = end < q.end ? end : q.end;
       if (lo < hi) this.m.drop(lo, this.nat(hi - lo, "unmapped range", Number.MAX_SAFE_INTEGER));
-      if (at <= q.at && end >= q.end) this.maps.splice(i, 1);
-      else if (at > q.at && end < q.end) {
-        const old = q.end, next: MapEnt = { at: end, end: old, prot: q.prot, shared: q.shared };
-        if (q.path !== undefined) next.path = q.path;
-        if (q.off !== undefined) next.off = q.off + this.nat(end - q.at, "mapping offset", Number.MAX_SAFE_INTEGER);
+      switch (true) {
+case !!(at <= q.at && end >= q.end): { this.maps.splice(i, 1);
+break; }
+case !!(at > q.at && end < q.end): {
+        const old = q.end, next: MapEnt = {"path": null, "off": null, at: end, end: old, prot: q.prot, shared: q.shared };
+        if (q.path !== null) next.path = q.path;
+        if (q.off !== null) next.off = q.off + this.nat(end - q.at, "mapping offset", Number.MAX_SAFE_INTEGER);
         q.end = at;
         this.maps.push(next);
-      }
-      else if (at <= q.at && end > q.at) {
+
+break; }
+case !!(at <= q.at && end > q.at): {
         const old = q.at;
         q.at = end;
-        if (q.off !== undefined) q.off += this.nat(end - old, "mapping offset", Number.MAX_SAFE_INTEGER);
-      }
-      else if (at < q.end && end >= q.end) q.end = at;
+        if (q.off !== null) q.off += this.nat(end - old, "mapping offset", Number.MAX_SAFE_INTEGER);
+
+break; }
+case !!(at < q.end && end >= q.end): { q.end = at;
+break; }
+}
     }
   }
 
@@ -2295,7 +2471,7 @@ export class Rv64 {
     if (len <= 0) return;
     const at = at0 & -PAGE, end = al(at0 + BigInt(len));
     for (const q of this.maps) {
-      if (!q.shared || !q.path || q.off === undefined) continue;
+      if (!q.shared || !q.path || q.off === null) continue;
       const lo = at > q.at ? at : q.at, hi = end < q.end ? end : q.end;
       if (lo >= hi) continue;
       const rel = this.nat(lo - q.at, "mapping relative offset", Number.MAX_SAFE_INTEGER);
@@ -2311,14 +2487,10 @@ export class Rv64 {
     for (const q of [...this.maps]) this.flushShared(q.at, this.nat(q.end - q.at, "mapping length", Number.MAX_SAFE_INTEGER));
   }
 
-  private random(at: bigint, n: number): number {
-    this.mem(at, n, true);
-    for (let i = 0; i < n; i += 65536) { const b = new Uint8Array(Math.min(65536, n - i)); crypto.getRandomValues(b); this.m.write(at + BigInt(i), b); }
-    return n;
-  }
+  private random(at: bigint, n: number): number { return randomFill(this.m, this.mem.bind(this), at, n); }
 
   private stack(argv: string[]): void {
-    const env = [...(this.s.env() as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
+    const env = [...(this.s.env(null) as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
     let sp = this.m.top - 16n;
     const z = BigInt(Math.max(1024 * 1024, this.s.k.lim.stack));
     this.stackAt = this.m.top - z;
@@ -2341,7 +2513,7 @@ export class Rv64 {
   private exec(at: bigint, n: number): void {
     const end = at + BigInt(n);
     if (at >= this.eat && end <= this.eend) return;
-    const q = this.seg.find(s => s.flg.includes("x") && at >= s.at && end <= s.end);
+    const q = (this.seg.find(s => s.flg.includes("x") && at >= s.at && end <= s.end) ?? null);
     if (q) { this.eat = q.at; this.eend = q.end; return; }
     if (!this.maps.some(m => m.prot & 4 && at >= m.at && end <= m.end)) bad("EACCES", `RV64 execute at 0x${at.toString(16)}`);
   }
@@ -2350,29 +2522,40 @@ export class Rv64 {
     const end = at + BigInt(n);
     if (at < 0n || !Number.isSafeInteger(n) || n < 0 || end > this.m.top) bad("ERANGE", `RV64 memory at 0x${at.toString(16)}`);
     if (!n) return;
-    const q = at < this.floor ? this.seg.find(s => at >= s.at && end <= s.end) : undefined;
+    const q = at < this.floor ? (this.seg.find(s => at >= s.at && end <= s.end) ?? null) : null;
     const mapped = !!q || at >= this.floor && end <= this.brk || at >= this.stackAt || this.maps.some(m => at >= m.at && end <= m.end);
-    if (!mapped) bad("ERANGE", `unmapped RV64 memory at 0x${at.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(this.x[13]!).toString(16)}, a7=0x${ux(this.x[17]!).toString(16)})`);
+    if (!mapped) bad("ERANGE", `unmapped RV64 memory at 0x${at.toString(16)} from pc 0x${(this.pc - 2n).toString(16)} (a3=0x${ux(requireValue(this.x[13] ?? null, "src/vm/rv64.ts:2355")).toString(16)}, a7=0x${ux(requireValue(this.x[17] ?? null, "src/vm/rv64.ts:2355")).toString(16)})`);
     if (wr && q && !q.flg.includes("w")) bad("EACCES", `write to ${q.name}`);
     if (wr && !q && this.maps.some(m => at >= m.at && end <= m.end && !(m.prot & 2))) bad("EACCES", "write to read-only RV64 mapping");
   }
 
-  private immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }
-  private immS(i: number): bigint { return BigInt(rv64ImmediateS(i)); }
-  private immB(i: number): bigint { return BigInt(rv64ImmediateB(i)); }
-  private immU(i: number): bigint { return BigInt(rv64ImmediateU(i)); }
-  private immJ(i: number): bigint { return BigInt(rv64ImmediateJ(i)); }
+
+
+
+
+
   private set(d: number, n: bigint): void { if (d) this.x[d] = sx(n, 64); }
-  private addr(n: bigint): bigint { return ux(n); }
+
   private fd(n: bigint): number { return this.nat(n, "file descriptor", 0x7fffffff); }
   private nat(n: bigint, k: string, max: number): number { const q = ux(n); if (n < 0n || q > BigInt(max)) bad("ERANGE", `${k} is out of range`); return Number(q); }
   private owner(n: bigint, k: string): number { const q = ux(n); if (q === 0xffffffffn) bad("EINVAL", `${k} is reserved`); if (q > 0xffffffffn) bad("ERANGE", `${k} is out of range`); return Number(q); }
-  private idOrKeep(n: bigint): number | undefined {
+  private idOrKeep(n: bigint): number | null {
     const value = ux(n);
-    return value === 0xffffffffn || value === MASK ? undefined : this.owner(n, "identity");
+    return value === 0xffffffffn || value === MASK ? null : this.owner(n, "identity");
   }
-  private num(n: bigint, k: string): number { if (n < BigInt(Number.MIN_SAFE_INTEGER) || n > BigInt(Number.MAX_SAFE_INTEGER)) bad("ERANGE", `${k} is out of range`); return Number(n); }
+
   private exit(n: bigint): void { this.flushAllShared(); this.code = Number(ux(n) & 0xffffffffn); this.done = true; }
+  // The default trap address is derived from the current VM program counter.
+  //@cg-expect-warning
   private bad(i: number, at = this.pc - 4n): never { return bad("ENOEXEC", `bad RV64 instruction 0x${i.toString(16).padStart(8, "0")} at 0x${at.toString(16)}`); }
   private badR(top: number, f: number): never { return bad("ENOEXEC", `bad RV64 function ${top.toString(16)}:${f} at 0x${(this.pc - 4n).toString(16)}`); }
 }
+
+function cj(i: number): bigint {
+    return BigInt(rv64CompressedJump(i));
+  }
+function immI(i: number): bigint { return BigInt(rv64ImmediateI(i)); }
+function immS(i: number): bigint { return BigInt(rv64ImmediateS(i)); }
+function immB(i: number): bigint { return BigInt(rv64ImmediateB(i)); }
+function immU(i: number): bigint { return BigInt(rv64ImmediateU(i)); }
+function immJ(i: number): bigint { return BigInt(rv64ImmediateJ(i)); }

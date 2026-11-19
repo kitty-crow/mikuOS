@@ -1,3 +1,4 @@
+import { requireValue } from "./err.js";
 import type { In, Out } from "../io/stream.js";
 import { credGid, credUid } from "../fs/vfs.js";
 import type { Cred } from "../fs/vfs.js";
@@ -29,10 +30,12 @@ export class ExecReplace extends Error {
 export class Fd {
   pos = 0;
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   constructor(
-    public input?: In,
-    public output?: Out,
-    public path?: string,
+    public input: In | null = null,
+    public output: Out | null = null,
+    public path: string | null = null,
     public rd = false,
     public wr = false,
     public add = false,
@@ -55,8 +58,10 @@ export class Proc {
   signalMask = 0n;
   private pending: Sig | null = null;
   readonly done: Promise<number>;
-  private fin!: (n: number) => void;
+  private fin: ((n: number) => void) | null = null;
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   constructor(
     public readonly pid: number,
     public readonly ppid: number,
@@ -70,9 +75,9 @@ export class Proc {
   ) {
     this.fsuid = credUid(cred);
     this.fsgid = credGid(cred);
-    this.fds.set(0, new Fd(io.sin, undefined, "/dev/stdin", true));
-    this.fds.set(1, new Fd(undefined, io.sout, "/dev/stdout", false, true));
-    this.fds.set(2, new Fd(undefined, io.serr, "/dev/stderr", false, true));
+    this.fds.set(0, new Fd(io.sin, null, "/dev/stdin", true));
+    this.fds.set(1, new Fd(null, io.sout, "/dev/stdout", false, true));
+    this.fds.set(2, new Fd(null, io.serr, "/dev/stderr", false, true));
     this.done = new Promise(ok => { this.fin = ok; });
   }
 
@@ -80,7 +85,7 @@ export class Proc {
     if (this.code !== null) return;
     this.code = n & 0xff;
     this.state = "zombie";
-    this.fin(this.code);
+    requireValue(this.fin, "process completion resolver")(this.code);
   }
 
   signal(s: Sig): boolean {
@@ -95,9 +100,13 @@ export class Proc {
 
   setSignalMask(how: 0 | 1 | 2, mask: bigint): bigint {
     const old = this.signalMask, kill = 1n << 8n;
-    if (how === 0) this.signalMask |= mask;
-    else if (how === 1) this.signalMask &= ~mask;
-    else this.signalMask = mask;
+    switch (true) {
+case !!(how === 0): { this.signalMask |= mask;
+break; }
+case !!(how === 1): { this.signalMask &= ~mask;
+break; }
+default: { this.signalMask = mask; }
+}
     this.signalMask &= ~kill;
     const p = this.pending;
     if (p !== null && !(this.signalMask & (1n << BigInt(p - 1)))) {

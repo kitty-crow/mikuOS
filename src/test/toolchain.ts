@@ -4,7 +4,7 @@ import { Exe, codec } from "../asm/fmt.js";
 
 const ok: (v: boolean, m: string) => asserts v = (v, m) => { if (!v) throw new Error(m); };
 let out = "", err = "";
-const os = boot({ put: (s, ch) => { if (ch === "err") err += s; else out += s; }, pkg: rootPkg });
+const os = boot({"halt": null, "tree": null, "requireTree": null, "config": null, "account": null, "setId": null, "teto": null, "kernelMode": null, "onBootProgress": null, put: (s, ch) => { if (ch === "err") err += s; else out += s; }, pkg: rootPkg }, null);
 
 const run = async (s: string): Promise<{ code: number; out: string; err: string; ms: number }> => {
   out = ""; err = ""; const at = Date.now(), code = await os.run(s);

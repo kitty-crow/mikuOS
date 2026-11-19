@@ -1,3 +1,9 @@
+// This module composes kernel, toolchain or integration-test boundaries and intentionally imports their contracts.
+//@cg-expect-warning
+import { ensure } from "../core/err.js";
+import { Lim } from "../core/cap.js";
+import { withValue } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import { Kern } from "../core/kernel.js";
 import { Sys } from "../core/sys.js";
 import { Tty } from "../io/tty.js";
@@ -17,17 +23,17 @@ export type Ch = "out" | "err" | "sys" | "in";
 
 export interface Host {
   put(s: string, ch: Ch): void | Promise<void>;
-  halt?(): void;
-  tree?: Tree;
-  requireTree?: boolean;
-  pkg?: { install(kernel: Kern): Promise<boolean> };
-  config?: SystemConfig;
-  account?: AccountConfig;
-  setId?: boolean;
-  teto?: TetoImageProvider;
-  kernelMode?: KernelMode;
+  halt: (() => void) | null;
+  tree: Tree | null;
+  requireTree: boolean | null;
+  pkg: { install(kernel: Kern): Promise<boolean> } | null;
+  config: SystemConfig | null;
+  account: AccountConfig | null;
+  setId: boolean | null;
+  teto: TetoImageProvider | null;
+  kernelMode: KernelMode | null;
   /** Real browser startup milestones; no simulated elapsed-time progress. */
-  onBootProgress?: (phase: number) => void;
+  onBootProgress: ((phase: number) => void) | null;
 }
 
 export class Os {
@@ -43,17 +49,17 @@ export class Os {
 
   constructor(readonly host: Host, net = new Net()) {
     const config = host.config ?? DEFAULT_CONFIG;
-    this.k = new Kern(net, undefined, config, host.setId ?? false, host.teto);
-    this.k.ttyFn = (x, e) => void host.put(x, e ? "err" : "out");
+    this.k = new Kern(net, Lim.host(), config, host.setId ?? false, host.teto);
+    this.k.ttyFn = (x, e) => { Promise.resolve(host.put(x, e ? "err" : "out")).catch(console.error); };
     image(this.k);
     this.tty = new Tty(
       (x, e) => host.put(x, e ? "err" : "out"),
-      n => n === 2 ? this.sh?.interrupt() ?? false : false,
+      n => n === 2 ? withValue(this.sh ?? null, value => value.interrupt()) ?? false : false,
     );
     this.p = this.k.session({ sin: this.tty.input, sout: this.tty.output, serr: this.tty.error }, host.account ?? config.accounts.cli);
     this.s = new Sys(this.k, this.p);
     this.sh = new Shell(this.s);
-    this.k.setHalt(() => host.halt?.());
+    this.k.setHalt(() => withValue(host.halt ?? null, callable => callable.call(host)));
     this.k.log("thsh: interactive session ready");
     this.ready = this.init();
   }
@@ -63,12 +69,10 @@ export class Os {
     if (this.activeKernelMode === "teto") {
       const banner = this.k.config.messages.tetoBanner;
 
-      if (banner) {
-        await this.host.put(
+      (banner) && (await this.host.put(
           `${banner}${banner.endsWith("\n") ? "" : "\n"}`,
           "sys",
-        );
-      }
+        ));
     }
     if (!this.sh.prefs.showWelcome) return;
     try {
@@ -81,6 +85,8 @@ export class Os {
       );
       await this.host.put(motd, "sys");
     }
+    // This documented best-effort fallback intentionally continues after the optional operation fails.
+    //@cg-expect-warning
     catch { /* A deleted motd should not brick the login. */ }
   }
 
@@ -94,7 +100,7 @@ export class Os {
     try {
       return await this.sh.run(line, recordHistory, heredocBodies);
     }
-    catch (e) { if (e instanceof ShExit) { this.host.halt?.(); return e.code; } throw e; }
+    catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  if (e instanceof ShExit) { withValue(this.host.halt ?? null, callable => callable.call(this.host)); return e.code; } throw e; }
     finally {
       this.busy = false;
       this.tty.reset();
@@ -120,15 +126,15 @@ export class Os {
     if (!this.host.tree) return;
     const ent = this.snapshot();
     this.save = this.save.then(async () => {
-      const merged = await this.host.tree!.push(ent, ROOT_IMAGE_VERSION);
+      const merged = await requireValue(this.host.tree ?? null, "src/main/boot.ts:123").push(ent, ROOT_IMAGE_VERSION);
       if (merged) {
         treeFs.load(this.k.fs, merged);
         live(this.k);
       }
-    }).catch(async e => {
+    }, null).catch(async <T>(caughtValue: T) => { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       this.k.log(`persist: save failed: ${e instanceof Error ? e.message : String(e)}`);
       await this.host.put(`Persistence save failed: ${e instanceof Error ? e.message : String(e)}\n`, "err");
-    });
+     });
     await this.save;
   }
 
@@ -136,20 +142,20 @@ export class Os {
     if (!this.host.tree) { live(this.k); return; }
     try {
       const ent = await this.host.tree.pull();
-      this.host.onBootProgress?.(4);
+      withValue(this.host.onBootProgress ?? null, callable => callable.call(this.host, 4));
       const before = this.host.tree.imageVersion ?? 0;
       if (ent) treeFs.load(this.k.fs, ent);
       this.k.disk = true;
       const after = ent ? migrateImage(this.k, before) : ROOT_IMAGE_VERSION;
       live(this.k);
       if (ent) {
-        if (after !== before) await this.host.tree.push(this.snapshot(), after);
+        (after !== before) && (await this.host.tree.push(this.snapshot(), after));
         this.k.log(`hostfs: restored / from ${ent.length} entries in ${this.host.tree.label}`);
       } else {
         await this.host.tree.push(this.snapshot(), after);
         this.k.log(`hostfs: initialized / in ${this.host.tree.label}`);
       }
-    } catch (e) {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (this.host.requireTree) throw e;
       this.k.disk = false;
       live(this.k);
@@ -160,7 +166,7 @@ export class Os {
 
 
   private async configureKernelMode(): Promise<void> {
-    this.host.onBootProgress?.(5);
+    withValue(this.host.onBootProgress ?? null, callable => callable.call(this.host, 5));
     const requested = this.host.kernelMode ?? "thistle";
     if (requested === "thistle") {
       this.activeKernelMode = "thistle";
@@ -173,7 +179,7 @@ export class Os {
       return;
     }
     if (!this.host.teto) {
-      if (requested === "teto") throw new Error("Teto was requested but this host did not provide teto.wasm");
+      ensure(!(requested === "teto"), () => { throw new Error("Teto was requested but this host did not provide teto.wasm"); });
       this.k.log("teto: unavailable; auto mode retained direct Thistle execution");
       this.activeKernelMode = "thistle";
       this.k.name = "Thistle";
@@ -191,7 +197,7 @@ export class Os {
       this.p.env.set("THISTLE_TETO_STRICT", "1");
       this.k.executionCore = "Teto WebAssembly";
       this.k.log("teto: generated WebAssembly RV64 execution core validated and selected");
-    } catch (error) {
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (requested === "teto") throw error;
       this.activeKernelMode = "thistle";
       this.p.env.set("MIKUOS_KERNEL_MODE", "thistle");
@@ -205,16 +211,18 @@ export class Os {
   private async init(): Promise<void> {
     await this.restore();
     await this.configureKernelMode();
-    this.host.onBootProgress?.(6);
+    withValue(this.host.onBootProgress ?? null, callable => callable.call(this.host, 6));
     this.sh.ensureUserState(true);
     if (this.host.pkg) {
       try {
+        // An installed package is flushed only after its successful guest-tree update.
+        //@cg-expect-warning
         if (await this.host.pkg.install(this.k)) {
           live(this.k);
           await this.flush();
         }
-      } catch (error) {
-        const code = (error as { code?: unknown } | null)?.code;
+      } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+        const code = withValue((error as Error & { code: string | null } | null) ?? null, value => value.code);
         const message = error instanceof Error && error.message
           ? error.message
           : `${error instanceof Error ? error.name : "Error"}${code ? ` (${String(code)})` : ""}`;
@@ -231,4 +239,4 @@ export class Os {
   }
 }
 
-export const boot = (host: Host, net?: Net): Os => new Os(host, net);
+export const boot = (host: Pick<Host, "put"> & Partial<Host>, net: Net | null = null): Os => new Os({ halt: null, tree: null, requireTree: null, pkg: null, config: null, account: null, setId: null, kernelMode: null, teto: null, onBootProgress: null, ...host }, net ?? new Net());

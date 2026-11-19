@@ -1,3 +1,4 @@
+import { withValue } from "../core/err.js";
 import { boot } from "./boot.js";
 import type { Host, Os } from "./boot.js";
 import type { SystemConfig } from "../core/config.js";
@@ -9,16 +10,16 @@ import type { KernelMode } from "../teto/provider.js";
 
 export interface WebSessionOutput {
   write(text: string): void;
-  halt?(): void;
+  halt: (() => void) | null;
 }
 
 export interface WebSessionOptions {
   config: SystemConfig;
-  tree?: Tree;
-  net?: Net;
-  kernelMode?: KernelMode;
-  teto?: TetoImageProvider;
-  onBootProgress?: (phase: number) => void;
+  tree: Tree | null;
+  net: Net | null;
+  kernelMode: KernelMode | null;
+  teto: TetoImageProvider | null;
+  onBootProgress: ((phase: number) => void) | null;
 }
 
 /** A complete kernel, guest session, and line editor running in this process. */
@@ -33,15 +34,14 @@ export class WebSession {
     private readonly output: WebSessionOutput,
     options: WebSessionOptions,
   ) {
-    const host: Host = {
-      put: text => output.write(text),
+    const host: Host = {"tree": null, "requireTree": null, "pkg": null, put: text => output.write(text),
       halt: () => this.halt(),
       config: options.config,
       account: options.config.accounts.web,
       setId: true,
       kernelMode: options.kernelMode ?? "thistle",
-      ...(options.onBootProgress ? { onBootProgress: options.onBootProgress } : {}),
-      ...(options.teto ? { teto: options.teto } : {}),
+      onBootProgress: options.onBootProgress,
+      teto: options.teto,
     };
 
     if (options.tree) host.tree = options.tree;
@@ -93,7 +93,7 @@ export class WebSession {
     this.os.sh.ensureUserState(true);
     this.output.write(""); // Keep renderer output ordering deterministic.
     this.editor.afterCommand();
-    this.os.host.onBootProgress?.(7);
+    withValue(this.os.host.onBootProgress ?? null, callable => callable.call(this.os.host, 7));
   }
 
   private execute(source: string, bodies: readonly string[]): void {
@@ -101,18 +101,18 @@ export class WebSession {
       if (!this.live) return;
       await this.os.run(source, bodies);
       this.editor.afterCommand();
-    }).catch(error => {
+    }, null).catch(<T>(caughtValue: T) => { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       this.output.write(
         `${error instanceof Error ? error.message : String(error)}\r\n`,
       );
       this.editor.afterCommand();
-    });
+     });
   }
 
   private halt(): void {
     if (!this.live) return;
     this.live = false;
     this.output.write(this.os.k.config.messages.halted);
-    this.output.halt?.();
+    withValue(this.output.halt ?? null, callable => callable.call(this.output));
   }
 }

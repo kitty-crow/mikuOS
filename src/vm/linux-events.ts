@@ -48,14 +48,14 @@ export class RvLinuxEvents {
 
   private allocate(device: Device, clo: boolean): number {
     const fd = this.sys.k.fd(this.sys.p);
-    this.sys.p.fds.set(fd, new Fd(undefined, undefined, undefined, true, true, false, clo));
+    this.sys.p.fds.set(fd, new Fd(null, null, null, true, true, false, clo));
     this.devices.set(fd, device);
     return fd;
   }
 
   createEpoll(flags: number): number {
     if (flags & ~CLOEXEC) return -22;
-    return this.allocate({ kind: "epoll", watches: new Map(), refs: 1 }, !!(flags & CLOEXEC));
+    return this.allocate({ kind: "epoll", watches: new Map<number, Watch>(), refs: 1 }, !!(flags & CLOEXEC));
   }
 
   createEventfd(initial: number, flags: number): number {
@@ -70,7 +70,7 @@ export class RvLinuxEvents {
   }
 
   duplicate(oldFd: number, newFd: number): void {
-    const device = this.devices.get(oldFd);
+    const device = (this.devices.get(oldFd) ?? null);
     if (!device || oldFd === newFd) return;
     this.detach(newFd);
     device.refs++;
@@ -87,7 +87,7 @@ export class RvLinuxEvents {
   }
 
   private detach(fd: number): void {
-    const device = this.devices.get(fd);
+    const device = (this.devices.get(fd) ?? null);
     if (!device) return;
     this.devices.delete(fd);
     device.refs--;
@@ -102,22 +102,22 @@ export class RvLinuxEvents {
     this.changed();
   }
 
-  flags(fd: number): number | undefined {
-    const device = this.devices.get(fd);
-    if (!device) return undefined;
+  flags(fd: number): number | null {
+    const device = (this.devices.get(fd) ?? null);
+    if (!device) return null;
     return 2 | (device.kind === "eventfd" && device.nonblock ? NONBLOCK : 0);
   }
 
   setStatusFlags(fd: number, flags: number): boolean {
-    const device = this.devices.get(fd);
+    const device = (this.devices.get(fd) ?? null);
     if (!device) return false;
     if (device.kind === "eventfd") device.nonblock = !!(flags & NONBLOCK);
     return true;
   }
 
-  async read(fd: number, at: bigint, length: number): Promise<bigint | undefined> {
-    const device = this.devices.get(fd);
-    if (!device) return undefined;
+  async read(fd: number, at: bigint, length: number): Promise<bigint | null> {
+    const device = (this.devices.get(fd) ?? null);
+    if (!device) return null;
     if (device.kind !== "eventfd" || length < 8) return -22n;
     this.check(at, 8, true);
     while (device.value === 0n) {
@@ -132,9 +132,9 @@ export class RvLinuxEvents {
     return 8n;
   }
 
-  async write(fd: number, at: bigint, length: number): Promise<bigint | undefined> {
-    const device = this.devices.get(fd);
-    if (!device) return undefined;
+  async write(fd: number, at: bigint, length: number): Promise<bigint | null> {
+    const device = (this.devices.get(fd) ?? null);
+    if (!device) return null;
     if (device.kind !== "eventfd" || length < 8) return -22n;
     this.check(at, 8, false);
     const value = this.memory().u64(at);
@@ -152,9 +152,9 @@ export class RvLinuxEvents {
   private ready(target: Device | Fd): number {
     if (target instanceof Fd) {
       let result = 0;
-      if (target.input instanceof Pipe && target.input.readable) result |= EPOLLIN;
-      if (target.output instanceof Pipe && target.output.writable) result |= EPOLLOUT;
-      if (target.output && !(target.output instanceof Pipe)) result |= EPOLLOUT;
+      (target.input instanceof Pipe && target.input.readable) && (result |= EPOLLIN);
+      (target.output instanceof Pipe && target.output.writable) && (result |= EPOLLOUT);
+      (target.output && !(target.output instanceof Pipe)) && (result |= EPOLLOUT);
       return result;
     }
     if (target.kind !== "eventfd") return 0;
@@ -162,18 +162,20 @@ export class RvLinuxEvents {
       (target.value < MAX_COUNTER ? EPOLLOUT : 0);
   }
 
-  readiness(fd: number, mask: number): number | undefined {
-    const target = this.devices.get(fd) ?? this.sys.p.fds.get(fd);
-    return target ? this.ready(target) & mask : undefined;
+  readiness(fd: number, mask: number): number | null {
+    const target = this.devices.get(fd) ?? (this.sys.p.fds.get(fd) ?? null);
+    return target ? this.ready(target) & mask : null;
   }
 
   ctl(epfd: number, op: number, fd: number, at: bigint): number {
-    const poller = this.devices.get(epfd);
+    const poller = (this.devices.get(epfd) ?? null);
     if (!poller || poller.kind !== "epoll") return -9;
     if (!this.sys.p.fds.has(fd)) return -9;
     if (epfd === fd) return -22;
     const present = poller.watches.has(fd);
     if (op === 2) {
+      // Watch existence is checked within the selected epoll operation before mutation.
+      //@cg-expect-warning
       if (!present) return -2;
       poller.watches.delete(fd);
       this.refreshPipeWatches();
@@ -183,7 +185,7 @@ export class RvLinuxEvents {
     if (op !== 1 && op !== 3) return -22;
     if (op === 1 && present) return -17;
     if (op === 3 && !present) return -2;
-    const target = this.devices.get(fd) ?? this.sys.p.fds.get(fd);
+    const target = this.devices.get(fd) ?? (this.sys.p.fds.get(fd) ?? null);
     if (!target) return -9;
     if (!(target instanceof Fd) && target.kind === "epoll") return -22;
     if (target instanceof Fd && target.path && !target.input && !target.output) return -1;
@@ -219,7 +221,7 @@ export class RvLinuxEvents {
   }
 
   async wait(epfd: number, at: bigint, limit: number, timeout: number): Promise<number> {
-    const poller = this.devices.get(epfd);
+    const poller = (this.devices.get(epfd) ?? null);
     if (!poller || poller.kind !== "epoll") return -9;
     if (limit < 1 || limit > 4096 || timeout < -1) return -22;
     if (!at) return -14;
@@ -228,7 +230,7 @@ export class RvLinuxEvents {
     if (count || timeout === 0) return count;
     await this.waitChange(timeout);
     count = this.collect(poller, at, limit);
-    return this.devices.get(epfd) === poller ? count : -9;
+    return (this.devices.get(epfd) ?? null) === poller ? count : -9;
   }
 
   private refreshPipeWatches(): void {
@@ -264,10 +266,10 @@ export class RvLinuxEvents {
 
   private async waitChange(timeout: number): Promise<void> {
     await new Promise<void>(resolve => {
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      let timer: ReturnType<typeof setTimeout> | null = null;
       const finish = (): void => {
         this.waiters.delete(finish);
-        if (timer !== undefined) clearTimeout(timer);
+        if (timer !== null) clearTimeout(timer);
         resolve();
       };
       this.waiters.add(finish);

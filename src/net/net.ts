@@ -1,15 +1,18 @@
+import { ensure } from "../core/err.js";
+import { requireValue } from "../core/err.js";
+import { withValue } from "../core/err.js";
 import { KErr, bad } from "../core/err.js";
 
 export type Hdr = Record<string, string>;
 
 export interface NReq {
   url: string;
-  method?: string;
-  hdr?: Hdr;
-  body?: Uint8Array;
-  redirs?: number;
-  timeout?: number;
-  max?: number;
+  method: string | null;
+  hdr: Hdr | null;
+  body: Uint8Array | null;
+  redirs: number | null;
+  timeout: number | null;
+  max: number | null;
 }
 
 export interface NRes {
@@ -25,7 +28,7 @@ export interface DReq {
   url: string;
   method: string;
   hdr: Hdr;
-  body?: Uint8Array;
+  body: Uint8Array | null;
   max: number;
 }
 
@@ -74,11 +77,11 @@ export class FetchDev extends NetDev {
     if (r.body && r.method !== "GET" && r.method !== "HEAD") init.body = Uint8Array.from(r.body);
     let x: Response;
     try { x = await fetch(r.url, init); }
-    catch (e) { throw this.fail(e); }
+    catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  throw this.fail(e); }
     return { url: x.url || r.url, status: x.status, text: x.statusText, hdr: hdrs(x.headers), body: await bytes(x, r.max) };
   }
 
-  private fail(e: unknown): KErr {
+  private fail<T>(e: T): KErr {
     if (e instanceof KErr) return e;
     if (e instanceof DOMException && e.name === "AbortError") return new KErr("EINTR", "network request interrupted");
     return new KErr("ENETUNREACH", e instanceof Error ? e.message : String(e));
@@ -96,7 +99,7 @@ export class Net {
 
   constructor(readonly dev: NetDev = new FetchDev()) {}
 
-  async req(r: NReq, parent?: AbortSignal): Promise<NRes> {
+  async req(r: NReq, parent: AbortSignal | null = null): Promise<NRes> {
     const method = (r.method ?? "GET").toUpperCase();
     if (!/^[A-Z]+$/.test(method)) bad("EINVAL", `bad HTTP method: ${method}`);
     const max = r.max ?? 12 * 1024 * 1024;
@@ -105,8 +108,8 @@ export class Net {
     if (!Number.isInteger(max) || max < 0 || !Number.isInteger(redirs) || redirs < 0 || !Number.isFinite(timeout) || timeout <= 0) bad("EINVAL", "bad network limit");
 
     const ac = new AbortController();
-    const stop = (): void => ac.abort(parent?.reason);
-    parent?.addEventListener("abort", stop, { once: true });
+    const stop = (): void => ac.abort(new DOMException("Request aborted", "AbortError"));
+    withValue(parent ?? null, value => value.addEventListener("abort", stop, { once: true }));
     const id = setTimeout(() => ac.abort(new KErr("ETIMEDOUT", r.url)), timeout);
     let url = this.url(r.url);
     let verb = method;
@@ -115,28 +118,28 @@ export class Net {
     try {
       for (let n = 0;; n++) {
         this.calls++;
-        this.tx += body?.length ?? 0;
+        this.tx += withValue(body ?? null, value => value.length) ?? 0;
         this.log(`net: ${verb} ${url}`);
-        const q: DReq = { url, method: verb, hdr: { "user-agent": "Thistle/2.1.0", ...(r.hdr ?? {}) }, max };
-        if (body !== undefined) q.body = body;
+        const q: DReq = {"body": null, url, method: verb, hdr: { "user-agent": "Thistle/2.1.0", ...(r.hdr ?? {}) }, max };
+        if (body !== null) q.body = body;
         const x = await this.dev.req(q, ac.signal);
         this.rx += x.body.length;
-        if (!moved.has(x.status) || !x.hdr.location) return { ...x, hops };
+        if (!moved.has(x.status) || !(x.hdr.location ?? null)) return { ...x, hops };
         if (n >= redirs) bad("ELOOP", `too many redirects: ${r.url}`);
         hops.push(url);
-        url = this.url(new URL(x.hdr.location, url).href);
-        if (x.status === 303 || ((x.status === 301 || x.status === 302) && verb === "POST")) { verb = "GET"; body = undefined; }
+        url = this.url(new URL((requireValue(x.hdr.location ?? null, "src/net/net.ts:128") ?? null), url).href);
+        if (x.status === 303 || ((x.status === 301 || x.status === 302) && verb === "POST")) { verb = "GET"; body = null; }
       }
-    } catch (e) {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       this.fails++;
       if (ac.signal.aborted) {
-        if (parent?.aborted) throw new KErr("EINTR", "network request interrupted");
+        ensure(!(withValue(parent ?? null, value => value.aborted)), () => { throw new KErr("EINTR", "network request interrupted"); });
         throw new KErr("ETIMEDOUT", r.url);
       }
       throw e;
     } finally {
       clearTimeout(id);
-      parent?.removeEventListener("abort", stop);
+      withValue(parent ?? null, value => value.removeEventListener("abort", stop));
     }
   }
 

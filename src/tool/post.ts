@@ -52,13 +52,13 @@ try {
     "-Wl,--initial-memory=131072", "-Wl,--strip-all",
     "-o", decodeURIComponent(bootWasm.pathname), decodeURIComponent(bootC.pathname),
   ], { stdio: "inherit" });
-} catch (error) {
+} catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
   throw new Error("The independent mikuOS boot programme requires clang with wasm32 support", { cause: error });
 }
 await build({
   entryPoints: [decodeURIComponent(new URL("src/boot/loader.ts", root).pathname)],
   outfile: decodeURIComponent(new URL("bootloader.js", web).pathname),
-  bundle: false,
+  bundle: true,
   platform: "browser",
   format: "iife",
   target: ["es2022"],
@@ -68,7 +68,7 @@ await build({
 await build({
   entryPoints: [decodeURIComponent(new URL("src/boot/standalone.ts", root).pathname)],
   outfile: decodeURIComponent(new URL("boot-standalone.js", web).pathname),
-  bundle: false,
+  bundle: true,
   platform: "browser",
   format: "iife",
   target: ["es2022"],
@@ -78,8 +78,8 @@ console.log("Early mikuOS boot programme compiled with the original Unicode colo
 
 await fs.mkdir(assets, { recursive: true });
 await fs.writeFile(new URL("hello.wasm", assets), demoWasm());
-const hello = new Asm((name) => libInc(name), { debug: true }).run(HELLO_TAS, "hello.tas").obj;
-const helloThx = codec.pack(new Link().run([hello], { names: ["hello.to"] }).exe);
+const hello = new Asm((name) => libInc(name), {"defs": {}, "arch": "thistle64",  debug: true }).run(HELLO_TAS, "hello.tas").obj;
+const helloThx = codec.pack(new Link().run([hello], {"entry": null, "base": null, "mem": null,  names: ["hello.to"] }).exe);
 const rvMessage = new TextEncoder().encode("hello from Teto RV64GC\n");
 const rvWords = [
   (1 << 20 | 10 << 7 | 0x13) >>> 0,
@@ -119,6 +119,8 @@ for (const x of await fs.readdir(src, { withFileTypes: true })) {
     const d = new URL(`${x.name}/`, dst);
     await fs.mkdir(d, { recursive: true });
     await fs.copyFile(new URL(`${x.name}/README.md`, src), new URL("README.md", d));
+  // This documented best-effort fallback intentionally continues after the optional operation fails.
+  //@cg-expect-warning
   } catch { /* Source-only helper folders don't owe the build a novel. */ }
 }
 
@@ -176,6 +178,8 @@ await build({
   sourcemap: false,
   minify: false,
   treeShaking: true,
+  define: { process: "undefined" },
+  minifySyntax: true,
   external: ["node:*"],
   logOverride: { "empty-import-meta": "silent" },
   logLevel: "warning",

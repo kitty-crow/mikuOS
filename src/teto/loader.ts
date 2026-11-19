@@ -1,4 +1,5 @@
-export interface TetoExports {
+import { withValue } from "../core/err.js";
+export interface TetoExports extends WebAssembly.Exports {
   tetoKernelInit(memory: number, maxHarts: number, threaded: number): number;
   tetoKernelValid(memory: number): number;
   tetoHartInit(memory: number, hart: number, virtualTop: bigint, pc: bigint): number;
@@ -67,10 +68,10 @@ export interface TetoExports {
 }
 
 export interface TetoLoadOptions {
-  threaded?: boolean;
-  memory?: WebAssembly.Memory;
-  initialPages?: number;
-  maximumPages?: number;
+  threaded: boolean | null;
+  memory: WebAssembly.Memory | null;
+  initialPages: number | null;
+  maximumPages: number | null;
 }
 
 export type TetoVariant = "baseline" | "threads";
@@ -158,12 +159,12 @@ const required = [
 
 export const loadTeto = async (
   bytes: BufferSource,
-  options: TetoLoadOptions = {},
+  options: TetoLoadOptions = {"threaded": null, "memory": null, "initialPages": null, "maximumPages": null},
 ): Promise<TetoModule> => {
   const threaded = options.threaded ?? false;
   const module = await WebAssembly.compile(bytes);
   const imports = WebAssembly.Module.imports(module);
-  if (imports.length !== 1 || imports[0]?.module !== "env" || imports[0]?.name !== "memory" || imports[0]?.kind !== "memory") {
+  if (imports.length !== 1 || withValue((imports[0] ?? null) ?? null, value => value.module) !== "env" || withValue(imports[0] ?? null, value => value.name) !== "memory" || withValue(imports[0] ?? null, value => value.kind) !== "memory") {
     throw new Error("Teto module has an unsupported host import surface");
   }
   const memory = options.memory ?? new WebAssembly.Memory({
@@ -172,7 +173,7 @@ export const loadTeto = async (
     shared: threaded,
   });
   const instance = await WebAssembly.instantiate(module, { env: { memory } });
-  const exports = instance.exports as unknown as TetoExports;
+  const exports = instance.exports as TetoExports;
   for (const name of required) {
     if (typeof exports[name] !== "function") throw new Error(`Teto module is missing ${name}`);
   }

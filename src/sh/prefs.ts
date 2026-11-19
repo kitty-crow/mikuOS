@@ -97,7 +97,7 @@ const unquote = (input: string): string => {
   const value = input.trim();
   if (
     value.length >= 2 &&
-    ((value[0] === '"' && value.at(-1) === '"') || (value[0] === "'" && value.at(-1) === "'"))
+    (((value[0] ?? null) === '"' && (value.at(-1) ?? null) === '"') || ((value[0] ?? null) === "'" && (value.at(-1) ?? null) === "'"))
   ) {
     return value.slice(1, -1)
       .replace(/\\n/g, "\n")
@@ -129,6 +129,7 @@ export interface ParsedPrefs {
   unknown: Map<string, string>;
 }
 
+// Validation precedes mutation so failures leave the current operation in a defined state.
 export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs()): ParsedPrefs => {
   const prefs: ShellPrefs = {
     ...initial,
@@ -166,7 +167,7 @@ export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs())
         case "colour":
         case "bell":
         case "showWelcome":
-          (prefs as unknown as Record<string, unknown>)[key] = booleanValue(key, value);
+          prefs[key] = booleanValue(key, value);
           break;
 
         case "historySize":
@@ -204,13 +205,13 @@ export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs())
         case "keyHistoryNext":
         case "keyHistorySearchReverse":
         case "keyHistorySearchForward":
-          (prefs as unknown as Record<string, unknown>)[key] = unquote(value);
+          prefs[key] = unquote(value);
           break;
 
         default:
           unknown.set(key, unquote(value));
       }
-    } catch (error) {
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       warnings.push(`line ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -224,7 +225,7 @@ export const parsePrefs = (source: string, initial: ShellPrefs = defaultPrefs())
   return { prefs, warnings, unknown };
 };
 
-const valueText = (value: unknown): string =>
+const valueText = <T>(value: T): string =>
   Array.isArray(value)
     ? JSON.stringify(value.join(","))
     : typeof value === "string"

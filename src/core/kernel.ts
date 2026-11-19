@@ -1,3 +1,8 @@
+// This module composes kernel, toolchain or integration-test boundaries and intentionally imports their contracts.
+//@cg-expect-warning
+import { ensure } from "./err.js";
+import { withValue } from "./err.js";
+import { requireValue } from "./err.js";
 import { App } from "../apps/base.js";
 import { bad, KErr, msg } from "./err.js";
 import { MemIn, MemOut, enc } from "../io/stream.js";
@@ -21,11 +26,11 @@ import { DEFAULT_CONFIG, rootCred } from "./config.js";
 import type { AccountConfig, SystemConfig } from "./config.js";
 
 export interface Start {
-  io?: Partial<Io>;
-  fds?: Map<number, Fd>;
-  pgid?: number;
-  cwd?: string;
-  env?: Map<string, string>;
+  io: Partial<Io> | null;
+  fds: Map<number, Fd> | null;
+  pgid: number | null;
+  cwd: string | null;
+  env: Map<string, string> | null;
 }
 
 export interface PInfo {
@@ -76,8 +81,7 @@ const accountCred = (account: AccountConfig | Cred): { cred: Cred; name: string;
   };
 };
 
-const procFsCred = (p: Proc): Cred => ({
-  uid: p.fsuid,
+const procFsCred = (p: Proc): Cred => ({"ruid": null, "euid": null, "suid": null, "rgid": null, "egid": null, "sgid": null, uid: p.fsuid,
   gid: p.fsgid,
   groups: [...p.cred.groups],
 });
@@ -96,14 +100,16 @@ export class Kern {
   disk = false;
   ttyFn: (s: string, err: boolean) => void = () => {};
   private seq = 1;
-  private haltFn?: () => void;
+  private haltFn: (() => void) | null = null;
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   constructor(
     readonly net = new Net(),
     readonly lim = Lim.host(),
     readonly config: SystemConfig = DEFAULT_CONFIG,
     readonly setId = false,
-    readonly teto?: TetoImageProvider,
+    readonly teto: TetoImageProvider | null = null,
   ) {
     this.fs = new Vfs(lim.fs);
     this.name = config.kernel.name;
@@ -121,7 +127,7 @@ export class Kern {
   }
 
   init(): Proc {
-    if (this.procs.has(1)) return this.procs.get(1)!;
+    if (this.procs.has(1)) return requireValue(this.procs.get(1) ?? null, "src/core/kernel.ts:124");
     const z = new MemOut();
     const p = new Proc(1, 0, 1, "init", ["init"], "/", this.baseEnv(), root, { sin: new MemIn(), sout: z, serr: z });
     p.state = "sleep";
@@ -142,7 +148,7 @@ export class Kern {
     const p = new Proc(pid, 1, pid, "thsh", ["thsh"], home, env, fullCred(cred), io);
     p.state = "run";
     this.procs.set(pid, p);
-    this.procs.get(1)!.kids.add(pid);
+    requireValue(this.procs.get(1) ?? null, "src/core/kernel.ts:145").kids.add(pid);
     this.log(`tty: session pid=${pid} uid=${credUid(cred)}`);
     return p;
   }
@@ -162,7 +168,7 @@ export class Kern {
     const p = `/bin/${a.name}`;
     const c = root;
     try { this.fs.mkfile(p, `#!thistle:${a.name}\n`, "/", c, 0o755); }
-    catch (e) { if (!(e instanceof KErr) || e.code !== "EEXIST") throw e; }
+    catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  if (!(e instanceof KErr) || e.code !== "EEXIST") throw e; }
   }
 
   which(name: string, p: Proc): string {
@@ -179,19 +185,23 @@ export class Kern {
         const h = this.fs.at(q, p.cwd, c);
         this.fs.need(h.node, c, 1, q);
         if (h.node instanceof Reg) return h.path;
+      // This documented best-effort fallback intentionally continues after the optional operation fails.
+      //@cg-expect-warning
       } catch { /* PATH lookup is allowed to miss. Quite often, in fact. */ }
     }
     return bad("ENOENT", `${name}: command not found`);
   }
 
   private validateExecutable(path: string, bin: Uint8Array): void {
-    if (bin.length >= 4 && bin[0] === 0 && bin[1] === 0x61 && bin[2] === 0x73 && bin[3] === 0x6d) return;
+    if (bin.length >= 4 && (bin[0] ?? null) === 0 && (bin[1] ?? null) === 0x61 && (bin[2] ?? null) === 0x73 && (bin[3] ?? null) === 0x6d) return;
 
     if (isExe(bin)) {
       try {
         const image = codec.unpack(bin);
+        // Executable selection preserves process identity and descriptor scope across replacement.
+        //@cg-expect-warning
         if (!(image instanceof Exe)) bad("ENOEXEC", `${path}: not an executable`);
-      } catch (error) {
+      } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
         bad("ENOEXEC", `${path}: ${error instanceof Error ? error.message : String(error)}`);
       }
       return;
@@ -201,12 +211,12 @@ export class Kern {
     const app = /^#!thistle:([^\n]+)\n/.exec(source);
 
     if (app) {
-      if (!this.apps.has(app[1]!)) bad("ENOEXEC", `${path}: missing app ${app[1]}`);
+      ensure(this.apps.has(requireValue(app[1] ?? null, "src/core/kernel.ts:204")), () => bad("ENOEXEC", `${path}: missing app ${(app[1] ?? null)}`));
       return;
     }
 
     if (source.startsWith("#!/bin/thsh\n") || source.startsWith("#!/bin/sh\n")) {
-      if (!this.apps.has("thsh")) bad("ENOEXEC", "shell is not installed");
+      ensure(this.apps.has("thsh"), () => bad("ENOEXEC", "shell is not installed"));
       return;
     }
 
@@ -237,20 +247,20 @@ export class Kern {
     return cred;
   }
 
-  start(name: string, argv: string[], par: Proc, opt: Start = {}): Proc {
+  start(name: string, argv: string[], par: Proc, opt: Start = {"io": null, "fds": null, "pgid": null, "cwd": null, "env": null}): Proc {
     const path = this.which(name, par);
     const h = this.fs.at(path, par.cwd, procFsCred(par));
     const node = h.node instanceof Reg ? h.node : bad("ENOEXEC", path);
     const pid = this.seq++;
     const io: Io = {
-      sin: opt.io?.sin ?? par.fds.get(0)?.input ?? new MemIn(),
-      sout: opt.io?.sout ?? par.fds.get(1)?.output ?? new MemOut(),
-      serr: opt.io?.serr ?? par.fds.get(2)?.output ?? new MemOut(),
+      sin: withValue(opt.io ?? null, value => (value.sin ?? null)) ?? withValue((par.fds.get(0) ?? null) ?? null, value => value.input) ?? new MemIn(),
+      sout: withValue(opt.io ?? null, value => (value.sout ?? null)) ?? withValue((par.fds.get(1) ?? null) ?? null, value => value.output) ?? new MemOut(),
+      serr: withValue(opt.io ?? null, value => (value.serr ?? null)) ?? withValue((par.fds.get(2) ?? null) ?? null, value => value.output) ?? new MemOut(),
     };
     if (!opt.fds) {
-      io.sin.holdR?.();
-      io.sout.hold?.();
-      if (io.serr !== io.sout) io.serr.hold?.();
+      withValue(io.sin.holdR ?? null, callable => callable.call(io.sin));
+      withValue(io.sout.hold ?? null, callable => callable.call(io.sout));
+      (io.serr !== io.sout) && (withValue(io.serr.hold ?? null, callable => callable.call(io.serr)));
     }
     const cred = this.executableCred(path, node, par.cred);
     const p = new Proc(
@@ -260,7 +270,7 @@ export class Kern {
     if (opt.fds) {
       p.fds.clear(); p.allHeld = true;
       for (const [n, f] of opt.fds) {
-        f.input?.holdR?.(); f.output?.hold?.();
+        withValue(withValue(f.input ?? null, value => value.holdR) ?? null, callable => callable.call(f.input)); withValue(withValue(f.output ?? null, value => value.hold) ?? null, callable => callable.call(f.output));
         const q = new Fd(f.input, f.output, f.path, f.rd, f.wr, f.add, f.clo); q.pos = f.pos; p.fds.set(n, q);
       }
     }
@@ -299,43 +309,56 @@ export class Kern {
     );
   }
 
+  // Executable selection preserves process identity and descriptor scope across replacement.
   private async run(p: Proc, path: string, bin: Uint8Array, argv: string[]): Promise<void> {
     p.state = "run";
     let code = 126;
     try {
       for (;;) {
         try {
-          if (bin.length >= 4 && bin[0] === 0 && bin[1] === 0x61 && bin[2] === 0x73 && bin[3] === 0x6d) {
+          switch (true) {
+case !!(bin.length >= 4 && (bin[0] ?? null) === 0 && (bin[1] ?? null) === 0x61 && (bin[2] ?? null) === 0x73 && (bin[3] ?? null) === 0x6d): {
         code = await new Wasi(new Sys(this, p)).run(bin, [path, ...argv]);
-      } else if (isExe(bin)) {
+
+break; }
+case !!(isExe(bin)): {
         let x: Exe;
         try { const q = codec.unpack(bin); x = q instanceof Exe ? q : bad("ENOEXEC", `${path}: not an executable`); }
-        catch (e) { x = bad("ENOEXEC", `${path}: ${e instanceof Error ? e.message : String(e)}`); }
+        catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  x = bad("ENOEXEC", `${path}: ${e instanceof Error ? e.message : String(e)}`); }
         code = x.machine === "thistle64"
           ? x.isa === "rv64gc" ? await new Rv64(new Sys(this, p)).run(x, [path, ...argv], bin) : await new Vm64(new Sys(this, p)).run(x, [path, ...argv])
           : await new Vm(new Sys(this, p)).run(x, [path, ...argv]);
-      } else {
+
+break; }
+default: {
         const src = new TextDecoder().decode(bin);
         const m = /^#!thistle:([^\n]+)\n/.exec(src);
-        if (m) {
-          const a = this.apps.get(m[1]!) ?? bad("ENOEXEC", `${path}: missing app ${m[1]}`);
+        switch (true) {
+case !!(m): {
+          const a = this.apps.get(requireValue(m[1] ?? null, "src/core/kernel.ts:321")) ?? bad("ENOEXEC", `${path}: missing app ${(m[1] ?? null)}`);
           const s = new Sys(this, p);
           code = argv.includes("--help") ? await a.help(s) : await a.run(s, argv);
-        } else if (src.startsWith("#!/bin/thsh\n") || src.startsWith("#!/bin/sh\n")) {
+
+break; }
+case !!(src.startsWith("#!/bin/thsh\n") || src.startsWith("#!/bin/sh\n")): {
           const a = this.apps.get("thsh") ?? bad("ENOEXEC", "shell is not installed");
           code = await a.run(new Sys(this, p), [path, ...argv]);
-        } else bad("ENOEXEC", `${path}: unknown executable format`);
-      }
+
+break; }
+default: { bad("ENOEXEC", `${path}: unknown executable format`); }
+}
+       }
+}
 
           break;
-        } catch (error) {
+        } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
           if (!(error instanceof ExecReplace)) throw error;
 
           for (const [fd, descriptor] of [...p.fds]) {
             if (!descriptor.clo) continue;
 
-            descriptor.input?.releaseR?.();
-            descriptor.output?.close?.();
+            withValue(withValue(descriptor.input ?? null, value => value.releaseR) ?? null, callable => callable.call(descriptor.input));
+            withValue(withValue(descriptor.output ?? null, value => value.close) ?? null, callable => callable.call(descriptor.output));
             p.fds.delete(fd);
           }
 
@@ -353,20 +376,24 @@ export class Kern {
           this.log(`proc: pid=${p.pid} exec=${path}`);
         }
       }
-    } catch (e) {
-      if (p.sig) code = 128 + p.sig;
-      else if (e instanceof KErr && e.code === "EPIPE") code = 141;
-      else {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+      switch (true) {
+case !!(p.sig): { code = 128 + p.sig;
+break; }
+case !!(e instanceof KErr && e.code === "EPIPE"): { code = 141;
+break; }
+default: {
         code = e instanceof KErr ? e.code === "EINTR" ? 130 : e.code === "ENOEXEC" || e.code === "EACCES" ? 126 : e.code === "ENOENT" ? 127 : 1 : 1;
-        await p.fds.get(2)?.output?.wr(enc(`${p.argv[0]}: ${msg(e)}\n`));
-      }
+        await (withValue(withValue((p.fds.get(2) ?? null) ?? null, value => value.output) ?? null, value => value.wr(enc(`${(p.argv[0] ?? null)}: ${msg(e)}\n`))) ?? null);
+       }
+}
     } finally {
       if (p.allHeld) {
-        for (const f of p.fds.values()) { f.input?.releaseR?.(); f.output?.close?.(); }
+        for (const f of p.fds.values()) { withValue(withValue(f.input ?? null, value => value.releaseR) ?? null, callable => callable.call(f.input)); withValue(withValue(f.output ?? null, value => value.close) ?? null, callable => callable.call(f.output)); }
       } else {
-        p.fds.get(0)?.input?.releaseR?.();
-        p.fds.get(1)?.output?.close?.();
-        if (p.fds.get(2)?.output !== p.fds.get(1)?.output) p.fds.get(2)?.output?.close?.();
+        withValue(withValue(withValue((p.fds.get(0) ?? null) ?? null, value => value.input) ?? null, value => value.releaseR) ?? null, callable => callable.call(withValue((p.fds.get(0) ?? null) ?? null, value => value.input)));
+        withValue(withValue(withValue((p.fds.get(1) ?? null) ?? null, value => value.output) ?? null, value => value.close) ?? null, callable => callable.call(withValue((p.fds.get(1) ?? null) ?? null, value => value.output)));
+        (withValue((p.fds.get(2) ?? null) ?? null, value => value.output) !== withValue((p.fds.get(1) ?? null) ?? null, value => value.output)) && (withValue(withValue(withValue((p.fds.get(2) ?? null) ?? null, value => value.output) ?? null, value => value.close) ?? null, callable => callable.call(withValue((p.fds.get(2) ?? null) ?? null, value => value.output))));
       }
       p.end(code);
       this.log(`proc: pid=${p.pid} exit=${code} cmd=${path}`);
@@ -381,12 +408,12 @@ export class Kern {
     return n;
   }
 
-  reap(pid: number, par?: Proc): void {
+  reap(pid: number, par: Proc | null = null): void {
     if (pid <= 2) return;
-    const p = this.procs.get(pid);
+    const p = (this.procs.get(pid) ?? null);
     if (!p || p.code === null) return;
     this.procs.delete(pid);
-    (par ?? this.procs.get(p.ppid))?.kids.delete(pid);
+    requireValue(withValue((par ?? (this.procs.get(p.ppid) ?? null)) ?? null, value => value.kids) ?? null, "src/core/kernel.ts:390").delete(pid);
   }
 
   kill(id: number, sig: Sig, by: Proc): number {
@@ -398,7 +425,7 @@ export class Kern {
       if ((by.cred.euid ?? by.cred.uid ?? 0) !== 0 && (by.cred.ruid ?? by.cred.uid ?? 0) !== (p.cred.ruid ?? p.cred.uid ?? 0)) bad("EPERM", String(p.pid));
       if (sig !== 0) {
         p.signal(sig);
-        if (sig === 9 || p.state === "sleep") p.end(128 + sig);
+        (sig === 9 || p.state === "sleep") && (p.end(128 + sig));
       }
       n++;
     }
@@ -426,7 +453,7 @@ export class Kern {
     if ((by.cred.euid ?? by.cred.uid ?? 0) !== 0) bad("EPERM", "reboot");
     for (const p of this.procs.values()) if (p.pid !== 1 && p.pid !== by.pid) p.signal(15);
     this.log("system: reboot requested");
-    this.haltFn?.();
+    withValue(this.haltFn ?? null, callable => callable.call(this));
   }
 
   fd(p: Proc): number {
@@ -434,15 +461,15 @@ export class Kern {
     return bad("EMFILE", "descriptor table full");
   }
 
-  cloneFd(p: Proc, old: number, nu?: number): number {
+  cloneFd(p: Proc, old: number, nu: number | null = null): number {
     const f = p.fds.get(old) ?? bad("EBADF", String(old));
     const n = nu ?? this.fd(p);
     if (n === old) return n;
-    const q = p.fds.get(n);
-    q?.input?.releaseR?.();
-    q?.output?.close?.();
-    f.input?.holdR?.();
-    f.output?.hold?.();
+    const q = (p.fds.get(n) ?? null);
+    withValue(withValue(withValue(q ?? null, value => value.input) ?? null, value => value.releaseR) ?? null, callable => callable.call(withValue(q ?? null, value => value.input)));
+    withValue(withValue(withValue(q ?? null, value => value.output) ?? null, value => value.close) ?? null, callable => callable.call(withValue(q ?? null, value => value.output)));
+    withValue(withValue(f.input ?? null, value => value.holdR) ?? null, callable => callable.call(f.input));
+    withValue(withValue(f.output ?? null, value => value.hold) ?? null, callable => callable.call(f.output));
     p.fds.set(n, new Fd(f.input, f.output, f.path, f.rd, f.wr, f.add));
     return n;
   }

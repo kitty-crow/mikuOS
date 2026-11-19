@@ -1,3 +1,4 @@
+import { withValue } from "../core/err.js";
 import type { Terminal as XtermTerminal } from "@xterm/xterm";
 import type { FitAddon as XtermFitAddon } from "@xterm/addon-fit";
 import type { BootApi } from "./loader.js";
@@ -8,7 +9,7 @@ const globals = globalThis as typeof globalThis & {
   FitAddon: { FitAddon: typeof XtermFitAddon };
   MikuBoot: BootApi;
   Thistle: { launchThistle: typeof launchThistle };
-  MikuOS?: Awaited<ReturnType<typeof launchThistle>>;
+  MikuOS: Awaited<ReturnType<typeof launchThistle>> | null;
 };
 
 /* Standalone mikuOS starts the tiny C/WASM boot screen first.
@@ -21,16 +22,18 @@ const globals = globalThis as typeof globalThis & {
   const fit = new globals.FitAddon.FitAddon();
   term.loadAddon(fit);
   term.open(el);
-  try { await document.fonts?.ready; } catch { /* Use the fallback font. */ }
+  // This documented best-effort fallback intentionally continues after the optional operation fails.
+  //@cg-expect-warning
+  try { await withValue(document.fonts ?? null, value => value.ready); } catch { /* Use the fallback font. */ }
   fit.fit();
   const onResize = () => fit.fit();
   window.addEventListener("resize", onResize);
-  const boot = await globals.MikuBoot.create(term, new URL("./", document.baseURI));
+  const boot = await globals.MikuBoot.create({ element: term.element ?? null, cols: term.cols, rows: term.rows, write: text => term.write(text), onResize: listener => term.onResize(listener) }, new URL("./", document.baseURI));
   try {
     await globals.MikuBoot.loadRuntime("./thistle.js");
-    const runtime = await globals.Thistle.launchThistle({ terminal: term, boot });
+    const runtime = await globals.Thistle.launchThistle({"config": null, "persistence": null, "kernel": null, "tetoBase": null, "rootBase": null,  terminal: term, boot });
     globals.MikuOS = runtime;
-  } catch (error) {
+  } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
     boot.fail(error);
     console.error(error);
   }

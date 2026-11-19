@@ -1,17 +1,20 @@
+import { fsp } from "../../src/tool/host.js";
+import { ensure } from "../../src/core/err.js";
+import { parseJson } from "../../src/core/json.js";
 /**
  * Stage direct TypeScript imports from the exact Thistle gitlink and source
  * provenance recorded by Teto. No native kernel file is
  * maintained in mikuOS. --check verifies byte-for-byte equivalence.
  */
 import { spawnSync } from "node:child_process";
-import { mkdir, readFile, copyFile } from "node:fs/promises";
+import { readFile, copyFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const teto = resolve(root, "deps/teto");
 const upstream = resolve(teto, "thistle");
-const manifest: unknown = JSON.parse(await readFile(resolve(teto, "teto.manifest.json"), "utf8"));
+const manifest = parseJson(await readFile(resolve(teto, "teto.manifest.json"), "utf8"));
 if (typeof manifest !== "object" || manifest === null || !("canonicalRevision" in manifest) ||
     typeof manifest.canonicalRevision !== "string" || !("canonicalSource" in manifest) ||
     !("toolchain" in manifest) || typeof manifest.toolchain !== "object" ||
@@ -38,6 +41,8 @@ for (const args of [["diff", "--quiet"], ["diff", "--cached", "--quiet"]]) {
   }
 }
 const files: readonly (readonly [string, string])[] = [
+  ["src/native/image-range.ts", "src/teto/image-range.ts"],
+  ["src/core/rv64-decode.ts", "src/core/rv64-decode.ts"],
   [
     "src/native/abi.ts",
     "src/teto/abi.ts"
@@ -114,13 +119,13 @@ for (const [from, to] of files) {
   const tracked = spawnSync("git", ["-C", root, "ls-files", "--error-unmatch", to], { stdio: "ignore" });
   if (tracked.status === 0) throw new Error(`Refusing an independently tracked Thistle kernel copy: ${to}`);
   if (tracked.status !== 1) throw new Error(`Cannot verify tracked state of generated source: ${to}`);
-  const expected = await readFile(resolve(upstream, from));
+  const expected = await readFile(resolve(upstream, from), null);
   const destination = resolve(root, to);
   if (verifyOnly) {
-    const current = await readFile(destination);
-    if (!current.equals(expected)) throw new Error(`Generated ${to} differs from Thistle ${recorded}: ${from}`);
+    const current = await readFile(destination, null);
+    ensure(current.equals(expected), () => { throw new Error(`Generated ${to} differs from Thistle ${recorded}: ${from}`); });
   } else {
-    await mkdir(dirname(destination), { recursive: true });
+    await fsp().mkdir(dirname(destination), { recursive: true });
     await copyFile(resolve(upstream, from), destination);
   }
 }

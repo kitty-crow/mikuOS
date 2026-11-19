@@ -1,8 +1,10 @@
-interface HProc { exitCode?: number; }
+import { parseJson } from "../core/json.js";
+import { withValue } from "../core/err.js";
+interface HProc { exitCode: number | null; }
 
 export {};
 
-const processHost = (globalThis as unknown as { process: HProc }).process;
+const processHost = (globalThis as typeof globalThis & { process: HProc }).process;
 const { app } = await import("../main/server.js");
 
 try {
@@ -26,7 +28,7 @@ try {
     fetch(new URL("assets/hello.39", app.url)),
   ]);
   const source = await bundle.text();
-  const runtime = await config.json() as { os?: { prettyName?: string } };
+  const runtime = parseJson(await config.text()) as { os: { prettyName: string | null } | null };
 
   if (!bundle.ok || !source.includes("launchThistle")) {
     throw new Error("static preview did not serve thistle.js");
@@ -43,7 +45,7 @@ try {
   if (!css.ok || !(await css.text()).includes(".xterm")) {
     throw new Error("static preview did not serve xterm.css");
   }
-  if (runtime.os?.prettyName !== "初音ミクOS v｡三") {
+  if (withValue(runtime.os ?? null, value => value.prettyName) !== "初音ミクOS v｡三") {
     throw new Error("static preview did not serve the OS configuration");
   }
   if (!thx39.ok || thx39.headers.get("content-type") !== "application/x-thistle-executable") {
@@ -51,7 +53,7 @@ try {
   }
 
   console.log("ok - Bun serves bytes only for the static browser launch");
-} catch (error) {
+} catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
   processHost.exitCode = 1;
   console.error(error);
 } finally {

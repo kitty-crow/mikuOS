@@ -1,3 +1,4 @@
+import { requireValue } from "../core/err.js";
 import { enc } from "./stream.js";
 import type { In, Out } from "./stream.js";
 
@@ -98,6 +99,11 @@ function defaultTermios(): Uint8Array {
 }
 
 class TtyIn implements In {
+  "holdR": (() => void) | null = null;
+  "releaseR": (() => void) | null = null;
+  "close": (() => void) | null = null;
+  "cancel": (() => void) | null = null;
+
   tty: Tty;
 
   private readonly q: Uint8Array[] = [];
@@ -108,12 +114,12 @@ class TtyIn implements In {
   }
 
   async rd(): Promise<Uint8Array> {
-    const b = this.q.shift();
+    const b = (this.q.shift() ?? null);
 
     /*
      * A zero-length array is meaningful: it represents canonical EOF.
      */
-    if (b !== undefined) {
+    if (b !== null) {
       return b;
     }
 
@@ -121,7 +127,7 @@ class TtyIn implements In {
   }
 
   push(b: Uint8Array): void {
-    const ok = this.wait.shift();
+    const ok = (this.wait.shift() ?? null);
 
     if (ok) {
       ok(b);
@@ -140,6 +146,9 @@ class TtyIn implements In {
 }
 
 class TtyOut implements Out {
+  "hold": (() => void) | null = null;
+  "close": (() => void) | null = null;
+
   tty: Tty;
 
   constructor(
@@ -172,15 +181,15 @@ export class Tty {
   constructor(
     private readonly put: (
       s: string,
-      err?: boolean,
+      err: boolean | null,
     ) => void | Promise<void>,
     private readonly interrupt: (
-      signal?: number,
+      signal: number | null,
     ) => boolean | void,
   ) {}
 
   write(s: string, err = false): void {
-    void this.put(s, err);
+    Promise.resolve(this.put(s, err)).catch(console.error);
   }
 
   feed(s: string | Uint8Array): void {
@@ -192,10 +201,14 @@ export class Tty {
       let pending = "";
 
       for (const ch of text) {
+        // Termios actions follow the selected canonical-input, echo or signal mode.
+        //@cg-expect-warning
         if (
           this.hasLocalFlag(ISIG) &&
           this.isControlCharacter(ch, VINTR)
         ) {
+          // Termios actions follow the selected canonical-input, echo or signal mode.
+          //@cg-expect-warning
           if (pending) {
             this.input.push(enc(pending));
             pending = "";
@@ -207,6 +220,8 @@ export class Tty {
 
         pending += ch;
 
+        // Termios actions follow the selected canonical-input, echo or signal mode.
+        //@cg-expect-warning
         if (this.hasLocalFlag(ECHO)) {
           this.write(ch);
         }
@@ -216,9 +231,7 @@ export class Tty {
        * Preserve a host key event as one read. This keeps terminal escape
        * sequences such as ESC [ A intact for the guest line editor.
        */
-      if (pending) {
-        this.input.push(enc(pending));
-      }
+      (pending) && (this.input.push(enc(pending)));
 
       return;
     }
@@ -319,7 +332,7 @@ export class Tty {
       );
     }
 
-    return this.attributes[CC_OFFSET + index]!;
+    return requireValue(this.attributes[CC_OFFSET + index] ?? null, "src/io/tty.ts:322");
   }
 
   private isControlCharacter(
@@ -365,6 +378,8 @@ export class Tty {
     this.line = characters.join("");
 
     if (this.hasLocalFlag(ECHO)) {
+      // Termios actions follow the selected canonical-input, echo or signal mode.
+      //@cg-expect-warning
       if (this.hasLocalFlag(ECHOE)) {
         this.write("\b \b");
       } else {
@@ -382,7 +397,7 @@ export class Tty {
 
     while (
       characters.length &&
-      /\s/u.test(characters[characters.length - 1]!)
+      /\s/u.test(requireValue(characters[characters.length - 1] ?? null, "src/io/tty.ts:385"))
     ) {
       this.eraseLast();
       characters = Array.from(this.line);
@@ -390,7 +405,7 @@ export class Tty {
 
     while (
       characters.length &&
-      !/\s/u.test(characters[characters.length - 1]!)
+      !/\s/u.test(requireValue(characters[characters.length - 1] ?? null, "src/io/tty.ts:393"))
     ) {
       this.eraseLast();
       characters = Array.from(this.line);
@@ -435,11 +450,16 @@ export class Tty {
       this.attributes.set(defaultTermios());
     }
 
-    if (handled && this.hasLocalFlag(ECHOCTL)) {
+    switch (true) {
+case !!(handled && this.hasLocalFlag(ECHOCTL)): {
       this.write("^C\r\n");
-    } else if (handled) {
+
+break; }
+case !!(handled): {
       this.write("\r\n");
-    }
+
+break; }
+}
 
     this.input.wake();
   }
@@ -456,9 +476,7 @@ export class Tty {
     if (!this.hasLocalFlag(ICANON)) {
       this.input.push(enc(ch));
 
-      if (this.hasLocalFlag(ECHO)) {
-        this.write(ch);
-      }
+      (this.hasLocalFlag(ECHO)) && (this.write(ch));
 
       return;
     }
@@ -484,9 +502,7 @@ export class Tty {
     }
 
     if (ch === "\r" || ch === "\n") {
-      if (this.hasLocalFlag(ECHO)) {
-        this.write("\r\n");
-      }
+      (this.hasLocalFlag(ECHO)) && (this.write("\r\n"));
 
       this.input.push(enc(this.line + "\n"));
       this.line = "";

@@ -33,7 +33,7 @@ const ensureDir = (k: Kern, path: string): void => {
     try {
       const stat = k.fs.stat(current, "/", root);
       if (stat.kind !== "dir") throw new Error(`${current} is not a directory`);
-    } catch (error) {
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (!(error instanceof KErr) || error.code !== "ENOENT") throw error;
       k.fs.mkdir(current, "/", root, 0o755);
     }
@@ -52,7 +52,7 @@ const writeRootFile = (
     k.fs.write(path, data, "/", root, false, mode);
     k.fs.chmod(path, mode, "/", root);
     k.fs.chown(path, 0, 0, "/", root);
-  } catch (error) {
+  } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
     if (!(error instanceof KErr) || error.code !== "ENOENT") throw error;
     k.fs.mkfile(path, data, "/", root, mode);
   }

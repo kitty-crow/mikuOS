@@ -1,15 +1,18 @@
+import { ensure } from "../core/err.js";
+import { withValue } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import { bad, KErr } from "../core/err.js";
 import { dec, enc } from "../io/stream.js";
 
 export interface Cred {
-  uid?: number;
-  gid?: number;
-  ruid?: number;
-  euid?: number;
-  suid?: number;
-  rgid?: number;
-  egid?: number;
-  sgid?: number;
+  uid: number | null;
+  gid: number | null;
+  ruid: number | null;
+  euid: number | null;
+  suid: number | null;
+  rgid: number | null;
+  egid: number | null;
+  sgid: number | null;
   groups: number[];
 }
 
@@ -21,7 +24,7 @@ export type Wfn = (b: Uint8Array) => number;
 export interface RegSource {
   readonly size: number;
   readonly sum: string;
-  readonly head?: Uint8Array;
+  readonly head: Uint8Array | null;
   load(): Promise<Uint8Array>;
 }
 
@@ -51,23 +54,25 @@ export abstract class VNode {
 export class Reg extends VNode {
   readonly kind = "file" as const;
   data: Uint8Array;
-  sum: string | undefined;
-  source: RegSource | undefined;
-  private loading: Promise<Uint8Array> | undefined;
+  sum: string | null = null;
+  source: RegSource | null = null;
+  private loading: Promise<Uint8Array> | null = null;
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   constructor(
     data: Uint8Array | string = "",
     mode = 0o644,
     uid = 0,
     gid = 0,
-    source?: RegSource,
+    source: RegSource | null = null,
     copy = true,
   ) {
     super(mode, uid, gid);
     const bytes = typeof data === "string" ? enc(data) : data;
     this.data = copy ? bytes.slice() : bytes;
     this.source = source;
-    this.sum = source?.sum;
+    this.sum = withValue(source ?? null, value => value.sum);
   }
 
   get size(): number { return this.source && !this.data.length ? this.source.size : this.data.length; }
@@ -76,26 +81,26 @@ export class Reg extends VNode {
 
   head(n: number): Uint8Array {
     if (this.data.length || !this.source) return this.data.slice(0, n);
-    return this.source.head?.slice(0, n) ?? new Uint8Array();
+    return withValue(this.source.head ?? null, value => value.slice(0, n)) ?? new Uint8Array();
   }
 
   async materialise(): Promise<Uint8Array> {
     if (!this.source || this.data.length || this.source.size === 0) return this.data;
     if (!this.loading) {
       this.loading = this.source.load().then(bytes => {
-        if (bytes.length !== this.source?.size) throw new Error("lazy regular-file size mismatch");
+        if (bytes.length !== withValue(this.source ?? null, value => value.size)) throw new Error("lazy regular-file size mismatch");
         this.data = bytes;
         return this.data;
-      }).finally(() => { this.loading = undefined; });
+      }, null).finally(() => { this.loading = null; });
     }
     return this.loading;
   }
 
   replace(bytes: Uint8Array): void {
     this.data = bytes;
-    this.source = undefined;
-    this.loading = undefined;
-    this.sum = undefined;
+    this.source = null;
+    this.loading = null;
+    this.sum = null;
   }
 }
 
@@ -115,6 +120,8 @@ export class Sym extends VNode {
 export class Chr extends VNode {
   readonly kind = "char" as const;
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   constructor(
     public readonly rfn: Rfn,
     public readonly wfn: Wfn,
@@ -151,14 +158,20 @@ export const credGid = (c: Cred): number => c.gid ?? c.egid ?? c.rgid ?? 0;
 const wrx = (p: string): RegExp => {
   let s = "^";
   for (let i = 0; i < p.length; i++) {
-    const c = p[i]!;
-    if (c === "*") s += "[^/]*";
-    else if (c === "?") s += "[^/]";
-    else if (c === "[") {
+    const c = requireValue(p[i] ?? null, "src/fs/vfs.ts:154");
+    switch (true) {
+case !!(c === "*"): { s += "[^/]*";
+break; }
+case !!(c === "?"): { s += "[^/]";
+break; }
+case !!(c === "["): {
       const z = p.indexOf("]", i + 1);
       if (z < 0) s += "\\[";
       else { const x = p.slice(i + 1, z); s += `[${x.startsWith("!") ? "^" + x.slice(1) : x}]`; i = z; }
-    } else s += /[.+^${}()|\\]/.test(c) ? `\\${c}` : c;
+
+break; }
+default: { s += /[.+^${}()|\\]/.test(c) ? `\\${c}` : c; }
+}
   }
   return new RegExp(s + "$");
 };
@@ -167,8 +180,12 @@ export const norm = (p: string, cwd = "/"): string => {
   const src = p.startsWith("/") ? seg(p) : [...seg(cwd), ...seg(p)];
   const out: string[] = [];
   for (const x of src) {
-    if (x === "..") out.pop();
-    else if (x !== ".") out.push(x);
+    switch (true) {
+case !!(x === ".."): { out.pop();
+break; }
+case !!(x !== "."): { out.push(x);
+break; }
+}
   }
   return `/${out.join("/")}`;
 };
@@ -214,7 +231,7 @@ export class Vfs {
     for (let i = 0; i < a.length; i++) {
       const d = n instanceof Dir ? n : bad("ENOTDIR", `/${done.join("/")}`);
       this.need(d, c, 1, `/${done.join("/")}` || "/");
-      const x = a[i]!;
+      const x = requireValue(a[i] ?? null, "src/fs/vfs.ts:217");
       const z = d.ent.get(x) ?? bad("ENOENT", abs);
       const last = i === a.length - 1;
       if (z instanceof Sym && (follow || !last)) {
@@ -234,7 +251,7 @@ export class Vfs {
     const abs = norm(p, cwd);
     if (abs === "/") bad("EBUSY", "/");
     const a = seg(abs);
-    const name = a.pop()!;
+    const name = requireValue(a.pop() ?? null, "src/fs/vfs.ts:237");
     if (name.length > 255) bad("ENAMETOOLONG", name);
     const pp = `/${a.join("/")}`;
     const h = this.at(pp, "/", c);
@@ -247,7 +264,7 @@ export class Vfs {
     const h = this.at(p, cwd, c);
     this.need(h.node, c, 4, h.path);
     if (h.node instanceof Reg) {
-      if (h.node.lazy) bad("EAGAIN", `${h.path}: file content is loading`);
+      ensure(!(h.node.lazy), () => bad("EAGAIN", `${h.path}: file content is loading`));
       return h.node.data.slice();
     }
     if (h.node instanceof Chr) return h.node.rfn(65536);
@@ -257,15 +274,16 @@ export class Vfs {
 
   read(p: string, cwd: string, c: Cred): string { return dec(this.readb(p, cwd, c)); }
 
+  // Capacity failure must roll back the same inode write before publishing metadata.
   writeb(p: string, b: Uint8Array, cwd: string, c: Cred, add = false, mode = 0o666): void {
     let n: VNode;
     let path: string;
-    let made: { dir: Dir; name: string } | undefined;
+    let made: { dir: Dir; name: string } | null = null;
     try {
       const h = this.at(p, cwd, c);
       n = h.node;
       path = h.path;
-    } catch (e) {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (!(e instanceof KErr) || e.code !== "ENOENT") throw e;
       const q = this.par(p, cwd, c);
       n = new Reg("", mode, credUid(c), credGid(c));
@@ -276,22 +294,26 @@ export class Vfs {
     }
     this.need(n, c, 2, path);
     if (n instanceof Reg) {
-      if (add && n.lazy) bad("EAGAIN", `${path}: file content is loading`);
+      ensure(!(add && n.lazy), () => bad("EAGAIN", `${path}: file content is loading`));
       const old = n.data;
       const oldSource = n.source;
+      // Capacity failure must roll back the same inode write before publishing metadata.
+      //@cg-expect-warning
       if (add) {
         const x = new Uint8Array(n.data.length + b.length);
         x.set(n.data);
         x.set(b, n.data.length);
         n.replace(x);
       } else n.replace(b.slice());
+      // Capacity failure must roll back the same inode write before publishing metadata.
+      //@cg-expect-warning
       if (this.used() > this.cap) {
         n.data = old;
         n.source = oldSource;
-        if (made) made.dir.ent.delete(made.name);
+        (made) && (made.dir.ent.delete(made.name));
         bad("ENOSPC", path);
       }
-      if (!made) n.mode &= ~0o6000;
+      (!made) && (n.mode &= ~0o6000);
       n.touch(true);
       return;
     }
@@ -327,6 +349,8 @@ export class Vfs {
     return n;
   }
 
+  // The public construction contract retains its positional arguments for existing callers.
+  //@cg-expect-warning
   char(p: string, r: Rfn, w: Wfn, cwd: string, c: Cred, mode = 0o666, repeat = false): Chr {
     const q = this.par(p, cwd, c);
     if (q.dir.ent.has(q.name)) bad("EEXIST", q.path);
@@ -345,10 +369,15 @@ export class Vfs {
   rm(p: string, cwd: string, c: Cred, dir = false): void {
     const q = this.par(p, cwd, c);
     const n = q.dir.ent.get(q.name) ?? bad("ENOENT", q.path);
-    if (n instanceof Dir) {
+    switch (true) {
+case !!(n instanceof Dir): {
       if (!dir) bad("EISDIR", q.path);
       if (n.ent.size) bad("ENOTEMPTY", q.path);
-    } else if (dir) bad("ENOTDIR", q.path);
+
+break; }
+case !!(dir): { bad("ENOTDIR", q.path);
+break; }
+}
     q.dir.ent.delete(q.name);
     n.nlink--;
     q.dir.touch(true);
@@ -359,7 +388,7 @@ export class Vfs {
     const n = x.dir.ent.get(x.name) ?? bad("ENOENT", x.path);
     const y = this.par(b, cwd, c);
     if (x.path === y.path) return;
-    const old = y.dir.ent.get(y.name);
+    const old = (y.dir.ent.get(y.name) ?? null);
     if (old instanceof Dir && !(n instanceof Dir)) bad("EISDIR", y.path);
     if (n instanceof Dir && old && !(old instanceof Dir)) bad("ENOTDIR", y.path);
     if (old instanceof Dir && old.ent.size) bad("ENOTEMPTY", y.path);

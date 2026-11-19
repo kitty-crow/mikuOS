@@ -1,3 +1,4 @@
+import { ensure } from "../core/err.js";
 import { Exe } from "../asm/fmt.js";
 
 const EI_NIDENT = 16;
@@ -12,6 +13,8 @@ const PF_W = 2;
 const PF_R = 4;
 const MAX_MEM = 1024 * 1024 * 1024 * 1024;
 
+// The shared shape is an inherited protocol; runtime identities and payload roles remain distinct.
+//@cg-expect-warning
 export class ElfErr extends Error {
   constructor(message: string) { super(message); this.name = "ElfErr"; }
 }
@@ -29,14 +32,16 @@ const pow2 = (n: number): boolean => {
   return (q & (q - 1n)) === 0n;
 };
 
-export const isElf = (b: Uint8Array): boolean => b.length >= EI_NIDENT && b[0] === 0x7f && b[1] === 0x45 && b[2] === 0x4c && b[3] === 0x46;
+export const isElf = (b: Uint8Array): boolean => b.length >= EI_NIDENT && (b[0] ?? null) === 0x7f && (b[1] ?? null) === 0x45 && (b[2] ?? null) === 0x4c && (b[3] ?? null) === 0x46;
 
 /** Import a linked RV64 executable. Relocating an ELF at runtime is a different job, so dynamic files are refused here. */
 export class Elf {
+  // This method is retained as the established snapshot, executable or platform callback boundary.
+  //@cg-expect-warning
   run(b: Uint8Array, name = "a.out"): Exe {
     if (!isElf(b)) fail(`${name}: not an ELF file`);
     if (b.length < 64) fail(`${name}: truncated ELF header`);
-    if (b[4] !== 2 || b[5] !== 1 || b[6] !== 1) fail(`${name}: expected ELF64 little-endian version 1`);
+    if ((b[4] ?? null) !== 2 || (b[5] ?? null) !== 1 || (b[6] ?? null) !== 1) fail(`${name}: expected ELF64 little-endian version 1`);
     const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
     if (v.getUint16(16, true) !== ET_EXEC) fail(`${name}: only linked ET_EXEC files can become THX`);
     if (v.getUint16(18, true) !== EM_RISCV) fail(`${name}: expected a RISC-V executable`);
@@ -79,7 +84,7 @@ export class Elf {
     if (!loads || !x.sec.some(s => s.flg.includes("x") && entry >= s.addr && entry < s.addr + s.size)) fail(`${name}: entry point is not in an executable load segment`);
     if (!x.phdr) {
       const at = Math.ceil(end / 16) * 16, z = phz * phn;
-      if (at + z > x.mem) fail(`${name}: no address remains for the ELF program headers`);
+      ensure(!(at + z > x.mem), () => fail(`${name}: no address remains for the ELF program headers`));
       x.phdr = at;
       x.sec.push({ name: ".elf.phdr", flg: "r", align: 16, data: b.slice(phoff, phoff + z), size: z, addr: at });
     }

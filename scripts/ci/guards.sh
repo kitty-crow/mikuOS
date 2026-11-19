@@ -34,4 +34,6 @@ done < <(sed -n '/^# Canonical Thistle native files/,$ { /^\/src\/.*\.ts$/p; }' 
 
 ln -s "$root/node_modules" "$scope/node_modules"
 mkdir -p logs
+# Set the native runtime opt-out before Bun loads ONNX Runtime.
+export ORT_DISABLE_TELEMETRY=1
 bun "$root/scripts/ci/guards.mts" "$scope" | tee logs/code-guards.json

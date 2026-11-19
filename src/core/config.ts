@@ -11,7 +11,7 @@ export interface AccountConfig {
 
 export interface LocalSessionConfig {
   mode: "direct" | "login";
-  account?: string;
+  account: string | null;
 }
 
 export interface SystemConfig {
@@ -115,7 +115,7 @@ export const DEFAULT_CONFIG: SystemConfig = {
     },
   },
   sessions: {
-    local: { mode: "direct" },
+    local: {"account": null, mode: "direct" },
   },
   messages: {
     tetoBanner: "[Teto] Baguette-generated WebAssembly RV64 core active; unmigrated syscalls still use the Thistle compatibility bridge.",

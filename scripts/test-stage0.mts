@@ -1,14 +1,14 @@
+import { parseJson } from "../src/core/json.js";
 import { boot } from "../src/main/boot.ts";
 import { DEFAULT_CONFIG } from "../src/core/config.ts";
 
-const os = boot({
-  config: DEFAULT_CONFIG,
+const os = boot({"halt": null, "tree": null, "requireTree": null, "pkg": null, "account": null, "setId": null, "teto": null, "kernelMode": null, "onBootProgress": null, config: DEFAULT_CONFIG,
   put: () => {},
-});
+}, null);
 
 await os.ready;
 
-const builtins: unknown = JSON.parse(
+const builtins = parseJson(
   os.s.read("/usr/share/mikuos/builtin-commands.json"),
 );
 
@@ -17,7 +17,7 @@ if (builtins.commands.length !== os.s.apps().length) {
   throw new Error("built-in manifest count does not match the app registry");
 }
 
-const compiler: unknown = JSON.parse(
+const compiler = parseJson(
   os.s.read("/usr/share/mikuos/compiler-infrastructure.json"),
 );
 

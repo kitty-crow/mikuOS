@@ -99,5 +99,5 @@ exe.sec.push({ name: ".rodata", flg: "r", align: 4096, data, size: data.length, 
 exe.ident.push("Generated RV64 mmap shared flush regression fixture");
 
 mkdirSync(dirname(out), { recursive: true });
-await writeFile(out, codec.pack(exe));
+await writeFile(out, codec.pack(exe), null);
 await chmod(out, 0o755);

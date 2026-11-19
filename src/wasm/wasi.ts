@@ -1,3 +1,6 @@
+import { ensure } from "../core/err.js";
+import { withValue } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import { KErr } from "../core/err.js";
 import type { Errno } from "../core/err.js";
 import type { Sys } from "../core/sys.js";
@@ -12,20 +15,22 @@ const E: Record<Errno, number> = {
   EPERM: 63, EPIPE: 64, EPROTO: 65, ERANGE: 68, EROFS: 69, ESRCH: 71, ETIMEDOUT: 73,
 };
 
+// The shared shape is an inherited protocol; runtime identities and payload roles remain distinct.
+//@cg-expect-warning
 class WExit extends Error {
   constructor(readonly code: number) { super(`WASI exit ${code}`); }
 }
 
 interface Wfd {
   path: string;
-  sys?: number;
-  dir?: boolean;
+  sys: number | null;
+  dir: boolean | null;
 }
 
-const eno = (e: unknown): number => e instanceof KErr ? E[e.code] : 29;
+const eno = <T>(e: T): number => e instanceof KErr ? E[e.code] : 29;
 
 export class Wasi {
-  private mem?: WebAssembly.Memory;
+  private mem: WebAssembly.Memory | null = null;
   private sin: Uint8Array<ArrayBufferLike> = new Uint8Array();
   private ip = 0;
   private readonly out: Uint8Array[] = [];
@@ -39,29 +44,33 @@ export class Wasi {
 
   async run(bin: Uint8Array, argv: string[]): Promise<number> {
     this.argv = argv;
-    this.env = [...(this.s.env() as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
-    const input = this.s.p.fds.get(0)?.input;
-    this.sin = input?.tty ? new Uint8Array() : await this.s.inb();
-    this.fds.set(3, { path: "/", dir: true });
-    this.fds.set(4, { path: this.s.cwd, dir: true });
+    this.env = [...(this.s.env(null) as Map<string, string>)].map(([k, v]) => `${k}=${v}`);
+    const input = withValue((this.s.p.fds.get(0) ?? null) ?? null, value => value.input);
+    this.sin = withValue(input ?? null, value => value.tty) ? new Uint8Array() : await this.s.inb();
+    this.fds.set(3, {"sys": null, path: "/", dir: true });
+    this.fds.set(4, {"sys": null, path: this.s.cwd, dir: true });
     let code = 0;
     try {
       const mod = await WebAssembly.compile(Uint8Array.from(bin) as BufferSource);
       const x = await WebAssembly.instantiate(mod, this.imports());
       const ex = x.exports;
-      if (!(ex.memory instanceof WebAssembly.Memory)) throw new KErr("ENOEXEC", "WASM module exports no memory");
-      this.mem = ex.memory;
-      const fn = ex._start ?? ex.main;
+      const memory = ex.memory ?? null;
+      if (!(memory instanceof WebAssembly.Memory)) throw new KErr("ENOEXEC", "WASM module exports no memory");
+      this.mem = memory;
+      const fn = ex._start ?? (ex.main ?? null);
       if (typeof fn !== "function") throw new KErr("ENOEXEC", "WASM module exports neither _start nor main");
-      const r = fn();
+      const start = fn as () => number | void;
+      const r = start();
       if (typeof r === "number") code = r;
-    } catch (e) {
+    } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
       if (e instanceof WExit) code = e.code;
       else throw e;
     } finally {
       for (const b of this.out) await this.s.out(b);
       for (const b of this.err) await this.s.err(b);
-      for (const f of this.fds.values()) if (f.sys !== undefined) {
+      for (const f of this.fds.values()) if (f.sys !== null) {
+        // This documented best-effort fallback intentionally continues after the optional operation fails.
+        //@cg-expect-warning
         try { this.s.close(f.sys); } catch { /* the module may already have closed it */ }
       }
     }
@@ -69,8 +78,8 @@ export class Wasi {
   }
 
   private imports(): WebAssembly.Imports {
-    const safe = <A extends unknown[]>(fn: (...a: A) => number) => (...a: A): number => {
-      try { return fn(...a); } catch (e) { if (e instanceof WExit) throw e; return eno(e); }
+    const safe = <A extends (number | bigint)[]>(fn: (...a: A) => number) => (...a: A): number => {
+      try { return fn(...a); } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  if (e instanceof WExit) throw e; return eno(e); }
     };
 
     const wasi = {
@@ -99,15 +108,21 @@ export class Wasi {
       fd_prestat_get: safe((fd: number, p: number) => this.prestat(fd, p)),
       fd_prestat_dir_name: safe((fd: number, p: number, n: number) => this.prename(fd, p, n)),
       fd_readdir: safe((fd: number, p: number, n: number, c: bigint, used: number) => this.readdir(fd, p, n, c, used)),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       path_open: safe((fd: number, _df: number, p: number, n: number, of: number, rb: bigint, _ri: bigint, ff: number, out: number) => this.pathOpen(fd, p, n, of, rb, ff, out)),
       path_create_directory: safe((fd: number, p: number, n: number) => { this.s.mkdir(this.path(fd, p, n)); return 0; }),
       path_remove_directory: safe((fd: number, p: number, n: number) => { this.s.rm(this.path(fd, p, n), true); return 0; }),
       path_unlink_file: safe((fd: number, p: number, n: number) => { this.s.rm(this.path(fd, p, n)); return 0; }),
       path_rename: safe((a: number, ap: number, an: number, b: number, bp: number, bn: number) => { this.s.mv(this.path(a, ap, an), this.path(b, bp, bn)); return 0; }),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       path_link: safe((a: number, _af: number, ap: number, an: number, b: number, bp: number, bn: number) => { this.s.link(this.path(a, ap, an), this.path(b, bp, bn)); return 0; }),
       path_symlink: safe((a: number, an: number, fd: number, p: number, n: number) => { this.s.symlink(this.str(a, an), this.path(fd, p, n)); return 0; }),
       path_readlink: safe((fd: number, p: number, n: number, b: number, z: number, used: number) => this.readlink(fd, p, n, b, z, used)),
       path_filestat_get: safe((fd: number, _fl: number, p: number, n: number, out: number) => this.filestat(this.path(fd, p, n), out)),
+      // The fixed guest/WASM ABI requires these positional scalar parameters.
+      //@cg-expect-warning
       path_filestat_set_times: safe((fd: number, _lf: number, p: number, n: number, at: bigint, mt: bigint, fl: number) => this.setTimes(this.path(fd, p, n), at, mt, fl)),
       random_get: safe((p: number, n: number) => { this.random(p, n); return 0; }),
       clock_time_get: safe((_id: number, _pre: bigint, p: number) => { this.dv().setBigUint64(p, BigInt(Date.now()) * 1_000_000n, true); return 0; }),
@@ -160,7 +175,7 @@ export class Wasi {
     const m = this.u8();
     let at = bp;
     for (let i = 0; i < a.length; i++) {
-      const b = enc(a[i]!);
+      const b = enc(requireValue(a[i] ?? null, "src/wasm/wasi.ts:163"));
       this.dv().setUint32(vp + i * 4, at, true);
       m.set(b, at);
       m[at + b.length] = 0;
@@ -170,13 +185,17 @@ export class Wasi {
   }
 
   private rawWrite(fd: number, b: Uint8Array): number {
-    if (fd === 1) this.out.push(b.slice());
-    else if (fd === 2) this.err.push(b.slice());
-    else {
+    switch (true) {
+case !!(fd === 1): { this.out.push(b.slice());
+break; }
+case !!(fd === 2): { this.err.push(b.slice());
+break; }
+default: {
       const f = this.file(fd);
-      if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+      if (f.sys === null) throw new KErr("EBADF", String(fd));
       this.s.fdw(f.sys, b);
-    }
+     }
+}
     return b.length;
   }
 
@@ -187,7 +206,7 @@ export class Wasi {
       this.ip += b.length;
     } else {
       const f = this.file(fd);
-      if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+      ensure(!(f.sys === null), () => { throw new KErr("EBADF", String(fd)); });
       b = this.s.fdr(f.sys, n);
     }
     this.u8().set(b, p);
@@ -220,7 +239,7 @@ export class Wasi {
 
   private fdPread(fd: number, p: number, n: number, off: bigint, nr: number): number {
     const f = this.file(fd);
-    if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+    if (f.sys === null) throw new KErr("EBADF", String(fd));
     const old = this.s.seek(f.sys, 0, 1);
     try { this.s.seek(f.sys, Number(off), 0); return this.fdRead(fd, p, n, nr); }
     finally { this.s.seek(f.sys, old, 0); }
@@ -228,14 +247,14 @@ export class Wasi {
 
   private fdPwrite(fd: number, p: number, n: number, off: bigint, nw: number): number {
     const f = this.file(fd);
-    if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+    if (f.sys === null) throw new KErr("EBADF", String(fd));
     const old = this.s.seek(f.sys, 0, 1);
     try { this.s.seek(f.sys, Number(off), 0); return this.fdWrite(fd, p, n, nw); }
     finally { this.s.seek(f.sys, old, 0); }
   }
 
   private file(fd: number): Wfd {
-    const f = this.fds.get(fd);
+    const f = (this.fds.get(fd) ?? null);
     if (!f) throw new KErr("EBADF", String(fd));
     return f;
   }
@@ -243,7 +262,7 @@ export class Wasi {
   private fdClose(fd: number): number {
     const f = this.file(fd);
     if (fd < 5) throw new KErr("EBADF", String(fd));
-    if (f.sys !== undefined) this.s.close(f.sys);
+    if (f.sys !== null) this.s.close(f.sys);
     this.fds.delete(fd);
     return 0;
   }
@@ -251,8 +270,8 @@ export class Wasi {
   private renumber(a: number, b: number): number {
     if (a < 5 || b < 5) throw new KErr("ENOTSUP", "renumbering standard descriptors");
     const f = this.file(a);
-    const old = this.fds.get(b);
-    if (old?.sys !== undefined) this.s.close(old.sys);
+    const old = (this.fds.get(b) ?? null);
+    if (withValue(old ?? null, value => value.sys) !== null) this.s.close(requireValue(requireValue(old ?? null, "src/wasm/wasi.ts:258").sys ?? null, "src/wasm/wasi.ts:258"));
     this.fds.set(b, f);
     this.fds.delete(a);
     return 0;
@@ -260,7 +279,7 @@ export class Wasi {
 
   private fdSeek(fd: number, off: bigint, wh: number, p: number): number {
     const f = this.file(fd);
-    if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+    if (f.sys === null) throw new KErr("EBADF", String(fd));
     const n = this.s.seek(f.sys, Number(off), wh);
     this.dv().setBigUint64(p, BigInt(n), true);
     return 0;
@@ -272,14 +291,16 @@ export class Wasi {
     return norm(this.str(p, n), f.path);
   }
 
+  // The fixed guest/WASM ABI requires these positional scalar parameters.
+  //@cg-expect-warning
   private pathOpen(fd: number, p: number, n: number, of: number, rights: bigint, ff: number, out: number): number {
     const path = this.path(fd, p, n);
     const wantDir = !!(of & 2);
     if (wantDir) {
       const st = this.s.stat(path);
-      if (st.kind !== "dir") throw new KErr("ENOTDIR", path);
+      ensure(!(st.kind !== "dir"), () => { throw new KErr("ENOTDIR", path); });
       const w = this.nfd++;
-      this.fds.set(w, { path, dir: true });
+      this.fds.set(w, {"sys": null, path, dir: true });
       this.dv().setUint32(out, w, true);
       return 0;
     }
@@ -289,7 +310,7 @@ export class Wasi {
     if ((of & 4) && this.exists(path)) throw new KErr("EEXIST", path);
     const sys = this.s.open(path, fl);
     const w = this.nfd++;
-    this.fds.set(w, { path, sys });
+    this.fds.set(w, {"dir": null, path, sys });
     this.dv().setUint32(out, w, true);
     return 0;
   }
@@ -314,7 +335,7 @@ export class Wasi {
   private setFlags(fd: number, fl: number): number {
     if (fd <= 2) return 0;
     const f = this.file(fd);
-    if (f.sys === undefined) return 0;
+    if (f.sys === null) return 0;
     const x = this.s.p.fds.get(f.sys) ?? (() => { throw new KErr("EBADF", String(fd)); })();
     x.add = !!(fl & 1);
     return 0;
@@ -368,7 +389,7 @@ export class Wasi {
     const a = [[".", f.path], ["..", norm("..", f.path)], ...this.s.list(f.path).map(([x]) => [x, norm(x, f.path)])] as Array<[string, string]>;
     let at = 0;
     for (let i = Number(cookie); i < a.length; i++) {
-      const [name, path] = a[i]!;
+      const [name, path] = requireValue(a[i] ?? null, "src/wasm/wasi.ts:371");
       const b = enc(name);
       if (at + 24 + b.length > n) break;
       const q = p + at;
@@ -393,7 +414,7 @@ export class Wasi {
 
   private resize(fd: number, n: bigint): number {
     const f = this.file(fd);
-    if (f.sys === undefined) throw new KErr("EBADF", String(fd));
+    if (f.sys === null) throw new KErr("EBADF", String(fd));
     const old = this.s.readb(f.path);
     const b = new Uint8Array(Number(n));
     b.set(old.slice(0, b.length));
@@ -414,27 +435,37 @@ export class Wasi {
     let wait = 0;
     for (let i = 0; i < n; i++) {
       const p = inp + i * 48, user = this.dv().getBigUint64(p, true), type = this.dv().getUint8(p + 8);
-      if (type === 0) {
+      switch (true) {
+case !!(type === 0): {
         const ns = this.dv().getBigUint64(p + 24, true), abs = !!(this.dv().getUint16(p + 40, true) & 1);
         const ms = Number(ns / 1_000_000n);
         wait = Math.max(wait, abs ? ms - Date.now() : ms);
         ev.push({ user, type, err: 0, bytes: 0n });
-      } else if (type === 1 || type === 2) {
+
+break; }
+case !!(type === 1 || type === 2): {
         const fd = this.dv().getUint32(p + 16, true);
         let bytes = 0n;
         try {
-          if (fd === 0) bytes = BigInt(this.sin.length - this.ip);
-          else if (fd > 2) { const f = this.file(fd); bytes = BigInt(Math.max(0, this.s.stat(f.path).size - (f.sys === undefined ? 0 : this.s.p.fds.get(f.sys)?.pos ?? 0))); }
+          switch (true) {
+case !!(fd === 0): { bytes = BigInt(this.sin.length - this.ip);
+break; }
+case !!(fd > 2): {  const f = this.file(fd); bytes = BigInt(Math.max(0, this.s.stat(f.path).size - (f.sys === null ? 0 : withValue((this.s.p.fds.get(f.sys) ?? null) ?? null, value => value.pos) ?? 0)));
+break; }
+}
           ev.push({ user, type, err: 0, bytes });
-        } catch (e) { ev.push({ user, type, err: eno(e), bytes: 0n }); }
-      } else ev.push({ user, type, err: 28, bytes: 0n });
+        } catch (caughtValue) { const e = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));  ev.push({ user, type, err: eno(e), bytes: 0n }); }
+
+break; }
+default: { ev.push({ user, type, err: 28, bytes: 0n }); }
+}
     }
     if (wait > 0 && !ev.some(x => x.type !== 0 && x.err === 0)) {
       const end = performance.now() + wait;
       while (performance.now() < end) { /* WASI Preview 1 is synchronous. Yep, even here. */ }
     }
     for (let i = 0; i < ev.length; i++) {
-      const p = out + i * 32, x = ev[i]!;
+      const p = out + i * 32, x = requireValue(ev[i] ?? null, "src/wasm/wasi.ts:437");
       this.dv().setBigUint64(p, x.user, true);
       this.dv().setUint16(p + 8, x.err, true);
       this.dv().setUint8(p + 10, x.type);

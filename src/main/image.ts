@@ -1,3 +1,5 @@
+// This module composes kernel, toolchain or integration-test boundaries and intentionally imports their contracts.
+//@cg-expect-warning
 import { bad, KErr } from "../core/err.js";
 import type { Kern } from "../core/kernel.js";
 import type { Cred } from "../fs/vfs.js";
@@ -22,7 +24,7 @@ const osRelease = (k: Kern): string => {
 const replaceStockFile = (k: Kern, path: string, oldText: string, newText: string): void => {
   let text: string;
   try { text = k.fs.read(path, "/", r); }
-  catch (error) {
+  catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
     if (error instanceof KErr && error.code === "ENOENT") return;
     throw error;
   }
@@ -31,7 +33,7 @@ const replaceStockFile = (k: Kern, path: string, oldText: string, newText: strin
 
 const addStockLink = (k: Kern, target: string, path: string): void => {
   try { k.fs.stat(path, "/", r); }
-  catch (error) {
+  catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
     if (!(error instanceof KErr) || error.code !== "ENOENT") throw error;
     try { k.fs.stat(target, "/", r); }
     catch { return; }
@@ -41,7 +43,7 @@ const addStockLink = (k: Kern, target: string, path: string): void => {
 
 const addStockFile = (k: Kern, path: string, text: string, mode = 0o644): void => {
   try { k.fs.stat(path, "/", r); }
-  catch (error) {
+  catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
     if (!(error instanceof KErr) || error.code !== "ENOENT") throw error;
     k.fs.mkfile(path, text, "/", r, mode);
   }
@@ -188,14 +190,14 @@ export const image = (k: Kern): void => {
   f("/usr/bin/hello.wasm", demoWasm(), 0o755);
   k.fs.symlink("/usr/bin/hello.wasm", "/bin/hello.wasm", "/", r);
   const inc = (name: string): { src: string; file: string } => ({ src: k.fs.read(name, "/", r), file: name });
-  const crt = new Asm(inc, { debug: true }).run(CRT0_TAS, "/usr/lib/thistle/crt0.tas").obj;
+  const crt = new Asm(inc, {"defs": {}, "arch": "thistle64",  debug: true }).run(CRT0_TAS, "/usr/lib/thistle/crt0.tas").obj;
   f("/usr/lib/thistle/crt0.to", codec.pack(crt));
-  const crt32 = new Asm(inc, { debug: true, arch: "thistle32" }).run(CRT032_TAS, "/usr/lib/thistle32/crt0.tas").obj;
+  const crt32 = new Asm(inc, {"defs": {},  debug: true, arch: "thistle32" }).run(CRT032_TAS, "/usr/lib/thistle32/crt0.tas").obj;
   f("/usr/lib/thistle32/crt0.to", codec.pack(crt32));
   for (const [name, src] of [["hello", HELLO_TAS], ["fib", FIB_TAS]] as const) {
-    const obj = new Asm(inc, { debug: true }).run(src, `/usr/share/thistle/examples/${name}.tas`).obj;
+    const obj = new Asm(inc, {"defs": {}, "arch": "thistle64",  debug: true }).run(src, `/usr/share/thistle/examples/${name}.tas`).obj;
     f(`/usr/share/thistle/examples/${name}.to`, codec.pack(obj));
-    const exe = new Link().run([obj], { names: [`${name}.to`] }).exe;
+    const exe = new Link().run([obj], {"entry": null, "base": null, "mem": null,  names: [`${name}.to`] }).exe;
     const bin = codec.pack(exe);
     f(`/usr/bin/${name}.txe`, bin, 0o755);
     k.fs.symlink(`/usr/bin/${name}.txe`, `/bin/${name}.txe`, "/", r);
@@ -206,9 +208,9 @@ export const image = (k: Kern): void => {
       k.fs.symlink(`/usr/bin/${name}.39`, `/bin/${name}.39`, "/", r);
     }
   }
-  const old = new Asm(inc, { debug: true, arch: "thistle32" }).run(HELLO32_TAS, "/usr/share/thistle/examples/hello32.tas").obj;
+  const old = new Asm(inc, {"defs": {},  debug: true, arch: "thistle32" }).run(HELLO32_TAS, "/usr/share/thistle/examples/hello32.tas").obj;
   f("/usr/share/thistle/examples/hello32.to", codec.pack(old));
-  f("/usr/bin/hello32.txe", codec.pack(new Link().run([old], { names: ["hello32.to"] }).exe), 0o755);
+  f("/usr/bin/hello32.txe", codec.pack(new Link().run([old], {"entry": null, "base": null, "mem": null,  names: ["hello32.to"] }).exe), 0o755);
   k.fs.symlink("/usr/bin/hello32.txe", "/bin/hello32.txe", "/", r);
   k.log("vfs: root image mounted read-write");
   k.log("wasm: WASI preview1 loader registered");
@@ -220,7 +222,7 @@ export const image = (k: Kern): void => {
 /** Rebuild the bits which are alive, rather than files wearing convincing hats. */
 export const live = (k: Kern): void => {
   const reset = (name: string): Dir => {
-    const old = k.fs.root.ent.get(name), d = old instanceof Dir ? old : new Dir();
+    const old = (k.fs.root.ent.get(name) ?? null), d = old instanceof Dir ? old : new Dir();
     d.ent.clear(); d.mode = 0o755; d.uid = 0; d.gid = 0; k.fs.root.ent.set(name, d); return d;
   };
   reset("dev"); reset("proc");

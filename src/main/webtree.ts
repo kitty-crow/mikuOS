@@ -1,3 +1,9 @@
+import { ensure } from "../core/err.js";
+import { readWebRoot } from "./webroot-format.js";
+import { treeMeta } from "../fs/tree-meta.js";
+import { jsonObject, jsonText, jsonNat, parseJson } from "../core/json.js";
+import { withValue } from "../core/err.js";
+import { requireValue } from "../core/err.js";
 import { fileSum } from "../fs/tree.js";
 import type { Tree, TreeEnt } from "../fs/tree.js";
 import type { RegSource } from "../fs/vfs.js";
@@ -18,16 +24,18 @@ interface FF extends FH {
 }
 interface FD extends FH {
   kind: "directory";
-  entries(): AsyncIterableIterator<[string, FH]>;
-  getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<FD>;
-  getFileHandle(name: string, options?: { create?: boolean }): Promise<FF>;
-  removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
+  entries(): AsyncIterable<[string, FH], void, void>;
+  getDirectoryHandle(name: string, options: { create: boolean }): Promise<FD>;
+  getFileHandle(name: string, options: { create: boolean }): Promise<FF>;
+  removeEntry(name: string, options: { recursive: boolean }): Promise<void>;
 }
-interface Nav { storage?: { getDirectory(): Promise<FD> }; }
-interface Pick { showDirectoryPicker?(): Promise<FD>; }
+interface Nav { storage: { getDirectory(): Promise<FD> } | null; }
+interface Pick { showDirectoryPicker: (() => Promise<FD>) | null; }
 
+// The shared shape is an inherited protocol; runtime identities and payload roles remain distinct.
+//@cg-expect-warning
 interface OverlayMeta extends Omit<TreeEnt, "data" | "source"> {
-  base?: boolean;
+  base: boolean | null;
 }
 interface OverlayManifest {
   format: 2;
@@ -55,7 +63,7 @@ const fetchOk = async (url: URL): Promise<Response> => {
 
 const inflate = async (
   url: URL,
-  progress?: (done: number, total: number) => void,
+  progress: ((done: number, total: number) => void) | null = null,
 ): Promise<Uint8Array> => {
   const response = await fetchOk(url);
   if (!response.body) throw new Error(`${url.pathname}: empty compressed response`);
@@ -73,7 +81,7 @@ const inflate = async (
     : response.body;
   // The DOM typing also accepts ArrayBuffer for the decompressor's writable
   // side, but this stream supplies only Uint8Array chunks.
-  const decoder = new DecompressionStream("gzip") as unknown as
+  const decoder = new DecompressionStream("gzip") as
     ReadableWritablePair<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBufferLike>>;
   const stream = compressed.pipeThrough(decoder);
   return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -82,13 +90,12 @@ const inflate = async (
 const fileMeta = (entry: TreeEnt): { size: number; sum: string } => {
   const data = entry.data;
   return {
-    size: entry.size ?? entry.source?.size ?? data?.length ?? 0,
-    sum: entry.sum ?? entry.source?.sum ?? fileSum(data ?? new Uint8Array()),
+    size: entry.size ?? withValue(entry.source ?? null, value => value.size) ?? withValue(data ?? null, value => value.length) ?? 0,
+    sum: entry.sum ?? withValue(entry.source ?? null, value => value.sum) ?? fileSum(data ?? new Uint8Array()),
   };
 };
 
-const metadata = (entry: TreeEnt): OverlayMeta => ({
-  p: entry.p,
+const metadata = (entry: TreeEnt): OverlayMeta => ({"base": null, p: entry.p,
   k: entry.k,
   id: entry.id,
   mode: entry.mode,
@@ -97,8 +104,8 @@ const metadata = (entry: TreeEnt): OverlayMeta => ({
   at: entry.at,
   mt: entry.mt,
   ct: entry.ct,
-  ...(entry.k === "f" ? fileMeta(entry) : {}),
-  ...(entry.k === "l" ? { to: entry.to } : {}),
+  ...fileMeta(entry),
+  to: entry.k === "l" ? entry.to : null,
 });
 
 const sameBase = (left: TreeEnt, right: TreeEnt): boolean => {
@@ -139,14 +146,15 @@ export class WebTree implements Tree {
   constructor(
     base: string | URL = new URL("./root/", document.baseURI),
     persistence = true,
-    private readonly onBootProgress?: (phase: number, done?: number, total?: number) => void,
+    private readonly onBootProgress: ((phase: number, done: number | null, total: number | null) => void) | null = null,
   ) {
     const root = base instanceof URL ? base : new URL(base, document.baseURI);
     this.manifestUrl = new URL("manifest.json", root);
-    const storage = (navigator as unknown as Nav).storage;
-    this.persistent = persistence && !!storage?.getDirectory;
+    const nav: Nav = navigator as Navigator & Nav;
+    const storage = nav.storage;
+    this.persistent = persistence && !!withValue(storage ?? null, value => value.getDirectory);
     this.root = this.persistent
-      ? storage!.getDirectory().then(dir => dir.getDirectoryHandle(".mikuos", { create: true }))
+      ? requireValue(storage ?? null, "src/main/webtree.ts:149").getDirectory().then(dir => dir.getDirectoryHandle(".mikuos", { create: true }))
       : Promise.resolve(null);
     this.basePromise = this.loadBase();
   }
@@ -155,7 +163,7 @@ export class WebTree implements Tree {
   get imageVersion(): number { return this.image; }
 
   async pick(): Promise<boolean> {
-    const fn = (globalThis as unknown as Pick).showDirectoryPicker;
+    const fn = ((globalThis as typeof globalThis & Pick).showDirectoryPicker ?? null);
     if (!fn) return false;
     const selected = await fn();
     this.root = Promise.resolve(await selected.getDirectoryHandle(".mikuos", { create: true }));
@@ -187,20 +195,22 @@ export class WebTree implements Tree {
     }
 
     for (const entry of overlay.entries) {
-      const current = this.base.get(entry.p);
+      const current = (this.base.get(entry.p) ?? null);
       if (entry.k === "f") {
+        // Overlay changes preserve the selected base inode and its stored payload identity.
+        //@cg-expect-warning
         if (entry.base) {
-          if (!current || current.k !== "f") throw new Error(`missing static base file ${entry.p}`);
+          ensure(!(!current || current.k !== "f"), () => { throw new Error(`missing static base file ${entry.p}`); });
           const mergedEntry: TreeEnt = { ...current, ...entry };
-          if (current.data) mergedEntry.data = current.data;
-          if (current.source) mergedEntry.source = current.source;
+          (current.data) && (mergedEntry.data = current.data);
+          (current.source) && (mergedEntry.source = current.source);
           merged.set(entry.p, mergedEntry);
         } else {
           const data = await this.readData(root, entry.p);
-          merged.set(entry.p, { ...entry, data, sum: entry.sum ?? fileSum(data), size: data.length });
+          merged.set(entry.p, {"source": null, ...entry, data, sum: entry.sum ?? fileSum(data), size: data.length });
         }
       } else {
-        merged.set(entry.p, entry);
+        merged.set(entry.p, { ...entry, data: null, source: null });
       }
     }
 
@@ -222,9 +232,9 @@ export class WebTree implements Tree {
   private stableInodeIds(entries: TreeEnt[]): Map<number, number> {
     const assigned = new Map<number, number>();
     const used = new Set<number>();
-    const oldOverlay = new Map((this.overlay?.entries ?? []).map(entry => [entry.p, entry]));
+    const oldOverlay = new Map((withValue(this.overlay ?? null, value => value.entries) ?? []).map(entry => [entry.p, entry]));
     let nextId = Math.max(0, ...this.baseEntries.map(entry => entry.id),
-      ...(this.overlay?.entries ?? []).map(entry => entry.id));
+      ...(withValue(this.overlay ?? null, value => value.entries) ?? []).map(entry => entry.id));
 
     const oldPaths = entries.filter(entry =>
       this.base.has(entry.p) || oldOverlay.has(entry.p));
@@ -233,12 +243,12 @@ export class WebTree implements Tree {
     for (const entry of candidates) {
       if (assigned.has(entry.id)) continue;
 
-      const base = this.base.get(entry.p);
-      const saved = oldOverlay.get(entry.p);
-      const candidate = base?.k === entry.k ? base.id
-        : saved?.k === entry.k ? saved.id
-        : undefined;
-      const id = candidate !== undefined && !used.has(candidate)
+      const base = (this.base.get(entry.p) ?? null);
+      const saved = (oldOverlay.get(entry.p) ?? null);
+      const candidate = withValue(base ?? null, value => value.k) === entry.k ? requireValue(base ?? null, "src/main/webtree.ts:239").id
+        : withValue(saved ?? null, value => value.k) === entry.k ? requireValue(saved ?? null, "src/main/webtree.ts:240").id
+        : null;
+      const id = candidate !== null && !used.has(candidate)
         ? candidate
         : ++nextId;
       assigned.set(entry.id, id);
@@ -248,7 +258,8 @@ export class WebTree implements Tree {
     return assigned;
   }
 
-  async push(entries: TreeEnt[], imageVersion = this.image): Promise<void> {
+  async push(entries: TreeEnt[], imageVersion: number | null = this.image): Promise<void> {
+    imageVersion ??= this.image;
     await this.basePromise;
     const root = await this.root;
     if (!root) return;
@@ -259,18 +270,18 @@ export class WebTree implements Tree {
     const inodeIds = this.stableInodeIds(entries);
 
     for (const entry of entries) {
-      const original = this.base.get(entry.p);
+      const original = (this.base.get(entry.p) ?? null);
       if (original && sameBase(entry, original)) continue;
 
       const out = metadata(entry);
       out.id = inodeIds.get(entry.id) ?? entry.id;
       if (entry.k === "f") {
+        // Overlay changes preserve the selected base inode and its stored payload identity.
+        //@cg-expect-warning
         if (original && baseContent(entry, original)) {
           out.base = true;
         } else {
-          if (!(entry.data instanceof Uint8Array)) {
-            throw new Error(`modified web-root file has no resident payload: ${entry.p}`);
-          }
+          ensure((entry.data instanceof Uint8Array), () => { throw new Error(`modified web-root file has no resident payload: ${entry.p}`); });
           await this.writeData(root, entry.p, entry.data);
         }
       }
@@ -278,7 +289,7 @@ export class WebTree implements Tree {
     }
 
     const nextData = new Set(changed.filter(entry => entry.k === "f" && !entry.base).map(entry => entry.p));
-    for (const entry of this.overlay?.entries ?? []) {
+    for (const entry of withValue(this.overlay ?? null, value => value.entries) ?? []) {
       if (entry.k === "f" && !entry.base && !nextData.has(entry.p)) await this.removeData(root, entry.p);
     }
 
@@ -298,13 +309,13 @@ export class WebTree implements Tree {
   }
 
   private async loadBase(): Promise<TreeEnt[]> {
-    const manifest = await (await fetchOk(this.manifestUrl)).json() as WebRootManifest;
+    const manifest = readWebRoot(await (await fetchOk(this.manifestUrl)).text());
     if (manifest.format !== 1 || !Array.isArray(manifest.entries)) throw new Error("unsupported static web-root manifest");
-    this.onBootProgress?.(2);
+    withValue(this.onBootProgress ?? null, callable => callable.call(this, 2, null, null));
     const core = await inflate(new URL(manifest.core.path, this.manifestUrl),
-      (done, total) => this.onBootProgress?.(2, done, total));
+      (done, total) => withValue(this.onBootProgress ?? null, callable => callable.call(this, 2, done, total)));
     if (core.length !== manifest.core.unpackedSize) throw new Error("static web-root core size mismatch");
-    this.onBootProgress?.(3);
+    withValue(this.onBootProgress ?? null, callable => callable.call(this, 3, null, null));
 
     const entries = manifest.entries.map(entry => this.baseEntry(entry, core));
     this.baseEntries = entries;
@@ -314,13 +325,13 @@ export class WebTree implements Tree {
   }
 
   private baseEntry(entry: WebRootEntry, core: Uint8Array): TreeEnt {
-    if (entry.k === "d") return { ...entry };
-    if (entry.k === "l") return { ...entry };
+    if (entry.k === "d") return {"data": null, "sum": null, "size": null, "source": null, "to": null, ...entry };
+    if (entry.k === "l") return {"data": null, "sum": null, "size": null, "source": null, ...entry };
     const file = entry as WebRootFileEntry;
     if (file.ref.kind === "core") {
       const data = core.subarray(file.ref.offset, file.ref.offset + file.ref.length);
-      if (data.length !== file.size || fileSum(data) !== file.sum) throw new Error(`bad static web-root core entry ${file.p}`);
-      return { ...file, data, size: file.size, sum: file.sum };
+      ensure(!(data.length !== file.size || fileSum(data) !== file.sum), () => { throw new Error(`bad static web-root core entry ${file.p}`); });
+      return {"source": null, "to": null, ...file, data, size: file.size, sum: file.sum };
     }
 
     const url = new URL(file.ref.path, this.manifestUrl);
@@ -329,12 +340,12 @@ export class WebTree implements Tree {
       sum: file.sum,
       head: fromHex(file.head),
       load: async () => {
-        const data = await inflate(url);
+        const data = await inflate(url, null);
         if (data.length !== file.size || fileSum(data) !== file.sum) throw new Error(`bad static web-root blob ${file.p}`);
         return data;
       },
     };
-    return { ...file, source, size: file.size, sum: file.sum };
+    return {"data": null, "to": null, ...file, source, size: file.size, sum: file.sum };
   }
 
   private whiteouts(now: Map<string, TreeEnt>): string[] {
@@ -359,31 +370,28 @@ export class WebTree implements Tree {
     for (const part of this.parts(path)) {
       try {
         dir = await dir.getDirectoryHandle(part, { create });
-      } catch (error) {
-        if (!create || !this.isTypeMismatch(error)) throw error;
+      } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+        if (!create || !isTypeMismatch(error)) throw error;
         // The current guest tree now needs a directory where an old overlay file remains.
-        await dir.removeEntry(part);
+        await dir.removeEntry(part, { recursive: false });
         dir = await dir.getDirectoryHandle(part, { create: true });
       }
     }
     return dir;
   }
 
-  private isTypeMismatch(error: unknown): boolean {
-    return typeof error === "object" && error !== null &&
-      "name" in error && error.name === "TypeMismatchError";
-  }
+
 
   private async dataFile(root: FD, path: string, create: boolean): Promise<FF> {
     const parts = this.parts(path);
-    const name = parts.pop();
+    const name = (parts.pop() ?? null);
     if (!name) throw new Error("root is not a regular overlay file");
     const data = await this.folder(root, "/data", create);
     const dir = await this.folder(data, `/${parts.join("/")}`, create);
     try {
       return await dir.getFileHandle(name, { create });
-    } catch (error) {
-      if (!create || !this.isTypeMismatch(error)) throw error;
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+      if (!create || !isTypeMismatch(error)) throw error;
       // A directory used to occupy this file path. The new guest snapshot
       // cannot contain its descendants, so its stale overlay can be discarded.
       await dir.removeEntry(name, { recursive: true });
@@ -404,12 +412,14 @@ export class WebTree implements Tree {
 
   private async removeData(root: FD, path: string): Promise<void> {
     const parts = this.parts(path);
-    const name = parts.pop();
+    const name = (parts.pop() ?? null);
     if (!name) return;
     try {
-      const data = await root.getDirectoryHandle("data");
+      const data = await root.getDirectoryHandle("data", { create: false });
       const dir = await this.folder(data, `/${parts.join("/")}`, false);
-      await dir.removeEntry(name);
+      await dir.removeEntry(name, { recursive: false });
+    // This documented best-effort fallback intentionally continues after the optional operation fails.
+    //@cg-expect-warning
     } catch { /* The overlay file was already absent. */ }
   }
 
@@ -419,16 +429,22 @@ export class WebTree implements Tree {
     await writer.close();
   }
 
+  // This method is retained as the established snapshot, executable or platform callback boundary.
+  //@cg-expect-warning
   private async readManifest(root: FD): Promise<OverlayManifest | null> {
     try {
-      const file = await (await root.getFileHandle(overlayName)).getFile();
-      const value = JSON.parse(await file.text()) as OverlayManifest;
-      return value.format === 2 && Array.isArray(value.entries) && Array.isArray(value.whiteouts)
-        ? value
-        : null;
-    } catch (error) {
-      if ((error as { name?: string }).name === "NotFoundError") return null;
+      const file = await (await root.getFileHandle(overlayName, { create: false })).getFile();
+      const value = jsonObject(parseJson(await file.text()));
+      const entries = value.entries ?? null, whiteouts = value.whiteouts ?? null;
+      if ((value.format ?? null) !== 2 || !Array.isArray(entries) || !Array.isArray(whiteouts)) return null;
+      return { format: 2, image: jsonNat(value.image ?? null), whiteouts: whiteouts.map(jsonText),
+        entries: entries.map(item => ({ ...treeMeta(item), base: (jsonObject(item).base ?? null) === true })) };
+
+    } catch (caughtValue) { const error = caughtValue instanceof Error ? caughtValue : new Error(typeof caughtValue === "undefined" ? "undefined" : String(caughtValue));
+      if ((error as { name: string | null }).name === "NotFoundError") return null;
       throw error;
     }
   }
 }
+
+function isTypeMismatch(error: Error): boolean { return error.name === "TypeMismatchError"; }

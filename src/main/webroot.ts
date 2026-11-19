@@ -1,3 +1,6 @@
+import { parseJson, jsonObject, type Json } from "../core/json.js";
+import { hostModule } from "./host-module.js";
+import { requireValue } from "../core/err.js";
 import { fileSum } from "../fs/tree.js";
 import type {
   WebRootEntry,
@@ -19,31 +22,31 @@ interface HostPath {
 }
 
 interface HostZlib {
-  gzipSync(data: Uint8Array, options?: { level?: number }): Uint8Array;
+  gzipSync(data: Uint8Array, options: { level: number | null } | null): Uint8Array;
 }
 
 interface RootMeta {
-  image?: number;
-  ent?: Array<Record<string, unknown>>;
+  image: number | null;
+  ent: Array<Record<string, Json>> | null;
 }
 
-const mod = (name: string): Promise<unknown> => import(name);
-const fs = await mod("node:fs/promises") as HostFs;
-const path = await mod("node:path") as HostPath;
-const zlib = await mod("node:zlib") as HostZlib;
+
+const fs = await hostModule("node:fs/promises") as HostFs;
+const path = await hostModule("node:path") as HostPath;
+const zlib = await hostModule("node:zlib") as HostZlib;
 const td = new TextDecoder();
 
 const hex = (bytes: Uint8Array): string =>
   [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
 
-const num = (value: unknown, label: string): number => {
+const num = (value: Json, label: string): number => {
   if (!Number.isSafeInteger(value) || Number(value) < 0) {
     throw new Error(`bad ${label} in root metadata`);
   }
   return Number(value);
 };
 
-const text = (value: unknown, label: string): string => {
+const text = (value: Json, label: string): string => {
   if (typeof value !== "string") throw new Error(`bad ${label} in root metadata`);
   return value;
 };
@@ -63,29 +66,32 @@ export class WebRootPackage {
     private readonly imageVersion: number,
   ) {}
 
+  // Validation precedes mutation so failures leave the current operation in a defined state.
   async build(): Promise<WebRootManifest> {
     const source = path.resolve(this.sourceRoot);
     const output = path.resolve(this.outputRoot);
-    const raw = JSON.parse(td.decode(await fs.readFile(path.join(source, ".thistle-meta.json")))) as RootMeta;
-    if (!Array.isArray(raw.ent)) throw new Error("CLI root metadata has no entry table");
+    const raw = jsonObject(parseJson(td.decode(await fs.readFile(path.join(source, ".thistle-meta.json")))));
+    const rawEntries = raw.ent ?? null;
+    if (!Array.isArray(rawEntries)) throw new Error("CLI root metadata has no entry table");
 
-    const rows = raw.ent.map(value => {
-      const p = text(value.p, "path");
-      const k = text(value.k, "kind");
+    const rows = rawEntries.map(item => {
+      const value = jsonObject(item);
+      const p = text((value.p ?? null), "path");
+      const k = text((value.k ?? null), "kind");
       if (!p.startsWith("/") || p.split("/").includes("..") || !["d", "f", "l"].includes(k)) {
         throw new Error(`bad CLI root entry ${p}`);
       }
       return {
         p,
         k: k as "d" | "f" | "l",
-        id: num(value.id, "inode"),
-        mode: num(value.mode, "mode"),
-        uid: num(value.uid, "uid"),
-        gid: num(value.gid, "gid"),
-        at: num(value.at, "atime"),
-        mt: num(value.mt, "mtime"),
-        ct: num(value.ct, "ctime"),
-        ...(k === "l" ? { to: text(value.to, "link target") } : {}),
+        id: num((value.id ?? null), "inode"),
+        mode: num((value.mode ?? null), "mode"),
+        uid: num((value.uid ?? null), "uid"),
+        gid: num((value.gid ?? null), "gid"),
+        at: num((value.at ?? null), "atime"),
+        mt: num((value.mt ?? null), "mtime"),
+        ct: num((value.ct ?? null), "ctime"),
+        ...(k === "l" ? { to: text((value.to ?? null), "link target") } : {}),
       };
     }).filter(value => value.p !== "/.thistle-meta.json");
 
@@ -105,7 +111,7 @@ export class WebRootPackage {
     let coreSize = 0;
 
     for (const [id, paths] of [...filePaths].sort(([a], [b]) => a - b)) {
-      const hostPath = path.join(source, paths[0]!.slice(1));
+      const hostPath = path.join(source, requireValue(paths[0] ?? null, "src/main/webroot.ts:108").slice(1));
       const bytes = Uint8Array.from(await fs.readFile(hostPath));
       const size = bytes.length;
       const sum = fileSum(bytes);
@@ -144,8 +150,8 @@ export class WebRootPackage {
         ct: row.ct,
       };
       if (row.k === "d") return { ...base, k: "d" };
-      if (row.k === "l") return { ...base, k: "l", to: row.to! };
-      const ref = refs.get(row.id);
+      if (row.k === "l") return { ...base, k: "l", to: requireValue(row.to ?? null, "src/main/webroot.ts:147") };
+      const ref = (refs.get(row.id) ?? null);
       if (!ref) throw new Error(`missing CLI root payload for ${row.p}`);
       return { ...base, k: "f", ...ref };
     });

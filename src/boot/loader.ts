@@ -1,20 +1,21 @@
+import { withValue } from "../core/err.js";
 export interface BootTerminal {
-  element?: HTMLElement | undefined;
-  cols?: number;
-  rows?: number;
+  element: HTMLElement | null | null;
+  cols: number | null;
+  rows: number | null;
   write(text: string): void;
-  onResize?(listener: (size: { cols: number; rows: number }) => void): { dispose(): void };
+  onResize: ((listener: (size: { cols: number; rows: number }) => void) => { dispose(): void }) | null;
 }
 
 export interface BootDisplay {
-  report(phase: number, done?: number, total?: number): void;
+  report(phase: number, done: number | null, total: number | null): void;
   finish(): void;
-  fail(error: unknown): void;
+  fail<T>(error: T): void;
   dispose(): void;
 }
 
 export interface BootApi {
-  create(terminal: BootTerminal, base?: string | URL): Promise<BootDisplay>;
+  create(terminal: BootTerminal, base: string | URL | null): Promise<BootDisplay>;
   loadRuntime(url: string): Promise<void>;
 }
 
@@ -29,7 +30,7 @@ interface BootExports extends WebAssembly.Exports {
 
 /* Minimal host bridge. Screen, logo, spinner and progress maths are C/WASM.
  * This script starts before thistle.js and does not import the main runtime. */
-(function (global: typeof globalThis & { MikuBoot?: BootApi }) {
+(function (global: typeof globalThis & { MikuBoot: BootApi | null }) {
   "use strict";
   const decoder = new TextDecoder("utf-8");
 
@@ -39,10 +40,10 @@ interface BootExports extends WebAssembly.Exports {
   // terminal viewport during boot, then restore its original placement.
   // The splash artwork and progress UI still render entirely inside WASM.
   function centreBootGrid(terminal: BootTerminal) {
-    const host = terminal.element;
-    const screen = host?.querySelector?.<HTMLElement>(".xterm-screen");
-    if (!host?.getBoundingClientRect || !screen?.getBoundingClientRect ||
-        !screen.style) {
+    const host = (terminal.element ?? null);
+    if (!host) return { align() {}, restore() {} };
+    const screen = host.querySelector<HTMLElement>(".xterm-screen");
+    if (!screen) {
       return { align() {}, restore() {} };
     }
 
@@ -63,16 +64,16 @@ interface BootExports extends WebAssembly.Exports {
     return { align, restore() { screen.style.transform = previous; } };
   }
 
-  async function create(terminal: BootTerminal, base?: string | URL): Promise<BootDisplay> {
+  async function create(terminal: BootTerminal, base: string | URL | null = null): Promise<BootDisplay> {
     const source = new URL("boot.wasm", base || document.baseURI);
     const response = await fetch(source);
     if (!response.ok) throw new Error("mikuOS boot.wasm HTTP " + response.status);
     const bytes = await response.arrayBuffer();
-    let instance: WebAssembly.Instance | undefined;
+    let instance: WebAssembly.Instance | null = null;
     const module = await WebAssembly.instantiate(bytes, {
       env: { emit(pointer: number, size: number) {
         if (!instance || size < 0 || size > 20000) return;
-        const memory = instance.exports.memory;
+        const memory = (instance.exports.memory ?? null);
         if (!(memory instanceof WebAssembly.Memory)) return;
         const data = new Uint8Array(memory.buffer, pointer, size);
         terminal.write(decoder.decode(data));
@@ -84,24 +85,24 @@ interface BootExports extends WebAssembly.Exports {
     const alignment = centreBootGrid(terminal);
     wasm.boot_start(terminal.cols || 60, terminal.rows || 24);
     const spinner = setInterval(() => { if (!finished) wasm.boot_tick(); }, 150);
-    const resize = terminal.onResize?.(size => {
+    const resize = withValue(terminal.onResize ?? null, callable => callable.call(terminal, size => {
       alignment.align();
       wasm.boot_resize(size.cols, size.rows);
-    });
+    }));
     const display: BootDisplay = {
       report(phase: number, done = 0, total = 0) {
-        if (!finished) wasm.boot_update(phase, done, total);
+        if (!finished) wasm.boot_update(phase, done ?? 0, total ?? 0);
       },
       finish() {
         if (finished) return;
         wasm.boot_update(8, 0, 0);
         finished = true;
         clearInterval(spinner);
-        resize?.dispose();
+        withValue(resize ?? null, value => value.dispose());
         wasm.boot_finish();
         alignment.restore();
       },
-      fail(error: unknown) {
+      fail<T>(error: T) {
         if (finished) return;
         this.finish();
         terminal.write("\r\nmikuOS boot failed: " +
@@ -111,7 +112,7 @@ interface BootExports extends WebAssembly.Exports {
         if (!finished) {
           finished = true;
           clearInterval(spinner);
-          resize?.dispose();
+          withValue(resize ?? null, value => value.dispose());
           wasm.boot_finish();
           alignment.restore();
         }
@@ -133,4 +134,4 @@ interface BootExports extends WebAssembly.Exports {
   }
 
   global.MikuBoot = Object.freeze({ create, loadRuntime });
-})(globalThis);
+})(globalThis as typeof globalThis & { MikuBoot: BootApi | null });

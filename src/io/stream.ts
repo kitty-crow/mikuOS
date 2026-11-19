@@ -1,3 +1,4 @@
+import { withValue } from "../core/err.js";
 import { KErr } from "../core/err.js";
 
 const te = new TextEncoder();
@@ -6,23 +7,38 @@ const td = new TextDecoder();
 export const enc = (s: string): Uint8Array => te.encode(s);
 export const dec = (b: Uint8Array): string => td.decode(b);
 
+/** Terminal state shared by descriptors and the guest terminal ioctl bridge. */
+export interface TerminalState {
+  termios(): Uint8Array;
+  setTermios(raw: Uint8Array, flush: boolean): void;
+  size(): { rows: number; cols: number };
+  resize(rows: number, cols: number): void;
+}
+
 export interface In {
-  tty?: unknown;
+  tty: TerminalState | null;
   rd(): Promise<Uint8Array>;
-  holdR?(): void;
-  releaseR?(): void;
-  close?(): void;
-  cancel?(): void;
+  holdR: (() => void) | null;
+  releaseR: (() => void) | null;
+  close: (() => void) | null;
+  cancel: (() => void) | null;
 }
 
 export interface Out {
-  tty?: unknown;
+  tty: TerminalState | null;
   wr(b: Uint8Array): Promise<number>;
-  hold?(): void;
-  close?(): void;
+  hold: (() => void) | null;
+  close: (() => void) | null;
 }
 
 export class MemIn implements In {
+  "tty": TerminalState | null = null;
+
+  "holdR": (() => void) | null = null;
+  "releaseR": (() => void) | null = null;
+  "close": (() => void) | null = null;
+  "cancel": (() => void) | null = null;
+
   private hit = false;
 
   constructor(private readonly b: Uint8Array<ArrayBufferLike> = new Uint8Array()) {}
@@ -35,6 +51,11 @@ export class MemIn implements In {
 }
 
 export class MemOut implements Out {
+  "tty": TerminalState | null = null;
+
+  "hold": (() => void) | null = null;
+  "close": (() => void) | null = null;
+
   private readonly q: Uint8Array[] = [];
 
   async wr(b: Uint8Array): Promise<number> {
@@ -58,6 +79,11 @@ export class MemOut implements Out {
 }
 
 export class FnOut implements Out {
+  "tty": TerminalState | null = null;
+
+  "hold": (() => void) | null = null;
+  "close": (() => void) | null = null;
+
   constructor(private readonly fn: (s: string) => void | Promise<void>) {}
 
   async wr(b: Uint8Array): Promise<number> {
@@ -67,6 +93,8 @@ export class FnOut implements Out {
 }
 
 export class Pipe implements In, Out {
+  "tty": TerminalState | null = null;
+
   private readonly q: Uint8Array[] = [];
   private readonly w: Array<(b: Uint8Array) => void> = [];
   private shut = false;
@@ -93,7 +121,7 @@ export class Pipe implements In, Out {
     if (this.shut) throw new KErr("EPIPE", "pipe is closed");
     if (!b.length) return 0;
     const x = b.slice();
-    const fn = this.w.shift();
+    const fn = (this.w.shift() ?? null);
     if (fn) fn(x);
     else this.q.push(x);
     this.notify();
@@ -101,7 +129,7 @@ export class Pipe implements In, Out {
   }
 
   async rd(): Promise<Uint8Array> {
-    const b = this.q.shift();
+    const b = (this.q.shift() ?? null);
     if (b) { this.notify(); return b; }
     if (this.shut) return new Uint8Array();
     return new Promise<Uint8Array>(ok => this.w.push(ok));
@@ -128,6 +156,11 @@ export class Pipe implements In, Out {
 }
 
 export class TeeOut implements Out {
+  "tty": TerminalState | null = null;
+
+  "hold": (() => void) | null = null;
+  "close": (() => void) | null = null;
+
   constructor(private readonly a: Out, private readonly b: Out) {}
 
   async wr(x: Uint8Array): Promise<number> {

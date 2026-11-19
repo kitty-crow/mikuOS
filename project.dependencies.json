@@ -5,7 +5,7 @@
       "name": "KITTYX",
       "repository": "kittycrow-kittyx/kittyx",
       "path": "kittyx",
-      "commit": "076774c11103c996910c0f939deff9164e5f12d9",
+      "commit": "e62120659f5ba8de124f2a67f7d2f78eb1e12711",
       "relationship": "contract",
       "direct": false,
       "updatePolicy": "pull-request"
@@ -14,7 +14,7 @@
       "name": "ThistleASM",
       "repository": "kittycrow-kittyx/thistle-asm",
       "path": "src/asm",
-      "commit": "7e84b58d8c2450a5f4bab0342f601f005c719478",
+      "commit": "48db060114d819e3d531d47dbf15b5d865cc3202",
       "relationship": "runtime",
       "direct": true,
       "updatePolicy": "pull-request"
@@ -23,7 +23,7 @@
       "name": "ThistleCC",
       "repository": "kittycrow-kittyx/thistlecc",
       "path": "thistlecc",
-      "commit": "2d434056fe2d5c1c6a880e7c16f513558edea4a4",
+      "commit": "ab38674a2adb98f38f29dd8a00f0b231f1c9072b",
       "relationship": "build",
       "direct": true,
       "updatePolicy": "pull-request"
@@ -32,7 +32,7 @@
       "name": "Teto",
       "repository": "kittycrow-kittyx/teto",
       "path": "deps/teto",
-      "commit": "82d2742f0527f77f7f411fe7af41db8fb764a807",
+      "commit": "ac0a32062e71a42eea06657565b8e6b736240814",
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"

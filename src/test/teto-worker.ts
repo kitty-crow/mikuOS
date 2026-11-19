@@ -1,10 +1,13 @@
+export interface WorkerReport { calls: number; claims: number; idle: number; contention: number; terminal: number; }
+import { hostModule } from "../main/host-module.js";
+import { withValue } from "../core/err.js";
 interface WorkerPort {
-  postMessage(value: unknown): void;
+  postMessage(value: WorkerReport): void;
 }
 
 export {};
 
-interface SchedulerWorkerData {
+export interface SchedulerWorkerData {
   bytes: Uint8Array<ArrayBuffer>;
   memory: WebAssembly.Memory;
   worker: number;
@@ -16,16 +19,16 @@ interface WorkerThreads {
   parentPort: WorkerPort | null;
 }
 
-interface SchedulerExports {
+interface SchedulerExports extends WebAssembly.Exports {
   tetoRunSchedulerBatch(memory: number, budget: number, nowMicros: bigint, worker: number): number;
 }
 
-const load = (name: string): Promise<unknown> => import(name);
-const threads = await load("node:worker_threads") as WorkerThreads;
+
+const threads = await hostModule("node:worker_threads") as WorkerThreads;
 const data = threads.workerData;
 const module = await WebAssembly.compile(data.bytes);
 const instance = await WebAssembly.instantiate(module, { env: { memory: data.memory } });
-const run = (instance.exports as unknown as SchedulerExports).tetoRunSchedulerBatch;
+const run = (instance.exports as SchedulerExports).tetoRunSchedulerBatch;
 const wait = new Int32Array(data.memory.buffer);
 let calls = 0;
 let claims = 0;
@@ -42,6 +45,8 @@ while (calls < 100000 && idle < 100) {
     continue;
   }
   if (packed <= 255) {
+    // Scheduler status is decoded before interpreting the packed hart claim.
+    //@cg-expect-warning
     if (packed === 5 || packed === 6) {
       contention += 1;
       continue;
@@ -58,4 +63,4 @@ while (calls < 100000 && idle < 100) {
   }
 }
 
-threads.parentPort?.postMessage({ calls, claims, idle, contention, terminal });
+withValue(threads.parentPort ?? null, value => value.postMessage({ calls, claims, idle, contention, terminal }));

@@ -1,3 +1,4 @@
+import { requireValue } from "../../src/core/err.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { rv64Branch } from "../../src/core/rv64-branch.ts";
@@ -23,7 +24,7 @@ import {
   rv64ImmediateU,
 } from "../../src/vm/rv64-immediate.ts";
 
-interface NativeCore {
+interface NativeCore extends WebAssembly.Exports {
   rv64Branch(funct3: number, left: bigint, right: bigint): number;
   rv64RegisterWordValid(funct3: number, top: number): number;
   rv64RegisterWordValue(funct3: number, top: number, left: bigint, right: bigint): bigint;
@@ -49,11 +50,11 @@ interface NativeCore {
   rv64CompressedJump(instruction: number): number;
 }
 
-const bytes = await readFile(new URL("../../dist/teto/teto.wasm", import.meta.url));
+const bytes = await readFile(new URL("../../dist/teto/teto.wasm", import.meta.url), null);
 const module = await WebAssembly.instantiate(bytes, {
   env: { memory: new WebAssembly.Memory({ initial: 8192, maximum: 32768 }) },
 });
-const native = module.instance.exports as unknown as NativeCore;
+const native = module.instance.exports as NativeCore;
 const compare = [
   ["rv64ImmediateI", rv64ImmediateI],
   ["rv64ImmediateS", rv64ImmediateS],
@@ -99,8 +100,8 @@ for (const top of [0, 1, 0x20, 2]) for (let funct3 = 0; funct3 < 8; funct3++) {
   assert.equal(native.rv64RegisterValid(funct3, top), valid, "register validity mismatch");
   if (valid === 0) continue;
   for (let index = 0; index < registers.length; index++) {
-    const left = registers[index]!;
-    const right = registers[(index * 37 + 11) % registers.length]!;
+    const left = requireValue(registers[index] ?? null, "scripts/ci/test-thistle-native-core.ts:102");
+    const right = requireValue(registers[(index * 37 + 11) % registers.length] ?? null, "scripts/ci/test-thistle-native-core.ts:103");
     const direct = rv64RegisterValue(funct3, top, left, right);
     assert.equal(native.rv64RegisterValue(funct3, top, left, right), direct,
       `register mismatch funct3=${funct3} top=${top} left=${left} right=${right}`);
@@ -115,7 +116,7 @@ for (let index = 0; index < 1500; index++) {
     const valid = rv64ImmediateOpValid(funct3, instruction);
     assert.equal(native.rv64ImmediateOpValid(funct3, instruction), valid, "immediate validity mismatch");
     if (valid === 0) continue;
-    const left = registers[(index + funct3 * 23) % registers.length]!;
+    const left = requireValue(registers[(index + funct3 * 23) % registers.length] ?? null, "scripts/ci/test-thistle-native-core.ts:118");
     assert.equal(native.rv64ImmediateOpValue(funct3, instruction, left),
       rv64ImmediateOpValue(funct3, instruction, left),
       `immediate operation mismatch instruction=${instruction} funct3=${funct3} left=${left}`);
@@ -127,8 +128,8 @@ for (const top of [0, 1, 0x20, 2]) for (let funct3 = 0; funct3 < 8; funct3++) {
   assert.equal(native.rv64RegisterWordValid(funct3, top), valid, "register word validity mismatch");
   if (valid === 0) continue;
   for (let index = 0; index < registers.length; index++) {
-    const left = registers[index]!;
-    const right = registers[(index * 29 + 7) % registers.length]!;
+    const left = requireValue(registers[index] ?? null, "scripts/ci/test-thistle-native-core.ts:130");
+    const right = requireValue(registers[(index * 29 + 7) % registers.length] ?? null, "scripts/ci/test-thistle-native-core.ts:131");
     assert.equal(native.rv64RegisterWordValue(funct3, top, left, right),
       rv64RegisterWordValue(funct3, top, left, right),
       `word operation mismatch funct3=${funct3} top=${top} left=${left} right=${right}`);
@@ -142,7 +143,7 @@ for (let index = 0; index < 1500; index++) {
     const valid = rv64ImmediateWordValid(funct3, instruction);
     assert.equal(native.rv64ImmediateWordValid(funct3, instruction), valid, "immediate word validity mismatch");
     if (valid === 0) continue;
-    const left = registers[(index + funct3 * 13) % registers.length]!;
+    const left = requireValue(registers[(index + funct3 * 13) % registers.length] ?? null, "scripts/ci/test-thistle-native-core.ts:145");
     assert.equal(native.rv64ImmediateWordValue(funct3, instruction, left),
       rv64ImmediateWordValue(funct3, instruction, left),
       `immediate word mismatch instruction=${instruction} funct3=${funct3} left=${left}`);

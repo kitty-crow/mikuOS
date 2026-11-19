@@ -1,9 +1,10 @@
+import { requireValue } from "../core/err.js";
 import { bad } from "../core/err.js";
 import type { RvMemory } from "../vm/mem64.js";
-import { H_PAGE_COUNT, TETO_GUEST_PAGE_SIZE, TETO_HART_BASE, TETO_HART_STRIDE } from "./abi.js";
-import { tetoGuestPage } from "./kernel.js";
+import { H_PAGE_COUNT, THISTLE_GUEST_PAGE_SIZE as TETO_GUEST_PAGE_SIZE, THISTLE_HART_BASE as TETO_HART_BASE, THISTLE_HART_STRIDE as TETO_HART_STRIDE } from "./abi.js";
+import { thistleGuestPage as tetoGuestPage } from "./kernel.js";
 import { loadU32 } from "./memory.js";
-import type { TetoMemory } from "./memory.js";
+import type { ThistleMemory as TetoMemory } from "./memory.js";
 
 const INVALID = 0xffffffff;
 const UNMAPPED = 0xfffffffe;
@@ -33,8 +34,12 @@ export class TetoMem64 implements RvMemory {
       const offset = Number(address & 0xffffn);
       const length = Math.min(n - position, TETO_GUEST_PAGE_SIZE - offset);
       const frame = this.page(this.hart, address, false) >>> 0;
-      if (frame < UNMAPPED) output.set(this.memory.bytes.subarray(frame + offset, frame + offset + length), position);
-      else if (frame === INVALID) bad("ENOMEM", "Teto page-table lookup failed");
+      switch (true) {
+case !!(frame < UNMAPPED): { output.set(this.memory.bytes.subarray(frame + offset, frame + offset + length), position);
+break; }
+case !!(frame === INVALID): { bad("ENOMEM", "Teto page-table lookup failed");
+break; }
+}
       position += length;
     }
     return output;
@@ -64,13 +69,17 @@ export class TetoMem64 implements RvMemory {
       const offset = Number(address & 0xffffn);
       const length = Math.min(n - position, TETO_GUEST_PAGE_SIZE - offset);
       const frame = this.page(this.hart, address, false) >>> 0;
-      if (frame < UNMAPPED) this.memory.bytes.fill(0, frame + offset, frame + offset + length);
-      else if (frame === INVALID) bad("ENOMEM", "Teto page-table lookup failed");
+      switch (true) {
+case !!(frame < UNMAPPED): { this.memory.bytes.fill(0, frame + offset, frame + offset + length);
+break; }
+case !!(frame === INVALID): { bad("ENOMEM", "Teto page-table lookup failed");
+break; }
+}
       position += length;
     }
   }
 
-  u8(at: bigint): number { return this.read(at, 1)[0]!; }
+  u8(at: bigint): number { return requireValue(this.read(at, 1)[0] ?? null, "src/teto/mem64.ts:73"); }
   i8(at: bigint): bigint { return BigInt.asIntN(8, BigInt(this.u8(at))); }
   u16(at: bigint): number { return this.number(at, 2); }
   i16(at: bigint): bigint { return BigInt.asIntN(16, BigInt(this.u16(at))); }
@@ -80,7 +89,7 @@ export class TetoMem64 implements RvMemory {
   u64(at: bigint): bigint {
     const bytes = this.read(at, 8);
     let value = 0n;
-    for (let index = 7; index >= 0; index--) value = value << 8n | BigInt(bytes[index]!);
+    for (let index = 7; index >= 0; index--) value = value << 8n | BigInt(requireValue(bytes[index] ?? null, "src/teto/mem64.ts:83"));
     return value;
   }
 
@@ -116,7 +125,7 @@ export class TetoMem64 implements RvMemory {
   private number(at: bigint, size: number): number {
     const bytes = this.read(at, size);
     let value = 0;
-    for (let index = size - 1; index >= 0; index--) value = value * 256 + bytes[index]!;
+    for (let index = size - 1; index >= 0; index--) value = value * 256 + requireValue(bytes[index] ?? null, "src/teto/mem64.ts:119");
     return value;
   }
 

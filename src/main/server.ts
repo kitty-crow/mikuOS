@@ -1,3 +1,4 @@
+import { withValue } from "../core/err.js";
 import { hostConfig } from "./config.js";
 
 interface BServer {
@@ -14,14 +15,14 @@ interface BHost {
   }): BServer;
 }
 
-interface Proc { env?: Record<string, string | undefined>; }
+interface Proc { env: Record<string, string | null> | null; }
 
-const bun = (globalThis as unknown as { Bun: BHost }).Bun;
-const proc = (globalThis as unknown as { process?: Proc }).process;
+const bun: BHost = (globalThis as typeof globalThis & { Bun: BHost }).Bun;
+const proc = (globalThis as typeof globalThis & { process: Proc | null }).process;
 const staticRoot = new URL("../../dist/web/", import.meta.url);
-const port = Number(proc?.env?.PORT ?? 3000);
-const hostname = proc?.env?.HOST ?? "127.0.0.1";
-const config = await hostConfig();
+const port = Number(withValue(withValue(proc ?? null, value => value.env) ?? null, value => (value.PORT ?? null)) ?? 3000);
+const hostname = withValue(withValue(proc ?? null, value => value.env) ?? null, value => (value.HOST ?? null)) ?? "127.0.0.1";
+const config = await hostConfig(null);
 
 const mime: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -53,9 +54,11 @@ const allowed = (path: string): boolean =>
   path.startsWith("/assets/") ||
   path.startsWith("/teto/");
 
-export const app = bun.serve({
+export const app: BServer = bun.serve({
   hostname,
   port,
+  // This method is retained as the established snapshot, executable or platform callback boundary.
+  //@cg-expect-warning
   fetch(request): Response {
     const url = new URL(request.url);
     let path: string;
