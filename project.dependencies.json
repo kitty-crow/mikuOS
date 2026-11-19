@@ -27,6 +27,15 @@
       "relationship": "native-kernel",
       "direct": true,
       "updatePolicy": "pull-request"
+    },
+    {
+      "name": "Leek",
+      "repository": "kittycrow-kittyx/leek",
+      "path": "leek",
+      "commit": "5dc90372d18ee20b0f6e4a3e6fe44008be1ad6d7",
+      "relationship": "build",
+      "direct": true,
+      "updatePolicy": "pull-request"
     }
   ]
 }

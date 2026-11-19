@@ -7,3 +7,6 @@
 [submodule "deps/teto"]
 	path = deps/teto
 	url = https://github.com/kittycrow-kittyx/teto.git
+[submodule "leek"]
+	path = leek
+	url = https://github.com/kittycrow-kittyx/leek.git
